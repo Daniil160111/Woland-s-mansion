@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Woland's Mansion</title>
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="./manifest.json">
 <link rel="icon" type="image/jpeg" href="./icon/icon.jpg">
 <link rel="apple-touch-icon" href="./icon/icon.jpg">
 <style>
@@ -27,10 +27,10 @@
     -webkit-user-drag: none; user-drag: none;
   }
   #app { position:fixed; inset:0; overflow:hidden; }
-  img, canvas { 
-    -webkit-user-drag: none; 
-    user-drag: none; 
-    pointer-events: none; /* Блокирует перетаскивание и клики по картинкам */
+  img, canvas {
+    -webkit-user-drag: none;
+    user-drag: none;
+    pointer-events: none;
   }
 
   .screen {
@@ -39,14 +39,12 @@
   }
   .screen.show { display:flex; }
 
-  /* --- ЭКРАН ДЛЯ ПК --- */
   #screen-pc { background:#0a0616; }
   #screen-pc h1 { color:#ff3a3a; font-size:28px; margin-bottom:15px; text-transform:uppercase; letter-spacing:2px;}
   #screen-pc p { color:#c8d4ff; font-size:18px; margin-bottom:20px; line-height:1.6; max-width:80%;}
 
-  /* --- ЭКРАН ДЛЯ МОБИЛЬНЫХ (PWA) --- */
   #screen-pwa-install { background:#050505; overflow-y:auto; }
-  
+
   #pwa-logo {
     width: 95%; max-width: 600px; margin-bottom: 10px;
     filter: drop-shadow(0 0 15px rgba(255,0,0,0.6));
@@ -55,27 +53,26 @@
   #screen-pwa-install.show #pwa-logo { opacity: 1; transform: translateY(0); }
 
   #screen-pwa-install p { margin: 5px 0; font-size: 14px; line-height: 1.4; color: #aaa; }
-  .instruction-box { 
-    background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin: 10px 0; 
+  .instruction-box {
+    background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin: 10px 0;
     width: 90%; max-width: 400px;
   }
   .instruction-box p { color: #ccc; font-size: 12px; }
 
-  /* Разделитель */
   #install-divider {
-    display: none; margin: 15px 0; font-size: 18px; font-weight: bold; color: #f00; letter-spacing: 2px;
+    display: block; margin: 15px 0; font-size: 18px; font-weight: bold; color: #f00; letter-spacing: 2px;
     text-shadow: 0 0 10px rgba(255,0,0,0.5);
   }
 
   .btn-install {
-    display: none; margin-top: 10px; background: #800000; color: white; border: 2px solid #f00;
+    display: block; margin-top: 10px; background: #800000; color: white; border: 2px solid #f00;
     padding: 12px 24px; font-size: 16px; font-family: inherit;
     text-transform: uppercase; cursor: pointer; border-radius: 10px;
-    box-shadow:0 6px 18px rgba(255,0,0,0.3); transition: transform 0.15s ease;
+    box-shadow:0 6px 18px rgba(255,0,0,0.3); transition: transform 0.15s ease, opacity 0.3s ease;
   }
   .btn-install:active { transform:scale(0.97); }
+  .btn-install.hidden { display: none; }
 
-  /* Переключатель языков */
   .lang-switch {
     display: flex; gap: 10px; margin-top: 25px; justify-content: center;
   }
@@ -85,19 +82,16 @@
     transition: all 0.4s ease;
   }
   .lang-btn.active { color: #fff; border-color: #f00; background: rgba(255,0,0,0.2); }
-  
-  /* Стили для плавной смены текста (Crossfade) */
+
   .i18n-text { display: inline; transition: opacity 0.5s ease; }
 
-  /* --- ЗАТЕМНЕНИЕ --- */
   #fade-overlay {
     position: absolute; inset: 0; background: #000; z-index: 50; pointer-events: none;
     opacity: 1; transition: opacity 1.5s ease-in-out;
   }
 
-  /* --- ЭКРАН ЗАГРУЗКИ --- */
   #screen-loading { background: #000; z-index: 90; }
-  
+
   .loader-3d-container { width: 150px; height: 150px; perspective: 800px; margin-bottom: 20px; }
   .loader-3d-face { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; box-shadow: 0 0 30px #500; animation: spin3d 4s linear infinite; }
   @keyframes spin3d { 0% { transform: rotateY(0deg); } 100% { transform: rotateY(360deg); } }
@@ -114,7 +108,7 @@
   #load-status { font-size: 12px; color: #aaa; font-family: monospace; height: 20px; text-align: center; }
   .progress-bar { width: 60%; max-width: 400px; height: 4px; background: #222; margin-top: 20px; border-radius: 2px;}
   .progress-fill { width: 0%; height: 100%; background: #a00; transition: width 0.2s; box-shadow: 0 0 10px #f00; border-radius: 2px;}
-  
+
   #game-container { position: absolute; inset: 0; z-index: 10; display: none; }
   #game-container.show { display: block; }
 </style>
@@ -131,10 +125,10 @@
   <!-- 2. Экран инструкции PWA -->
   <div id="screen-pwa-install" class="screen">
       <img id="pwa-logo" src="./Текстуры/Меню/name1.png" alt="Woland's Mansion" onerror="this.style.display='none'">
-      
+
       <p><strong data-i18n="not_installed">Игра не установлена</strong></p>
       <p data-i18n="install_hint">Для комфортной игры на телефоне (без адресной строки и в горизонтальном режиме) установите приложение.</p>
-      
+
       <div class="instruction-box" id="manual-instruction">
           <p>
               <strong><span data-i18n="ios_platform">iPhone (Safari):</span></strong> <span data-i18n="ios_inst">Поделиться -> На экран "Домой"</span><br>
@@ -144,6 +138,7 @@
 
       <div id="install-divider">— <span data-i18n="or">ИЛИ</span> —</div>
 
+      <!-- Кнопка видна всегда; если deferredPrompt нет — откроет подсказку -->
       <button id="btn-auto-install" class="btn-install" data-i18n="install_btn">Добавить приложение</button>
 
       <div class="instruction-box" style="margin-top: 15px;">
@@ -183,6 +178,36 @@
   <div id="fade-overlay"></div>
 </div>
 
+<!-- ★ РАННИЙ СКРИПТ (НЕ module): регистрация SW + перехват beforeinstallprompt -->
+<script>
+(function () {
+  'use strict';
+
+  // 1) Service Worker — регистрируем СРАЗУ, без await
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js', { scope: './' })
+      .then(function (reg) { console.log('[SW] зарегистрирован, scope:', reg.scope); })
+      .catch(function (err) { console.warn('[SW] ошибка:', err.message); });
+  }
+
+  // 2) beforeinstallprompt — слушаем СРАЗУ, до любых await
+  window.__deferredInstallPrompt = null;
+
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    window.__deferredInstallPrompt = e;
+    console.log('✅ beforeinstallprompt сработал');
+    // Сообщаем остальному коду, что кнопка доступна
+    window.dispatchEvent(new CustomEvent('orbits:install-available'));
+  });
+
+  window.addEventListener('appinstalled', function () {
+    console.log('✅ Приложение установлено');
+    window.__deferredInstallPrompt = null;
+  });
+})();
+</script>
+
 <script type="module">
   'use strict';
 
@@ -192,23 +217,15 @@
   document.addEventListener('selectstart', e => e.preventDefault());
   document.addEventListener('copy', e => e.preventDefault());
   document.addEventListener('cut', e => e.preventDefault());
-  
+
   document.addEventListener('keydown', e => {
-      // Блокируем Ctrl+C, Ctrl+S, Ctrl+U, F12, Ctrl+Shift+I
-      if ((e.ctrlKey && (e.key === 'c' || e.key === 's' || e.key === 'u')) || 
-          e.key === 'F12' || 
+      if ((e.ctrlKey && (e.key === 'c' || e.key === 's' || e.key === 'u')) ||
+          e.key === 'F12' ||
           (e.ctrlKey && e.shiftKey && e.key === 'I')) {
           e.preventDefault();
           return false;
       }
   });
-
-  // ★ Регистрация Service Worker
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js', { scope: './' })
-      .then((reg) => console.log('[SW] зарегистрирован, scope:', reg.scope))
-      .catch((err) => console.warn('[SW] ошибка:', err.message));
-  }
 
   const $ = id => document.getElementById(id);
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -284,7 +301,6 @@
 
   let currentLang = 'ru';
 
-  // ===== ПЛАВНАЯ СМЕНА ЯЗЫКА (CROSSFADE) =====
   async function setLanguage(lang, force = false) {
     if (currentLang === lang && !force) return;
     currentLang = lang;
@@ -294,14 +310,11 @@
     });
 
     const elements = document.querySelectorAll('[data-i18n]');
-
     elements.forEach(el => {
         el.style.transition = 'opacity 0.5s ease';
         el.style.opacity = '0';
     });
-
     await sleep(250);
-
     elements.forEach(el => {
         const key = el.getAttribute('data-i18n');
         if (translations[lang] && translations[lang][key]) {
@@ -341,28 +354,36 @@
     return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
   }
 
-  // ★ ПЕРЕХВАТ УСТАНОВКИ
-  let deferredPrompt = null;
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    console.log('✅ beforeinstallprompt сработал!');
-    
-    if (isMobile() && !isPWA()) {
-        const btn = $('btn-auto-install');
-        const divider = $('install-divider');
-        if (btn) btn.style.display = 'block';
-        if (divider) divider.style.display = 'block';
-    }
-  });
+  // ===== КНОПКА УСТАНОВКИ =====
+  // deferredPrompt живёт в window.__deferredInstallPrompt (из раннего скрипта)
+  function refreshInstallButton() {
+    const btn = $('btn-auto-install');
+    if (!btn) return;
+    // Всегда показываем кнопку на мобильном не-PWA
+    btn.classList.remove('hidden');
+  }
+
+  // Если prompt пришёл позже — просто перерисуем (кнопка и так видна)
+  window.addEventListener('orbits:install-available', refreshInstallButton);
 
   $('btn-auto-install').addEventListener('click', async () => {
-      if (deferredPrompt) {
-          deferredPrompt.prompt();
-          await deferredPrompt.userChoice;
-          $('btn-auto-install').style.display = 'none';
-          $('install-divider').style.display = 'none';
-          deferredPrompt = null;
+      const prompt = window.__deferredInstallPrompt;
+      if (prompt) {
+          prompt.prompt();
+          try {
+              const choice = await prompt.userChoice;
+              console.log('User choice:', choice.outcome);
+          } catch (e) {}
+          window.__deferredInstallPrompt = null;
+          return;
+      }
+      // Нет нативного prompt — показываем ручную подсказку
+      const box = $('manual-instruction');
+      if (box) {
+          box.style.border = '2px solid #f00';
+          box.style.background = 'rgba(255,0,0,0.15)';
+          box.style.boxShadow = '0 0 20px rgba(255,0,0,0.5)';
+          box.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
   });
 
@@ -401,7 +422,7 @@
           return await res.blob();
       }
       const response = await fetch(path);
-      if (!response.ok) throw new Error(`404`);
+      if (!response.ok) throw new Error('404');
       const blob = await response.blob();
       const reader = new FileReader();
       reader.readAsDataURL(blob);
@@ -423,18 +444,19 @@
       if (isDesktopUA()) {
           screenPC.classList.add('show');
           overlay.style.opacity = '0';
-          setLanguage('ru', true); 
-      } 
+          setLanguage('ru', true);
+      }
       else if (isMobile() && !isPWA()) {
           screenPWA.classList.add('show');
           overlay.style.opacity = '0';
           setLanguage('ru', true);
+          refreshInstallButton();
           try {
               const logoBlob = await getCachedOrFetch('./Текстуры/Меню/name1.png');
               $('pwa-logo').src = URL.createObjectURL(logoBlob);
           } catch(e){}
 
-          // Если это Safari — через 2 секунды подсвечиваем инструкцию
+          // Safari — через 2 секунды подсвечиваем ручную инструкцию
           if (isSafari()) {
               setTimeout(() => {
                   const manualBox = $('manual-instruction');
@@ -445,29 +467,29 @@
                   }
               }, 2000);
           }
-      } 
+      }
       else {
           screenDisclaimer.classList.add('show');
           if (screen.orientation && screen.orientation.lock) {
               screen.orientation.lock('landscape').catch(() => {});
           }
-          overlay.style.opacity = '0'; 
+          overlay.style.opacity = '0';
 
           screenDisclaimer.addEventListener('click', () => {
               if (window.SoundsEngine) window.SoundsEngine.init();
               overlay.style.opacity = '1';
-              
+
               setTimeout(async () => {
                   screenDisclaimer.classList.remove('show');
                   screenLoading.classList.add('show');
-                  
+
                   await loadGameAssets();
-                  
+
                   setTimeout(() => {
                       overlay.style.opacity = '0';
                       screenLoading.classList.remove('show');
                       gameContainer.classList.add('show');
-                      Menu.start(); 
+                      Menu.start();
                   }, 600);
               }, 1500);
           }, { once: true });
@@ -484,7 +506,7 @@
           if (manifest.sounds) for (const [id, path] of Object.entries(manifest.sounds)) queue.push({ type: 'Звуки', id, path, target: 'sound' });
           if (manifest.textures) for (const [id, path] of Object.entries(manifest.textures)) queue.push({ type: 'Текстуры', id, path, target: 'texture' });
 
-          const totalFiles = queue.length;
+          const totalFiles = queue.length || 1;
           let loadedCount = 0;
           window.GameAssets = window.GameAssets || {};
 

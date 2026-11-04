@@ -24,9 +24,14 @@
     width:100%; height:100%; overflow:hidden; background:#0a0616; color:#fff;
     user-select:none; touch-action:none;
     -webkit-user-select:none; -webkit-touch-callout:none;
+    -webkit-user-drag: none; user-drag: none;
   }
   #app { position:fixed; inset:0; overflow:hidden; }
-  img, canvas { -webkit-user-drag: none; user-drag: none; }
+  img, canvas { 
+    -webkit-user-drag: none; 
+    user-drag: none; 
+    pointer-events: none; /* Блокирует перетаскивание и клики по картинкам */
+  }
 
   .screen {
     position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center;
@@ -130,7 +135,7 @@
       <p><strong data-i18n="not_installed">Игра не установлена</strong></p>
       <p data-i18n="install_hint">Для комфортной игры на телефоне (без адресной строки и в горизонтальном режиме) установите приложение.</p>
       
-      <div class="instruction-box">
+      <div class="instruction-box" id="manual-instruction">
           <p>
               <strong><span data-i18n="ios_platform">iPhone (Safari):</span></strong> <span data-i18n="ios_inst">Поделиться -> На экран "Домой"</span><br>
               <strong><span data-i18n="android_platform">Android (Samsung/Chrome):</span></strong> <span data-i18n="android_inst">Меню (⋮) -> Добавить на главный экран</span>
@@ -181,7 +186,24 @@
 <script type="module">
   'use strict';
 
-  // ★ Регистрация Service Worker (Как в ORBITS)
+  // ★ ЗАЩИТА ОТ КОПИРОВАНИЯ, СКАЧИВАНИЯ И ПРАВОГО КЛИКА
+  document.addEventListener('contextmenu', e => e.preventDefault());
+  document.addEventListener('dragstart', e => e.preventDefault());
+  document.addEventListener('selectstart', e => e.preventDefault());
+  document.addEventListener('copy', e => e.preventDefault());
+  document.addEventListener('cut', e => e.preventDefault());
+  
+  document.addEventListener('keydown', e => {
+      // Блокируем Ctrl+C, Ctrl+S, Ctrl+U, F12, Ctrl+Shift+I
+      if ((e.ctrlKey && (e.key === 'c' || e.key === 's' || e.key === 'u')) || 
+          e.key === 'F12' || 
+          (e.ctrlKey && e.shiftKey && e.key === 'I')) {
+          e.preventDefault();
+          return false;
+      }
+  });
+
+  // ★ Регистрация Service Worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js', { scope: './' })
       .then((reg) => console.log('[SW] зарегистрирован, scope:', reg.scope))
@@ -273,16 +295,13 @@
 
     const elements = document.querySelectorAll('[data-i18n]');
 
-    // 1. Начинаем плавное исчезновение (0.5с)
     elements.forEach(el => {
         el.style.transition = 'opacity 0.5s ease';
         el.style.opacity = '0';
     });
 
-    // Ждем 0.25с, чтобы текст сменился в середине анимации
     await sleep(250);
 
-    // 2. Меняем текст и начинаем плавное появление (0.5с)
     elements.forEach(el => {
         const key = el.getAttribute('data-i18n');
         if (translations[lang] && translations[lang][key]) {
@@ -297,7 +316,7 @@
       btn.addEventListener('click', () => setLanguage(btn.getAttribute('data-lang')));
   });
 
-  // ===== ПЛАТФОРМА (1:1 из ORBITS) =====
+  // ===== ПЛАТФОРМА =====
   function isPWA() {
     const standalone = window.matchMedia('(display-mode: standalone)').matches;
     const fullscreen = window.matchMedia('(display-mode: fullscreen)').matches;
@@ -318,14 +337,17 @@
     return /windows nt|macintosh|linux x86_64|x11/.test(ua) && !/android|iphone|ipad|ipod|mobile/.test(ua);
   }
 
-  // ★ ПЕРЕХВАТ УСТАНОВКИ (1:1 из ORBITS)
+  function isSafari() {
+    return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  }
+
+  // ★ ПЕРЕХВАТ УСТАНОВКИ
   let deferredPrompt = null;
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
     console.log('✅ beforeinstallprompt сработал!');
     
-    // Показываем кнопку, только если мы на мобилке (но не в PWA)
     if (isMobile() && !isPWA()) {
         const btn = $('btn-auto-install');
         const divider = $('install-divider');
@@ -411,10 +433,21 @@
               const logoBlob = await getCachedOrFetch('./Текстуры/Меню/name1.png');
               $('pwa-logo').src = URL.createObjectURL(logoBlob);
           } catch(e){}
+
+          // Если это Safari — через 2 секунды подсвечиваем инструкцию
+          if (isSafari()) {
+              setTimeout(() => {
+                  const manualBox = $('manual-instruction');
+                  if (manualBox) {
+                      manualBox.style.border = '2px solid #f00';
+                      manualBox.style.background = 'rgba(255,0,0,0.15)';
+                      manualBox.style.boxShadow = '0 0 20px rgba(255,0,0,0.5)';
+                  }
+              }, 2000);
+          }
       } 
       else {
           screenDisclaimer.classList.add('show');
-          // Блокировка поворота как в ORBITS
           if (screen.orientation && screen.orientation.lock) {
               screen.orientation.lock('landscape').catch(() => {});
           }

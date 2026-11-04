@@ -44,20 +44,5 @@
       "type": "image/png",
       "purpose": "maskable"
     }
-  ],
-
-  "screenshots": [
-    {
-      "src": "./icon/name.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "form_factor": "wide"
-    },
-    {
-      "src": "./icon/name.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "form_factor": "narrow"
-    }
   ]
 }

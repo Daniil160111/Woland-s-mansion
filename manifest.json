@@ -1,0 +1,19 @@
+{
+  "name": "Woland's Mansion",
+  "short_name": "Woland",
+  "description": "3D хоррор в особняке Воланда",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "./icon/icon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}

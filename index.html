@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Woland's Mansion</title>
     
+    <!-- PWA Манифест и иконки -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#000000">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,6 +14,7 @@
     <link rel="apple-touch-icon" href="./icon/icon.jpg">
 
     <style>
+        /* Шрифт */
         @font-face {
             font-family: 'WolandFont';
             src: url('./supermario286rusbylyajka.otf') format('opentype');
@@ -41,20 +43,21 @@
         #screen-pc p { color: #c8d4ff; font-size: 18px; margin-bottom: 20px; line-height: 1.6; max-width: 80%;}
 
         /* --- ЭКРАН ДЛЯ МОБИЛЬНЫХ (PWA) --- */
-        #screen-pwa-install { background: #050505; display: none; }
+        #screen-pwa-install { background: #050505; display: none; overflow-y: auto; }
         
         /* УВЕЛИЧИЛИ ЛОГОТИП */
         #pwa-logo {
-            width: 95%; max-width: 600px; margin-bottom: 20px;
+            width: 95%; max-width: 600px; margin-bottom: 10px;
             filter: drop-shadow(0 0 15px rgba(255,0,0,0.6));
         }
         
-        #screen-pwa-install p { margin: 8px 0; font-size: 14px; line-height: 1.4; color: #aaa; }
+        #screen-pwa-install p { margin: 5px 0; font-size: 14px; line-height: 1.4; color: #aaa; }
+        .instruction-box { background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; margin: 10px 0; }
         
         /* Скрываем разделитель по умолчанию */
         .divider {
             display: none; /* Показываем только через JS */
-            margin: 20px 0; font-size: 18px; font-weight: bold; color: #f00; letter-spacing: 2px;
+            margin: 15px 0; font-size: 18px; font-weight: bold; color: #f00; letter-spacing: 2px;
             text-shadow: 0 0 10px rgba(255,0,0,0.5);
         }
 
@@ -65,9 +68,25 @@
             text-transform: uppercase; cursor: pointer;
             border-radius: 10px;
             box-shadow:0 6px 18px rgba(255,0,0,0.3);
-            transition: transform 0.15s ease, opacity 0.45s ease;
+            transition: transform 0.15s ease;
         }
         .btn-install:active { transform:scale(0.97); }
+
+        /* Переключатель языков */
+        .lang-switch {
+            display: flex; gap: 10px; margin-top: 20px; justify-content: center;
+        }
+        .lang-btn {
+            background: transparent; color: #888; border: 1px solid #333;
+            padding: 5px 10px; cursor: pointer; border-radius: 5px; font-size: 12px;
+            transition: all 0.3s;
+        }
+        .lang-btn.active { color: #fff; border-color: #f00; background: rgba(255,0,0,0.2); }
+        
+        /* Анимация смены текста */
+        .i18n-text {
+            transition: opacity 0.3s ease;
+        }
 
         /* --- ДИСКЛЕЙМЕР --- */
         #screen-disclaimer { background: #000; cursor: pointer; display: none; z-index: 100; }
@@ -106,32 +125,48 @@
 </head>
 <body>
 
+    <!-- 1. Экран для ПК -->
     <div id="screen-pc" class="screen">
-        <h1>Только для мобильных</h1>
-        <p>Woland's Mansion — мобильная 3D-игра.<br>Пожалуйста, откройте эту страницу на вашем смартфоне.</p>
+        <h1 data-i18n="pc_title">Только для мобильных</h1>
+        <p data-i18n="pc_text">Woland's Mansion — мобильная 3D-игра.<br>Пожалуйста, откройте эту страницу на вашем смартфоне.</p>
     </div>
 
+    <!-- 2. Экран инструкции PWA -->
     <div id="screen-pwa-install" class="screen">
         <img id="pwa-logo" src="./Текстуры/Меню/name1.png" alt="Woland's Mansion" onerror="this.style.display='none'">
-        <p><strong>Игра не установлена</strong></p>
-        <p>Для комфортной игры на телефоне (без адресной строки и в горизонтальном режиме) установите приложение.</p>
         
-        <p style="color:#888; font-size:12px; margin-top:15px;">
-            <strong>iPhone (Safari):</strong> Поделиться -> На экран "Домой"<br>
-            <strong>Android (Chrome):</strong> Три точки -> Установить приложение
-        </p>
+        <p><strong data-i18n="not_installed">Игра не установлена</strong></p>
+        <p data-i18n="install_hint">Для комфортной игры на телефоне (без адресной строки и в горизонтальном режиме) установите приложение.</p>
+        
+        <div class="instruction-box">
+            <p style="color:#ccc; font-size:12px;">
+                <strong>iPhone (Safari):</strong> <span data-i18n="ios_inst">Поделиться -> На экран "Домой"</span><br>
+                <strong>Android (Chrome):</strong> <span data-i18n="android_inst">Три точки -> Установить приложение</span>
+            </p>
+        </div>
 
-        <!-- Разделитель (скрыт по умолчанию) -->
-        <div class="divider" id="install-divider">— ИЛИ —</div>
+        <!-- Разделитель (скрыт, если нет кнопки) -->
+        <div class="divider" id="install-divider">— <span data-i18n="or">ИЛИ</span> —</div>
 
-        <!-- Кнопка (скрыта по умолчанию) -->
-        <button id="btn-auto-install" class="btn-install">Добавить приложение</button>
+        <!-- Кнопка автоустановки -->
+        <button id="btn-auto-install" class="btn-install" data-i18n="install_btn">Добавить приложение</button>
+
+        <!-- Переключатель языков -->
+        <div class="lang-switch">
+            <button class="lang-btn active" data-lang="ru">RU</button>
+            <button class="lang-btn" data-lang="en">EN</button>
+            <button class="lang-btn" data-lang="fr">FR</button>
+            <button class="lang-btn" data-lang="es">ES</button>
+            <button class="lang-btn" data-lang="it">IT</button>
+        </div>
     </div>
 
+    <!-- 3. Дисклеймер -->
     <div id="screen-disclaimer" class="screen">
         <img id="disclaimer-img" src="" alt="">
     </div>
 
+    <!-- 4. Экран загрузки -->
     <div id="screen-loading" class="screen">
         <div class="loader-3d-container">
             <img class="loader-3d-face" src="./Текстуры/Воланд/лицо1.png" alt="Voland" onerror="this.src='./icon/icon.jpg'">
@@ -147,13 +182,102 @@
     <div id="fade-overlay"></div>
 
     <script type="module">
-        // --- РЕГИСТРАЦИЯ SERVICE WORKER (КРИТИЧНО ДЛЯ УСТАНОВКИ) ---
+        // --- РЕГИСТРАЦИЯ SERVICE WORKER ---
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./sw.js')
                 .then(reg => console.log('SW зарегистрирован', reg.scope))
                 .catch(err => console.warn('SW ошибка:', err.message));
         }
 
+        // --- СЛОВАРИ ПЕРЕВОДОВ ---
+        const translations = {
+            ru: {
+                pc_title: "Только для мобильных",
+                pc_text: "Woland's Mansion — мобильная 3D-игра.<br>Пожалуйста, откройте эту страницу на вашем смартфоне.",
+                not_installed: "Игра не установлена",
+                install_hint: "Для комфортной игры на телефоне установите приложение.",
+                ios_inst: 'Поделиться -> На экран "Домой"',
+                android_inst: 'Три точки -> Установить приложение',
+                or: "ИЛИ",
+                install_btn: "Добавить приложение"
+            },
+            en: {
+                pc_title: "Mobile Only",
+                pc_text: "Woland's Mansion is a mobile 3D game.<br>Please open this page on your smartphone.",
+                not_installed: "Game is not installed",
+                install_hint: "For the best experience, install the app.",
+                ios_inst: 'Share -> Add to Home Screen',
+                android_inst: 'Three dots -> Install app',
+                or: "OR",
+                install_btn: "Add App"
+            },
+            fr: {
+                pc_title: "Mobile uniquement",
+                pc_text: "Woland's Mansion est un jeu 3D mobile.<br>Veuillez ouvrir cette page sur votre smartphone.",
+                not_installed: "Le jeu n'est pas installé",
+                install_hint: "Pour une meilleure expérience, installez l'application.",
+                ios_inst: 'Partager -> Sur l\'écran d\'accueil',
+                android_inst: 'Trois points -> Installer l\'application',
+                or: "OU",
+                install_btn: "Ajouter l'app"
+            },
+            es: {
+                pc_title: "Solo móviles",
+                pc_text: "Woland's Mansion es un juego 3D móvil.<br>Abre esta página en tu smartphone.",
+                not_installed: "El juego no está instalado",
+                install_hint: "Para una mejor experiencia, instala la aplicación.",
+                ios_inst: 'Compartir -> Añadir a pantalla de inicio',
+                android_inst: 'Tres puntos -> Instalar aplicación',
+                or: "O",
+                install_btn: "Añadir App"
+            },
+            it: {
+                pc_title: "Solo mobile",
+                pc_text: "Woland's Mansion è un gioco 3D mobile.<br>Apri questa pagina sul tuo smartphone.",
+                not_installed: "Il gioco non è installato",
+                install_hint: "Per un'esperienza migliore, installa l'app.",
+                ios_inst: 'Condividi -> Aggiungi alla schermata Home',
+                android_inst: 'Tre punti -> Installa app',
+                or: "O",
+                install_btn: "Aggiungi App"
+            }
+        };
+
+        let currentLang = 'ru';
+
+        // --- ФУНКЦИЯ СМЕНЫ ЯЗЫКА ---
+        function setLanguage(lang) {
+            currentLang = lang;
+            
+            // 1. Плавно скрываем текст
+            const elements = document.querySelectorAll('[data-i18n]');
+            elements.forEach(el => el.style.opacity = '0');
+            
+            setTimeout(() => {
+                // 2. Меняем текст
+                elements.forEach(el => {
+                    const key = el.getAttribute('data-i18n');
+                    if (translations[lang] && translations[lang][key]) {
+                        el.innerHTML = translations[lang][key]; // innerHTML для <br>
+                    }
+                });
+                
+                // 3. Обновляем кнопки
+                document.querySelectorAll('.lang-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.getAttribute('data-lang') === lang);
+                });
+                
+                // 4. Плавно показываем
+                elements.forEach(el => el.style.opacity = '1');
+            }, 300); // Ждем окончания анимации исчезновения
+        }
+
+        // Навешиваем события на кнопки языков
+        document.querySelectorAll('.lang-btn').forEach(btn => {
+            btn.addEventListener('click', () => setLanguage(btn.getAttribute('data-lang')));
+        });
+
+        // --- МОДУЛЬ PLATFORM ---
         const Platform = {
             isMobile: false,
             isStandalone: false,
@@ -173,17 +297,15 @@
                                     window.matchMedia('(display-mode: fullscreen)').matches || 
                                     window.navigator.standalone === true;
 
-                // Слушаем событие установки
                 window.addEventListener('beforeinstallprompt', (e) => {
                     e.preventDefault();
                     this.deferredPrompt = e;
                     
-                    // Показываем И кнопку, И разделитель только если мы в мобильном браузере
                     if (this.isMobile && !this.isStandalone) {
                         const btn = document.getElementById('btn-auto-install');
                         const divider = document.getElementById('install-divider');
                         if (btn) btn.style.display = 'block';
-                        if (divider) divider.style.display = 'block';
+                        if (divider) divider.style.display = 'block'; // Показываем "ИЛИ"
                     }
                 });
             },
@@ -207,6 +329,7 @@
 
         Platform.init();
 
+        // --- ПОДКЛЮЧЕНИЕ ИГРЫ ---
         let Settings, Menu;
         try {
             const settingsModule = await import('./Блоки/settings-manager.js');
@@ -251,6 +374,9 @@
         }
 
         async function startApp() {
+            // Применяем язык по умолчанию
+            setLanguage('ru');
+
             try {
                 if (document.fonts) await Promise.race([document.fonts.load('12px WolandFont'), new Promise(r => setTimeout(r, 1000))]);
                 const blob = await getCachedOrFetch('./Текстуры/Меню/Дисклеймер.jpg');

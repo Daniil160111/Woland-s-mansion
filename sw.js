@@ -1,14 +1,16 @@
-// sw.js
+/* sw.js */
+
 self.addEventListener('install', (event) => {
-    self.skipWaiting();
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-    event.waitUntil(clients.claim());
+  event.waitUntil(self.clients.claim());
 });
 
 self.addEventListener('fetch', (event) => {
-    // Просто пропускаем все запросы (сеть)
-    // В будущем здесь можно кэшировать ассеты для офлайн-режима
-    event.respondWith(fetch(event.request));
+  // Перехватываем запросы и отдаем из сети (или кэша)
+  event.respondWith(
+    fetch(event.request).catch(() => caches.match(event.request))
+  );
 });

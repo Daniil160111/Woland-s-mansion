@@ -82,7 +82,7 @@
   .lang-btn.active { color: #fff; border-color: #f00; background: rgba(255,0,0,0.2); }
   
   /* Стили для плавной смены текста */
-  .i18n-text { display: inline; transition: opacity 0.3s ease; }
+  .i18n-text { display: inline; transition: opacity 0.5s ease; }
 
   /* --- ЗАТЕМНЕНИЕ --- */
   #fade-overlay {
@@ -132,19 +132,15 @@
       
       <div class="instruction-box">
           <p>
-              <!-- ДОБАВЛЕН data-i18n к iPhone и Android -->
               <strong><span data-i18n="ios_platform">iPhone (Safari):</span></strong> <span data-i18n="ios_inst">Поделиться -> На экран "Домой"</span><br>
               <strong><span data-i18n="android_platform">Android (Samsung/Chrome):</span></strong> <span data-i18n="android_inst">Меню (⋮) -> Добавить на главный экран</span>
           </p>
       </div>
 
-      <!-- Разделитель (скрыт, если нет кнопки) -->
       <div id="install-divider">— <span data-i18n="or">ИЛИ</span> —</div>
 
-      <!-- Кнопка автоустановки -->
       <button id="btn-auto-install" class="btn-install" data-i18n="install_btn">Добавить приложение</button>
 
-      <!-- Ручная подсказка (всегда видима) -->
       <div class="instruction-box" style="margin-top: 15px;">
           <p style="color:#ccc; font-size:12px;" data-i18n="manual_install">
               <strong>Если кнопки нет — установите вручную:</strong><br>
@@ -152,7 +148,6 @@
           </p>
       </div>
 
-      <!-- Переключатель языков -->
       <div class="lang-switch">
           <button class="lang-btn active" data-lang="ru">RU</button>
           <button class="lang-btn" data-lang="en">EN</button>
@@ -186,7 +181,7 @@
 <script type="module">
   'use strict';
 
-  // Регистрация Service Worker
+  // ★ Регистрация Service Worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js', { scope: './' })
       .then((reg) => console.log('[SW] зарегистрирован, scope:', reg.scope))
@@ -196,7 +191,7 @@
   const $ = id => document.getElementById(id);
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-  // ===== СЛОВАРИ ПЕРЕВОДОВ (Добавлены ios_platform и android_platform) =====
+  // ===== СЛОВАРИ ПЕРЕВОДОВ =====
   const translations = {
     ru: {
       pc_title: "Только для мобильных",
@@ -267,7 +262,7 @@
 
   let currentLang = 'ru';
 
-  // ===== ИСПРАВЛЕННАЯ ПЛАВНАЯ СМЕНА ЯЗЫКА =====
+  // ===== ПЛАВНАЯ СМЕНА ЯЗЫКА (CROSSFADE) =====
   async function setLanguage(lang, force = false) {
     if (currentLang === lang && !force) return;
     currentLang = lang;
@@ -278,16 +273,22 @@
 
     const elements = document.querySelectorAll('[data-i18n]');
 
-    // 1. Плавно скрываем ВСЕ элементы
-    elements.forEach(el => { el.style.opacity = '0'; });
-    await sleep(300);
+    // 1. Плавно скрываем (0.5с)
+    elements.forEach(el => {
+        el.style.transition = 'opacity 0.5s ease';
+        el.style.opacity = '0';
+    });
 
-    // 2. Меняем текст и плавно показываем
+    // Ждем 0.25с (середина анимации), чтобы текст сменился, пока он еще полупрозрачный
+    await sleep(250);
+
+    // 2. Меняем текст и начинаем плавное появление (0.5с)
     elements.forEach(el => {
         const key = el.getAttribute('data-i18n');
         if (translations[lang] && translations[lang][key]) {
             el.innerHTML = translations[lang][key];
         }
+        el.style.transition = 'opacity 0.5s ease';
         el.style.opacity = '1';
     });
   }

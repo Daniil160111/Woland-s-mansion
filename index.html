@@ -132,8 +132,9 @@
       
       <div class="instruction-box">
           <p>
-              <strong>iPhone (Safari):</strong> <span data-i18n="ios_inst">Поделиться -> На экран "Домой"</span><br>
-              <strong>Android (Samsung/Chrome):</strong> <span data-i18n="android_inst">Меню (⋮) -> Добавить на главный экран</span>
+              <!-- ДОБАВЛЕН data-i18n к iPhone и Android -->
+              <strong><span data-i18n="ios_platform">iPhone (Safari):</span></strong> <span data-i18n="ios_inst">Поделиться -> На экран "Домой"</span><br>
+              <strong><span data-i18n="android_platform">Android (Samsung/Chrome):</span></strong> <span data-i18n="android_inst">Меню (⋮) -> Добавить на главный экран</span>
           </p>
       </div>
 
@@ -185,7 +186,7 @@
 <script type="module">
   'use strict';
 
-  // ★ 1:1 Регистрация Service Worker как в ORBITS
+  // Регистрация Service Worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js', { scope: './' })
       .then((reg) => console.log('[SW] зарегистрирован, scope:', reg.scope))
@@ -195,14 +196,16 @@
   const $ = id => document.getElementById(id);
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-  // ===== СЛОВАРИ ПЕРЕВОДОВ =====
+  // ===== СЛОВАРИ ПЕРЕВОДОВ (Добавлены ios_platform и android_platform) =====
   const translations = {
     ru: {
       pc_title: "Только для мобильных",
       pc_text: "Woland's Mansion — мобильная 3D-игра.<br>Пожалуйста, откройте эту страницу на вашем смартфоне.",
       not_installed: "Игра не установлена",
       install_hint: "Для комфортной игры на телефоне установите приложение.",
+      ios_platform: "iPhone (Safari):",
       ios_inst: 'Поделиться -> На экран "Домой"',
+      android_platform: "Android (Samsung/Chrome):",
       android_inst: 'Меню (⋮) -> Добавить на главный экран',
       or: "ИЛИ",
       install_btn: "Добавить приложение",
@@ -213,7 +216,9 @@
       pc_text: "Woland's Mansion is a mobile 3D game.<br>Please open this page on your smartphone.",
       not_installed: "Game is not installed",
       install_hint: "For the best experience, install the app.",
+      ios_platform: "iPhone (Safari):",
       ios_inst: 'Share -> Add to Home Screen',
+      android_platform: "Android (Samsung/Chrome):",
       android_inst: 'Menu (⋮) -> Add to Home Screen',
       or: "OR",
       install_btn: "Add App",
@@ -224,7 +229,9 @@
       pc_text: "Woland's Mansion est un jeu 3D mobile.<br>Veuillez ouvrir cette page sur votre smartphone.",
       not_installed: "Le jeu n'est pas installé",
       install_hint: "Pour une meilleure expérience, installez l'application.",
+      ios_platform: "iPhone (Safari):",
       ios_inst: 'Partager -> Sur l\'écran d\'accueil',
+      android_platform: "Android (Samsung/Chrome):",
       android_inst: 'Menu (⋮) -> Sur l\'écran d\'accueil',
       or: "OU",
       install_btn: "Ajouter l'app",
@@ -235,7 +242,9 @@
       pc_text: "Woland's Mansion es un juego 3D móvil.<br>Abre esta página en tu smartphone.",
       not_installed: "El juego no está instalado",
       install_hint: "Para una mejor experiencia, instala la aplicación.",
+      ios_platform: "iPhone (Safari):",
       ios_inst: 'Compartir -> Añadir a pantalla de inicio',
+      android_platform: "Android (Samsung/Chrome):",
       android_inst: 'Menú (⋮) -> Añadir a pantalla de inicio',
       or: "O",
       install_btn: "Añadir App",
@@ -246,7 +255,9 @@
       pc_text: "Woland's Mansion è un gioco 3D mobile.<br>Apri questa pagina sul tuo smartphone.",
       not_installed: "Il gioco non è installato",
       install_hint: "Per un'esperienza migliore, installa l'app.",
+      ios_platform: "iPhone (Safari):",
       ios_inst: 'Condividi -> Aggiungi alla schermata Home',
+      android_platform: "Android (Samsung/Chrome):",
       android_inst: 'Menu (⋮) -> Aggiungi alla schermata Home',
       or: "O",
       install_btn: "Aggiungi App",
@@ -256,19 +267,18 @@
 
   let currentLang = 'ru';
 
-  // ===== ПЛАВНАЯ СМЕНА ЯЗЫКА =====
+  // ===== ИСПРАВЛЕННАЯ ПЛАВНАЯ СМЕНА ЯЗЫКА =====
   async function setLanguage(lang, force = false) {
     if (currentLang === lang && !force) return;
     currentLang = lang;
 
-    // Подсветка кнопки
     document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-lang') === lang);
     });
 
     const elements = document.querySelectorAll('[data-i18n]');
 
-    // 1. Плавно скрываем
+    // 1. Плавно скрываем ВСЕ элементы
     elements.forEach(el => { el.style.opacity = '0'; });
     await sleep(300);
 
@@ -286,7 +296,7 @@
       btn.addEventListener('click', () => setLanguage(btn.getAttribute('data-lang')));
   });
 
-  // ===== ПЛАТФОРМА (1:1 как ORBITS) =====
+  // ===== ПЛАТФОРМА =====
   const Platform = {
       isMobile: false,
       isStandalone: false,
@@ -306,7 +316,6 @@
                               window.matchMedia('(display-mode: fullscreen)').matches || 
                               window.navigator.standalone === true;
 
-          // 1:1 Перехват установки из ORBITS
           window.addEventListener('beforeinstallprompt', (e) => {
               e.preventDefault();
               this.deferredPrompt = e;

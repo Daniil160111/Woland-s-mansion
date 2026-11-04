@@ -81,13 +81,8 @@
   }
   .lang-btn.active { color: #fff; border-color: #f00; background: rgba(255,0,0,0.2); }
   
-  /* Стили для побуквенной анимации */
-  .i18n-text { display: inline; transition: opacity 0.5s ease; }
-  .char {
-    display: inline-block; opacity: 0; transform: translateY(5px);
-    transition: opacity 0.3s ease, transform 0.3s ease;
-  }
-  .char.visible { opacity: 1; transform: translateY(0); }
+  /* Стили для плавной смены текста */
+  .i18n-text { display: inline; transition: opacity 0.3s ease; }
 
   /* --- ЗАТЕМНЕНИЕ --- */
   #fade-overlay {
@@ -190,7 +185,7 @@
 <script type="module">
   'use strict';
 
-  // ★ РЕГИСТРАЦИЯ SERVICE WORKER (Как в ORBITS - сразу при загрузке)
+  // ★ 1:1 Регистрация Service Worker как в ORBITS
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js', { scope: './' })
       .then((reg) => console.log('[SW] зарегистрирован, scope:', reg.scope))
@@ -261,66 +256,37 @@
 
   let currentLang = 'ru';
 
-  // ===== АНИМАЦИЯ ТЕКСТА =====
-  async function animateText(element, text) {
-    element.innerHTML = '';
-    
-    const lines = text.split('<br>');
-    const lineElements = lines.map(() => {
-        const lineDiv = document.createElement('div');
-        element.appendChild(lineDiv);
-        return lineDiv;
-    });
-
-    const maxLen = Math.max(...lines.map(l => l.length));
-
-    // Печатаем по одной букве на каждой строке одновременно
-    for (let i = 0; i < maxLen; i++) {
-        for (let l = 0; l < lines.length; l++) {
-            if (i < lines[l].length) {
-                const char = lines[l][i];
-                const span = document.createElement('span');
-                span.className = 'char';
-                span.innerHTML = char === ' ' ? '&nbsp;' : char;
-                lineElements[l].appendChild(span);
-                
-                void span.offsetWidth;
-                span.classList.add('visible');
-            }
-        }
-        await sleep(35); // Скорость появления букв
-    }
-  }
-
+  // ===== ПЛАВНАЯ СМЕНА ЯЗЫКА =====
   async function setLanguage(lang, force = false) {
-    if (currentLang === lang && !force) return; // Игнорируем, если язык тот же
+    if (currentLang === lang && !force) return;
     currentLang = lang;
-    
+
+    // Подсветка кнопки
     document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-lang') === lang);
     });
 
     const elements = document.querySelectorAll('[data-i18n]');
-    
-    // 1. Плавно исчезает (0.5с)
-    elements.forEach(el => el.style.opacity = '0');
-    await sleep(500);
 
-    // 2. Печатаем новый текст
-    for (const el of elements) {
+    // 1. Плавно скрываем
+    elements.forEach(el => { el.style.opacity = '0'; });
+    await sleep(300);
+
+    // 2. Меняем текст и плавно показываем
+    elements.forEach(el => {
         const key = el.getAttribute('data-i18n');
         if (translations[lang] && translations[lang][key]) {
-            await animateText(el, translations[lang][key]);
-            el.style.opacity = '1';
+            el.innerHTML = translations[lang][key];
         }
-    }
+        el.style.opacity = '1';
+    });
   }
 
   document.querySelectorAll('.lang-btn').forEach(btn => {
       btn.addEventListener('click', () => setLanguage(btn.getAttribute('data-lang')));
   });
 
-  // ===== ПЛАТФОРМА =====
+  // ===== ПЛАТФОРМА (1:1 как ORBITS) =====
   const Platform = {
       isMobile: false,
       isStandalone: false,
@@ -340,6 +306,7 @@
                               window.matchMedia('(display-mode: fullscreen)').matches || 
                               window.navigator.standalone === true;
 
+          // 1:1 Перехват установки из ORBITS
           window.addEventListener('beforeinstallprompt', (e) => {
               e.preventDefault();
               this.deferredPrompt = e;

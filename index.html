@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Woland's Mansion</title>
     
-    <!-- PWA Манифест и иконки -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#000000">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14,7 +13,6 @@
     <link rel="apple-touch-icon" href="./icon/icon.jpg">
 
     <style>
-        /* Шрифт */
         @font-face {
             font-family: 'WolandFont';
             src: url('./supermario286rusbylyajka.otf') format('opentype');
@@ -38,31 +36,33 @@
         }
 
         /* --- ЭКРАН ДЛЯ ПК --- */
-        #screen-pc {
-            background: #0a0616; display: none;
-        }
+        #screen-pc { background: #0a0616; display: none; }
         #screen-pc h1 { color: #ff3a3a; font-size: 28px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 2px;}
         #screen-pc p { color: #c8d4ff; font-size: 18px; margin-bottom: 20px; line-height: 1.6; max-width: 80%;}
 
         /* --- ЭКРАН ДЛЯ МОБИЛЬНЫХ (PWA) --- */
-        #screen-pwa-install {
-            background: #050505; display: none;
-        }
+        #screen-pwa-install { background: #050505; display: none; }
+        
+        /* УВЕЛИЧИЛИ ЛОГОТИП */
         #pwa-logo {
-            width: 80%; max-width: 400px; margin-bottom: 20px;
-            filter: drop-shadow(0 0 10px rgba(255,0,0,0.5));
+            width: 95%; max-width: 600px; margin-bottom: 20px;
+            filter: drop-shadow(0 0 15px rgba(255,0,0,0.6));
         }
+        
         #screen-pwa-install p { margin: 8px 0; font-size: 14px; line-height: 1.4; color: #aaa; }
         
+        /* Скрываем разделитель по умолчанию */
         .divider {
+            display: none; /* Показываем только через JS */
             margin: 20px 0; font-size: 18px; font-weight: bold; color: #f00; letter-spacing: 2px;
             text-shadow: 0 0 10px rgba(255,0,0,0.5);
         }
 
         .btn-install {
+            display: none; /* Показываем только через JS */
             margin-top: 10px; background: #800000; color: white; border: 2px solid #f00;
             padding: 12px 24px; font-size: 16px; font-family: inherit;
-            text-transform: uppercase; cursor: pointer; display: none;
+            text-transform: uppercase; cursor: pointer;
             border-radius: 10px;
             box-shadow:0 6px 18px rgba(255,0,0,0.3);
             transition: transform 0.15s ease, opacity 0.45s ease;
@@ -70,12 +70,8 @@
         .btn-install:active { transform:scale(0.97); }
 
         /* --- ДИСКЛЕЙМЕР --- */
-        #screen-disclaimer {
-            background: #000; cursor: pointer; display: none; z-index: 100;
-        }
-        #disclaimer-img {
-            width: 100%; height: 100%; object-fit: contain;
-        }
+        #screen-disclaimer { background: #000; cursor: pointer; display: none; z-index: 100; }
+        #disclaimer-img { width: 100%; height: 100%; object-fit: contain; }
 
         /* --- ЗАТЕМНЕНИЕ --- */
         #fade-overlay {
@@ -110,13 +106,11 @@
 </head>
 <body>
 
-    <!-- 1. Экран для ПК -->
     <div id="screen-pc" class="screen">
         <h1>Только для мобильных</h1>
         <p>Woland's Mansion — мобильная 3D-игра.<br>Пожалуйста, откройте эту страницу на вашем смартфоне.</p>
     </div>
 
-    <!-- 2. Экран инструкции PWA (Только для телефонов в браузере) -->
     <div id="screen-pwa-install" class="screen">
         <img id="pwa-logo" src="./Текстуры/Меню/name1.png" alt="Woland's Mansion" onerror="this.style.display='none'">
         <p><strong>Игра не установлена</strong></p>
@@ -127,19 +121,17 @@
             <strong>Android (Chrome):</strong> Три точки -> Установить приложение
         </p>
 
-        <!-- Разделитель ИЛИ -->
-        <div class="divider">— ИЛИ —</div>
+        <!-- Разделитель (скрыт по умолчанию) -->
+        <div class="divider" id="install-divider">— ИЛИ —</div>
 
-        <!-- Кнопка автоматической установки (для Android и некоторых браузеров) -->
+        <!-- Кнопка (скрыта по умолчанию) -->
         <button id="btn-auto-install" class="btn-install">Добавить приложение</button>
     </div>
 
-    <!-- 3. Дисклеймер -->
     <div id="screen-disclaimer" class="screen">
         <img id="disclaimer-img" src="" alt="">
     </div>
 
-    <!-- 4. Экран загрузки -->
     <div id="screen-loading" class="screen">
         <div class="loader-3d-container">
             <img class="loader-3d-face" src="./Текстуры/Воланд/лицо1.png" alt="Voland" onerror="this.src='./icon/icon.jpg'">
@@ -151,14 +143,17 @@
         <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
     </div>
 
-    <!-- 5. Контейнер для игры -->
     <div id="game-container"></div>
-
-    <!-- Затемнение -->
     <div id="fade-overlay"></div>
 
     <script type="module">
-        // --- МОДУЛЬ PLATFORM ---
+        // --- РЕГИСТРАЦИЯ SERVICE WORKER (КРИТИЧНО ДЛЯ УСТАНОВКИ) ---
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('SW зарегистрирован', reg.scope))
+                .catch(err => console.warn('SW ошибка:', err.message));
+        }
+
         const Platform = {
             isMobile: false,
             isStandalone: false,
@@ -166,28 +161,29 @@
             deferredPrompt: null,
 
             init() {
-                // Мобилка
                 const coarse  = window.matchMedia('(pointer: coarse)').matches;
                 const touch   = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
                 const noHover = window.matchMedia('(hover: none)').matches;
                 this.isMobile = [coarse, touch, noHover].filter(Boolean).length >= 2;
 
-                // ПК
                 const ua = navigator.userAgent.toLowerCase();
                 this.isDesktop = /windows nt|macintosh|linux x86_64|x11/.test(ua) && !/android|iphone|ipad|ipod|mobile/.test(ua);
 
-                // PWA (запущено как приложение)
                 this.isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
                                     window.matchMedia('(display-mode: fullscreen)').matches || 
                                     window.navigator.standalone === true;
 
-                // Перехват установки PWA
+                // Слушаем событие установки
                 window.addEventListener('beforeinstallprompt', (e) => {
                     e.preventDefault();
                     this.deferredPrompt = e;
-                    // Показываем кнопку, если мы на мобилке (но не в PWA)
+                    
+                    // Показываем И кнопку, И разделитель только если мы в мобильном браузере
                     if (this.isMobile && !this.isStandalone) {
-                        document.getElementById('btn-auto-install').style.display = 'block';
+                        const btn = document.getElementById('btn-auto-install');
+                        const divider = document.getElementById('install-divider');
+                        if (btn) btn.style.display = 'block';
+                        if (divider) divider.style.display = 'block';
                     }
                 });
             },
@@ -201,43 +197,28 @@
             async installPWA() {
                 if (this.deferredPrompt) {
                     this.deferredPrompt.prompt();
-                    const { outcome } = await this.deferredPrompt.userChoice;
+                    await this.deferredPrompt.userChoice;
                     document.getElementById('btn-auto-install').style.display = 'none';
+                    document.getElementById('install-divider').style.display = 'none';
                     this.deferredPrompt = null;
-                    if (outcome === 'accepted') {
-                        console.log('Пользователь установил приложение');
-                    }
-                } else {
-                    alert('Пожалуйста, используйте меню браузера для установки.');
                 }
             }
         };
 
         Platform.init();
 
-        // --- ПОДКЛЮЧЕНИЕ МОДУЛЕЙ ИЗ ПАПКИ /Блоки/ ---
-        let Settings, Menu, SoundsEngine;
-        
+        let Settings, Menu;
         try {
             const settingsModule = await import('./Блоки/settings-manager.js');
             Settings = settingsModule.Settings;
             Settings.init();
-        } catch (e) { console.warn('settings-manager.js не найден в /Блоки/', e); }
-
-        try {
-            const soundsModule = await import('./Блоки/sounds.js');
-            SoundsEngine = soundsModule.SoundsEngine || window.SoundsEngine;
-        } catch (e) { console.warn('sounds.js не найден в /Блоки/', e); }
+        } catch (e) { console.warn('settings-manager.js не найден'); }
 
         try {
             const menuModule = await import('./Блоки/menu.js');
             Menu = menuModule.Menu;
         } catch (e) {
-            console.error('menu.js не найден в /Блоки/!', e);
-            // Заглушка, если меню нет
-            Menu = { start: () => { 
-                document.getElementById('game-container').innerHTML = '<h1 style="color:red;text-align:center;margin-top:20%">Ошибка: menu.js не найден</h1>'; 
-            }};
+            Menu = { start: () => { document.getElementById('game-container').innerHTML = '<h1 style="color:red;text-align:center;margin-top:20%">Ошибка: menu.js не найден</h1>'; }};
         }
 
         const overlay = document.getElementById('fade-overlay');
@@ -252,7 +233,6 @@
         
         document.getElementById('btn-auto-install').addEventListener('click', () => Platform.installPWA());
 
-        // Кэширование
         const CACHE_PREFIX = 'woland_asset_';
         async function getCachedOrFetch(path) {
             const cacheKey = CACHE_PREFIX + path;
@@ -270,9 +250,7 @@
             return blob;
         }
 
-        // --- ЛОГИКА ЗАПУСКА ---
         async function startApp() {
-            // 1. Предзагрузка шрифта и дисклеймера
             try {
                 if (document.fonts) await Promise.race([document.fonts.load('12px WolandFont'), new Promise(r => setTimeout(r, 1000))]);
                 const blob = await getCachedOrFetch('./Текстуры/Меню/Дисклеймер.jpg');
@@ -282,7 +260,6 @@
                 screenDisclaimer.style.backgroundColor = '#300';
             }
 
-            // 2. Маршрутизация
             if (Platform.isDesktop) {
                 screenPC.style.display = 'flex';
                 overlay.style.opacity = '0';
@@ -296,7 +273,6 @@
                 } catch(e){}
             } 
             else {
-                // PWA - Запуск игры
                 screenDisclaimer.style.display = 'flex';
                 Platform.lockOrientation();
                 overlay.style.opacity = '0'; 
@@ -315,17 +291,13 @@
                             overlay.style.opacity = '0';
                             screenLoading.style.display = 'none';
                             gameContainer.classList.add('show');
-                            
-                            // ЗАПУСК МЕНЮ
                             Menu.start(); 
-                            
                         }, 600);
                     }, 1500);
                 }, { once: true });
             }
         }
 
-        // Загрузчик ассетов
         async function loadGameAssets() {
             try {
                 const response = await fetch('./load.json');
@@ -364,7 +336,6 @@
             }
         }
 
-        // Запуск
         startApp().catch(err => {
             console.error("Критическая ошибка:", err);
             screenLoading.style.display = 'none';

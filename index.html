@@ -77,15 +77,15 @@
   .lang-btn {
     background: transparent; color: #888; border: 1px solid #333;
     padding: 5px 10px; cursor: pointer; border-radius: 5px; font-size: 12px;
-    transition: all 0.4s ease; /* Плавнее */
+    transition: all 0.4s ease;
   }
   .lang-btn.active { color: #fff; border-color: #f00; background: rgba(255,0,0,0.2); }
   
   /* Стили для побуквенной анимации */
-  .i18n-text { display: inline; }
+  .i18n-text { display: inline; transition: opacity 0.5s ease; }
   .char {
     display: inline-block; opacity: 0; transform: translateY(5px);
-    transition: opacity 0.4s ease, transform 0.4s ease;
+    transition: opacity 0.3s ease, transform 0.3s ease;
   }
   .char.visible { opacity: 1; transform: translateY(0); }
 
@@ -138,7 +138,7 @@
       <div class="instruction-box">
           <p>
               <strong>iPhone (Safari):</strong> <span data-i18n="ios_inst">Поделиться -> На экран "Домой"</span><br>
-              <strong>Android (Chrome):</strong> <span data-i18n="android_inst">Три точки -> Установить приложение</span>
+              <strong>Android (Samsung/Chrome):</strong> <span data-i18n="android_inst">Меню (⋮) -> Добавить на главный экран</span>
           </p>
       </div>
 
@@ -147,6 +147,14 @@
 
       <!-- Кнопка автоустановки -->
       <button id="btn-auto-install" class="btn-install" data-i18n="install_btn">Добавить приложение</button>
+
+      <!-- Ручная подсказка (всегда видима) -->
+      <div class="instruction-box" style="margin-top: 15px;">
+          <p style="color:#ccc; font-size:12px;" data-i18n="manual_install">
+              <strong>Если кнопки нет — установите вручную:</strong><br>
+              Меню браузера (⋮ или ≡) → «Добавить на главный экран» / «Установить приложение»
+          </p>
+      </div>
 
       <!-- Переключатель языков -->
       <div class="lang-switch">
@@ -182,7 +190,7 @@
 <script type="module">
   'use strict';
 
-  // ★ РЕГИСТРАЦИЯ SERVICE WORKER
+  // ★ РЕГИСТРАЦИЯ SERVICE WORKER (Как в ORBITS - сразу при загрузке)
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js', { scope: './' })
       .then((reg) => console.log('[SW] зарегистрирован, scope:', reg.scope))
@@ -200,9 +208,10 @@
       not_installed: "Игра не установлена",
       install_hint: "Для комфортной игры на телефоне установите приложение.",
       ios_inst: 'Поделиться -> На экран "Домой"',
-      android_inst: 'Три точки -> Установить приложение',
+      android_inst: 'Меню (⋮) -> Добавить на главный экран',
       or: "ИЛИ",
-      install_btn: "Добавить приложение"
+      install_btn: "Добавить приложение",
+      manual_install: "<strong>Если кнопки нет — установите вручную:</strong><br>Меню браузера (⋮ или ≡) → «Добавить на главный экран» / «Установить приложение»"
     },
     en: {
       pc_title: "Mobile Only",
@@ -210,9 +219,10 @@
       not_installed: "Game is not installed",
       install_hint: "For the best experience, install the app.",
       ios_inst: 'Share -> Add to Home Screen',
-      android_inst: 'Three dots -> Install app',
+      android_inst: 'Menu (⋮) -> Add to Home Screen',
       or: "OR",
-      install_btn: "Add App"
+      install_btn: "Add App",
+      manual_install: "<strong>No button? Install manually:</strong><br>Browser menu (⋮ or ≡) → 'Add to Home Screen' / 'Install app'"
     },
     fr: {
       pc_title: "Mobile uniquement",
@@ -220,9 +230,10 @@
       not_installed: "Le jeu n'est pas installé",
       install_hint: "Pour une meilleure expérience, installez l'application.",
       ios_inst: 'Partager -> Sur l\'écran d\'accueil',
-      android_inst: 'Trois points -> Installer l\'application',
+      android_inst: 'Menu (⋮) -> Sur l\'écran d\'accueil',
       or: "OU",
-      install_btn: "Ajouter l'app"
+      install_btn: "Ajouter l'app",
+      manual_install: "<strong>Pas de bouton ? Installez manuellement :</strong><br>Menu du navigateur (⋮ ou ≡) → « Ajouter à l'écran d'accueil »"
     },
     es: {
       pc_title: "Solo móviles",
@@ -230,9 +241,10 @@
       not_installed: "El juego no está instalado",
       install_hint: "Para una mejor experiencia, instala la aplicación.",
       ios_inst: 'Compartir -> Añadir a pantalla de inicio',
-      android_inst: 'Tres puntos -> Instalar aplicación',
+      android_inst: 'Menú (⋮) -> Añadir a pantalla de inicio',
       or: "O",
-      install_btn: "Añadir App"
+      install_btn: "Añadir App",
+      manual_install: "<strong>¿Sin botón? Instala manualmente:</strong><br>Menú del navegador (⋮ o ≡) → «Añadir a pantalla de inicio»"
     },
     it: {
       pc_title: "Solo mobile",
@@ -240,34 +252,29 @@
       not_installed: "Il gioco non è installato",
       install_hint: "Per un'esperienza migliore, installa l'app.",
       ios_inst: 'Condividi -> Aggiungi alla schermata Home',
-      android_inst: 'Tre punti -> Installa app',
+      android_inst: 'Menu (⋮) -> Aggiungi alla schermata Home',
       or: "O",
-      install_btn: "Aggiungi App"
+      install_btn: "Aggiungi App",
+      manual_install: "<strong>Nessun pulsante? Installa manualmente:</strong><br>Menu del browser (⋮ o ≡) → «Aggiungi alla schermata Home»"
     }
   };
 
   let currentLang = 'ru';
 
-  // ===== ПОБУКВЕННАЯ АНИМАЦИЯ =====
+  // ===== АНИМАЦИЯ ТЕКСТА =====
   async function animateText(element, text) {
-    // Очищаем элемент
     element.innerHTML = '';
-    element.classList.remove('i18n-text'); // Убираем класс, если был
-
-    // Разбиваем текст на строки (если есть <br>)
-    const lines = text.split('<br>');
     
-    // Создаем контейнеры для каждой строки
-    const lineElements = lines.map(lineText => {
+    const lines = text.split('<br>');
+    const lineElements = lines.map(() => {
         const lineDiv = document.createElement('div');
         element.appendChild(lineDiv);
         return lineDiv;
     });
 
-    // Находим максимальную длину строки, чтобы знать, сколько «тиков» делать
     const maxLen = Math.max(...lines.map(l => l.length));
 
-    // Запускаем анимацию: на каждом тике добавляем по одной букве во все строки
+    // Печатаем по одной букве на каждой строке одновременно
     for (let i = 0; i < maxLen; i++) {
         for (let l = 0; l < lines.length; l++) {
             if (i < lines[l].length) {
@@ -277,13 +284,11 @@
                 span.innerHTML = char === ' ' ? '&nbsp;' : char;
                 lineElements[l].appendChild(span);
                 
-                // Принудительный reflow для срабатывания анимации
                 void span.offsetWidth;
                 span.classList.add('visible');
             }
         }
-        // Задержка между появлением букв (плавность)
-        await sleep(30); 
+        await sleep(35); // Скорость появления букв
     }
   }
 
@@ -291,28 +296,31 @@
     if (currentLang === lang && !force) return; // Игнорируем, если язык тот же
     currentLang = lang;
     
-    // Обновляем кнопки
     document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-lang') === lang);
     });
 
-    // Анимируем каждый элемент с data-i18n
     const elements = document.querySelectorAll('[data-i18n]');
+    
+    // 1. Плавно исчезает (0.5с)
+    elements.forEach(el => el.style.opacity = '0');
+    await sleep(500);
+
+    // 2. Печатаем новый текст
     for (const el of elements) {
         const key = el.getAttribute('data-i18n');
         if (translations[lang] && translations[lang][key]) {
-            // Плавно скрываем старое (мгновенно очищаем) и запускаем печать
             await animateText(el, translations[lang][key]);
+            el.style.opacity = '1';
         }
     }
   }
 
-  // Навешиваем события на кнопки языков
   document.querySelectorAll('.lang-btn').forEach(btn => {
       btn.addEventListener('click', () => setLanguage(btn.getAttribute('data-lang')));
   });
 
-  // ===== ПРОВЕРКА ПЛАТФОРМЫ =====
+  // ===== ПЛАТФОРМА =====
   const Platform = {
       isMobile: false,
       isStandalone: false,
@@ -332,7 +340,6 @@
                               window.matchMedia('(display-mode: fullscreen)').matches || 
                               window.navigator.standalone === true;
 
-          // Перехват установки (как в ORBITS)
           window.addEventListener('beforeinstallprompt', (e) => {
               e.preventDefault();
               this.deferredPrompt = e;
@@ -366,7 +373,7 @@
 
   Platform.init();
 
-  // ===== ПОДКЛЮЧЕНИЕ МОДУЛЕЙ ИГРЫ =====
+  // ===== МОДУЛИ ИГРЫ =====
   let Settings, Menu;
   try {
       const settingsModule = await import('./Блоки/settings-manager.js');
@@ -413,7 +420,6 @@
 
   // ===== СТАРТ =====
   async function startApp() {
-      // 1. Предзагрузка
       try {
           if (document.fonts) await Promise.race([document.fonts.load('12px WolandFont'), sleep(1000)]);
           const blob = await getCachedOrFetch('./Текстуры/Меню/Дисклеймер.jpg');
@@ -423,23 +429,21 @@
           screenDisclaimer.style.backgroundColor = '#300';
       }
 
-      // 2. Маршрутизация
       if (Platform.isDesktop) {
           screenPC.classList.add('show');
           overlay.style.opacity = '0';
-          setLanguage('ru', true); // Принудительно ставим русский для ПК
+          setLanguage('ru', true); 
       } 
       else if (Platform.isMobile && !Platform.isStandalone) {
           screenPWA.classList.add('show');
           overlay.style.opacity = '0';
-          setLanguage('ru', true); // Принудительно ставим русский при старте
+          setLanguage('ru', true);
           try {
               const logoBlob = await getCachedOrFetch('./Текстуры/Меню/name1.png');
               $('pwa-logo').src = URL.createObjectURL(logoBlob);
           } catch(e){}
       } 
       else {
-          // Запуск игры
           screenDisclaimer.classList.add('show');
           Platform.lockOrientation();
           overlay.style.opacity = '0'; 

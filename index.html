@@ -81,7 +81,7 @@
   }
   .lang-btn.active { color: #fff; border-color: #f00; background: rgba(255,0,0,0.2); }
   
-  /* Стили для плавной смены текста */
+  /* Стили для плавной смены текста (Crossfade) */
   .i18n-text { display: inline; transition: opacity 0.5s ease; }
 
   /* --- ЗАТЕМНЕНИЕ --- */
@@ -181,7 +181,7 @@
 <script type="module">
   'use strict';
 
-  // ★ Регистрация Service Worker
+  // ★ Регистрация Service Worker (Как в ORBITS)
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js', { scope: './' })
       .then((reg) => console.log('[SW] зарегистрирован, scope:', reg.scope))
@@ -273,13 +273,13 @@
 
     const elements = document.querySelectorAll('[data-i18n]');
 
-    // 1. Плавно скрываем (0.5с)
+    // 1. Начинаем плавное исчезновение (0.5с)
     elements.forEach(el => {
         el.style.transition = 'opacity 0.5s ease';
         el.style.opacity = '0';
     });
 
-    // Ждем 0.25с (середина анимации), чтобы текст сменился, пока он еще полупрозрачный
+    // Ждем 0.25с, чтобы текст сменился в середине анимации
     await sleep(250);
 
     // 2. Меняем текст и начинаем плавное появление (0.5с)
@@ -297,58 +297,52 @@
       btn.addEventListener('click', () => setLanguage(btn.getAttribute('data-lang')));
   });
 
-  // ===== ПЛАТФОРМА =====
-  const Platform = {
-      isMobile: false,
-      isStandalone: false,
-      isDesktop: false,
-      deferredPrompt: null,
+  // ===== ПЛАТФОРМА (1:1 из ORBITS) =====
+  function isPWA() {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches;
+    const fullscreen = window.matchMedia('(display-mode: fullscreen)').matches;
+    const minimalUI  = window.matchMedia('(display-mode: minimal-ui)').matches;
+    const iosStandalone = window.navigator.standalone === true;
+    return standalone || fullscreen || minimalUI || iosStandalone;
+  }
 
-      init() {
-          const coarse  = window.matchMedia('(pointer: coarse)').matches;
-          const touch   = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-          const noHover = window.matchMedia('(hover: none)').matches;
-          this.isMobile = [coarse, touch, noHover].filter(Boolean).length >= 2;
+  function isMobile() {
+    const coarse  = window.matchMedia('(pointer: coarse)').matches;
+    const touch   = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    const noHover = window.matchMedia('(hover: none)').matches;
+    return [coarse, touch, noHover].filter(Boolean).length >= 2;
+  }
 
-          const ua = navigator.userAgent.toLowerCase();
-          this.isDesktop = /windows nt|macintosh|linux x86_64|x11/.test(ua) && !/android|iphone|ipad|ipod|mobile/.test(ua);
+  function isDesktopUA() {
+    const ua = navigator.userAgent.toLowerCase();
+    return /windows nt|macintosh|linux x86_64|x11/.test(ua) && !/android|iphone|ipad|ipod|mobile/.test(ua);
+  }
 
-          this.isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
-                              window.matchMedia('(display-mode: fullscreen)').matches || 
-                              window.navigator.standalone === true;
+  // ★ ПЕРЕХВАТ УСТАНОВКИ (1:1 из ORBITS)
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    console.log('✅ beforeinstallprompt сработал!');
+    
+    // Показываем кнопку, только если мы на мобилке (но не в PWA)
+    if (isMobile() && !isPWA()) {
+        const btn = $('btn-auto-install');
+        const divider = $('install-divider');
+        if (btn) btn.style.display = 'block';
+        if (divider) divider.style.display = 'block';
+    }
+  });
 
-          window.addEventListener('beforeinstallprompt', (e) => {
-              e.preventDefault();
-              this.deferredPrompt = e;
-              console.log('✅ beforeinstallprompt сработал!');
-              
-              if (this.isMobile && !this.isStandalone) {
-                  const btn = $('btn-auto-install');
-                  const divider = $('install-divider');
-                  if (btn) btn.style.display = 'block';
-                  if (divider) divider.style.display = 'block';
-              }
-          });
-      },
-
-      async lockOrientation() {
-          if (this.isMobile && screen.orientation && screen.orientation.lock) {
-              try { await screen.orientation.lock('landscape'); } catch (e) {}
-          }
-      },
-
-      async installPWA() {
-          if (this.deferredPrompt) {
-              this.deferredPrompt.prompt();
-              await this.deferredPrompt.userChoice;
-              $('btn-auto-install').style.display = 'none';
-              $('install-divider').style.display = 'none';
-              this.deferredPrompt = null;
-          }
+  $('btn-auto-install').addEventListener('click', async () => {
+      if (deferredPrompt) {
+          deferredPrompt.prompt();
+          await deferredPrompt.userChoice;
+          $('btn-auto-install').style.display = 'none';
+          $('install-divider').style.display = 'none';
+          deferredPrompt = null;
       }
-  };
-
-  Platform.init();
+  });
 
   // ===== МОДУЛИ ИГРЫ =====
   let Settings, Menu;
@@ -374,8 +368,6 @@
   const loadStatus = $('load-status');
   const discImg = $('disclaimer-img');
   const gameContainer = $('game-container');
-  
-  $('btn-auto-install').addEventListener('click', () => Platform.installPWA());
 
   // ===== КЭШИРОВАНИЕ =====
   const CACHE_PREFIX = 'woland_asset_';
@@ -406,12 +398,12 @@
           screenDisclaimer.style.backgroundColor = '#300';
       }
 
-      if (Platform.isDesktop) {
+      if (isDesktopUA()) {
           screenPC.classList.add('show');
           overlay.style.opacity = '0';
           setLanguage('ru', true); 
       } 
-      else if (Platform.isMobile && !Platform.isStandalone) {
+      else if (isMobile() && !isPWA()) {
           screenPWA.classList.add('show');
           overlay.style.opacity = '0';
           setLanguage('ru', true);
@@ -422,7 +414,10 @@
       } 
       else {
           screenDisclaimer.classList.add('show');
-          Platform.lockOrientation();
+          // Блокировка поворота как в ORBITS
+          if (screen.orientation && screen.orientation.lock) {
+              screen.orientation.lock('landscape').catch(() => {});
+          }
           overlay.style.opacity = '0'; 
 
           screenDisclaimer.addEventListener('click', () => {

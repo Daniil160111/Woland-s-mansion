@@ -8,8 +8,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Woland's Mansion</title>
 <link rel="manifest" href="./manifest.json">
-<link rel="icon" type="image/jpeg" href="./icon/icon.jpg">
-<link rel="apple-touch-icon" href="./icon/icon.jpg">
+<link rel="icon" type="image/png" href="./icon/name.png">
+<link rel="apple-touch-icon" href="./icon/name.png">
 <style>
   @font-face {
     font-family: 'WolandFont';
@@ -39,10 +39,12 @@
   }
   .screen.show { display:flex; }
 
+  /* --- ЭКРАН ДЛЯ ПК --- */
   #screen-pc { background:#0a0616; }
   #screen-pc h1 { color:#ff3a3a; font-size:28px; margin-bottom:15px; text-transform:uppercase; letter-spacing:2px;}
   #screen-pc p { color:#c8d4ff; font-size:18px; margin-bottom:20px; line-height:1.6; max-width:80%;}
 
+  /* --- ЭКРАН ДЛЯ МОБИЛЬНЫХ (PWA) --- */
   #screen-pwa-install { background:#050505; overflow-y:auto; }
 
   #pwa-logo {
@@ -59,20 +61,6 @@
   }
   .instruction-box p { color: #ccc; font-size: 12px; }
 
-  #install-divider {
-    display: block; margin: 15px 0; font-size: 18px; font-weight: bold; color: #f00; letter-spacing: 2px;
-    text-shadow: 0 0 10px rgba(255,0,0,0.5);
-  }
-
-  .btn-install {
-    display: block; margin-top: 10px; background: #800000; color: white; border: 2px solid #f00;
-    padding: 12px 24px; font-size: 16px; font-family: inherit;
-    text-transform: uppercase; cursor: pointer; border-radius: 10px;
-    box-shadow:0 6px 18px rgba(255,0,0,0.3); transition: transform 0.15s ease, opacity 0.3s ease;
-  }
-  .btn-install:active { transform:scale(0.97); }
-  .btn-install.hidden { display: none; }
-
   .lang-switch {
     display: flex; gap: 10px; margin-top: 25px; justify-content: center;
   }
@@ -85,11 +73,13 @@
 
   .i18n-text { display: inline; transition: opacity 0.5s ease; }
 
+  /* --- ЗАТЕМНЕНИЕ --- */
   #fade-overlay {
     position: absolute; inset: 0; background: #000; z-index: 50; pointer-events: none;
     opacity: 1; transition: opacity 1.5s ease-in-out;
   }
 
+  /* --- ЭКРАН ЗАГРУЗКИ --- */
   #screen-loading { background: #000; z-index: 90; }
 
   .loader-3d-container { width: 150px; height: 150px; perspective: 800px; margin-bottom: 20px; }
@@ -136,11 +126,6 @@
           </p>
       </div>
 
-      <div id="install-divider">— <span data-i18n="or">ИЛИ</span> —</div>
-
-      <!-- Кнопка видна всегда; если deferredPrompt нет — откроет подсказку -->
-      <button id="btn-auto-install" class="btn-install" data-i18n="install_btn">Добавить приложение</button>
-
       <div class="instruction-box" style="margin-top: 15px;">
           <p style="color:#ccc; font-size:12px;" data-i18n="manual_install">
               <strong>Если кнопки нет — установите вручную:</strong><br>
@@ -165,7 +150,7 @@
   <!-- 4. Экран загрузки -->
   <div id="screen-loading" class="screen">
       <div class="loader-3d-container">
-          <img class="loader-3d-face" src="./Текстуры/Воланд/лицо1.png" alt="Voland" onerror="this.src='./icon/icon.jpg'">
+          <img class="loader-3d-face" src="./Текстуры/Воланд/лицо1.png" alt="Voland" onerror="this.src='./icon/name.png'">
       </div>
       <div class="loader-text">
           <span>З</span><span>а</span><span>г</span><span>р</span><span>у</span><span>з</span><span>к</span><span>а</span><span>.</span><span>.</span><span>.</span>
@@ -197,8 +182,7 @@
     e.preventDefault();
     window.__deferredInstallPrompt = e;
     console.log('✅ beforeinstallprompt сработал');
-    // Сообщаем остальному коду, что кнопка доступна
-    window.dispatchEvent(new CustomEvent('orbits:install-available'));
+    window.dispatchEvent(new CustomEvent('woland:install-available'));
   });
 
   window.addEventListener('appinstalled', function () {
@@ -241,8 +225,6 @@
       ios_inst: 'Поделиться -> На экран "Домой"',
       android_platform: "Android (Samsung/Chrome):",
       android_inst: 'Меню (⋮) -> Добавить на главный экран',
-      or: "ИЛИ",
-      install_btn: "Добавить приложение",
       manual_install: "<strong>Если кнопки нет — установите вручную:</strong><br>Меню браузера (⋮ или ≡) → «Добавить на главный экран» / «Установить приложение»"
     },
     en: {
@@ -254,8 +236,6 @@
       ios_inst: 'Share -> Add to Home Screen',
       android_platform: "Android (Samsung/Chrome):",
       android_inst: 'Menu (⋮) -> Add to Home Screen',
-      or: "OR",
-      install_btn: "Add App",
       manual_install: "<strong>No button? Install manually:</strong><br>Browser menu (⋮ or ≡) → 'Add to Home Screen' / 'Install app'"
     },
     fr: {
@@ -267,8 +247,6 @@
       ios_inst: 'Partager -> Sur l\'écran d\'accueil',
       android_platform: "Android (Samsung/Chrome):",
       android_inst: 'Menu (⋮) -> Sur l\'écran d\'accueil',
-      or: "OU",
-      install_btn: "Ajouter l'app",
       manual_install: "<strong>Pas de bouton ? Installez manuellement :</strong><br>Menu du navigateur (⋮ ou ≡) → « Ajouter à l'écran d'accueil »"
     },
     es: {
@@ -280,8 +258,6 @@
       ios_inst: 'Compartir -> Añadir a pantalla de inicio',
       android_platform: "Android (Samsung/Chrome):",
       android_inst: 'Menú (⋮) -> Añadir a pantalla de inicio',
-      or: "O",
-      install_btn: "Añadir App",
       manual_install: "<strong>¿Sin botón? Instala manualmente:</strong><br>Menú del navegador (⋮ o ≡) → «Añadir a pantalla de inicio»"
     },
     it: {
@@ -293,8 +269,6 @@
       ios_inst: 'Condividi -> Aggiungi alla schermata Home',
       android_platform: "Android (Samsung/Chrome):",
       android_inst: 'Menu (⋮) -> Aggiungi alla schermata Home',
-      or: "O",
-      install_btn: "Aggiungi App",
       manual_install: "<strong>Nessun pulsante? Installa manualmente:</strong><br>Menu del browser (⋮ o ≡) → «Aggiungi alla schermata Home»"
     }
   };
@@ -353,39 +327,6 @@
   function isSafari() {
     return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
   }
-
-  // ===== КНОПКА УСТАНОВКИ =====
-  // deferredPrompt живёт в window.__deferredInstallPrompt (из раннего скрипта)
-  function refreshInstallButton() {
-    const btn = $('btn-auto-install');
-    if (!btn) return;
-    // Всегда показываем кнопку на мобильном не-PWA
-    btn.classList.remove('hidden');
-  }
-
-  // Если prompt пришёл позже — просто перерисуем (кнопка и так видна)
-  window.addEventListener('orbits:install-available', refreshInstallButton);
-
-  $('btn-auto-install').addEventListener('click', async () => {
-      const prompt = window.__deferredInstallPrompt;
-      if (prompt) {
-          prompt.prompt();
-          try {
-              const choice = await prompt.userChoice;
-              console.log('User choice:', choice.outcome);
-          } catch (e) {}
-          window.__deferredInstallPrompt = null;
-          return;
-      }
-      // Нет нативного prompt — показываем ручную подсказку
-      const box = $('manual-instruction');
-      if (box) {
-          box.style.border = '2px solid #f00';
-          box.style.background = 'rgba(255,0,0,0.15)';
-          box.style.boxShadow = '0 0 20px rgba(255,0,0,0.5)';
-          box.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-  });
 
   // ===== МОДУЛИ ИГРЫ =====
   let Settings, Menu;
@@ -450,7 +391,6 @@
           screenPWA.classList.add('show');
           overlay.style.opacity = '0';
           setLanguage('ru', true);
-          refreshInstallButton();
           try {
               const logoBlob = await getCachedOrFetch('./Текстуры/Меню/name1.png');
               $('pwa-logo').src = URL.createObjectURL(logoBlob);

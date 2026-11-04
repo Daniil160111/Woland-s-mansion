@@ -5,75 +5,105 @@ class SoundEngine {
         this.ctx = null;
         this.masterMusic = null;
         this.masterEffects = null;
-        this.loadedBuffers = {}; // Хранилище декодированных файлов
-        this.activeSounds = new Set(); // Для отслеживания и остановки
-        this.audioMode = 'stereo';
+        this.loadedBuffers = {}; 
+        this.activeSounds = new Set(); 
+        
+        // Настройки по умолчанию
+        this.audioMode = 'stereo'; // 'mono', 'stereo', 'surround'
+        this.volumes = { music: 0.8, effects: 0.8 };
     }
 
-    // Инициализация (должна вызываться по клику пользователя)
+    // Инициализация (строго после клика пользователя)
     init() {
         if (this.ctx) return;
         
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         this.ctx = new AudioContext();
 
-        // Создаем шины громкости
+        // Создаем две независимые шины громкости
         this.masterMusic = this.ctx.createGain();
         this.masterEffects = this.ctx.createGain();
         
         this.masterMusic.connect(this.ctx.destination);
         this.masterEffects.connect(this.ctx.destination);
         
-        console.log('🔊 Аудио-движок запущен');
+        // Применяем текущие настройки громкости
+        this.setMasterVolume('music', this.volumes.music);
+        this.setMasterVolume('effects', this.volumes.effects);
+        
+        console.log('🔊 Аудио-движок запущен. Режим:', this.audioMode);
     }
 
-    // Загрузка файла (вызывается из загрузчика в index.html)
-    async loadSound(id, path) {
+    // Загрузка и декодирование звука (принимает строку пути или Blob из кэша)
+    async loadSound(id, source) {
         if (!this.ctx) return;
         try {
-            const response = await fetch(path);
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            const arrayBuffer = await response.arrayBuffer();
+            let arrayBuffer;
+            if (source instanceof Blob) {
+                arrayBuffer = await source.arrayBuffer();
+            } else {
+                const response = await fetch(source);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                arrayBuffer = await response.arrayBuffer();
+            }
             
-            // Декодируем звук (это долгий процесс, поэтому делаем это заранее)
             const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
             this.loadedBuffers[id] = audioBuffer;
         } catch (e) {
-            console.error(`Ошибка загрузки звука ${id} (${path}):`, e);
+            console.error(`Ошибка загрузки звука ${id}:`, e);
         }
     }
 
-    // Воспроизведение звука по ID
+    // Воспроизведение
     play(id, options = {}) {
         if (!this.ctx || !this.loadedBuffers[id]) {
-            console.warn(`Звук ${id} не загружен или аудио-движок не инициализирован.`);
-            return;
+            console.warn(`Звук "${id}" не найден или движок не запущен.`);
+            return null;
         }
 
-        const { loop = false, type = 'effects', position = null, volume = 1.0 } = options;
+        // Параметры по умолчанию: тип 'effects', громкость 1.0, позиция null
+        const { 
+            loop = false, 
+            type = 'effects', 
+            volume = 1.0, 
+            position = null 
+        } = options;
 
         const source = this.ctx.createBufferSource();
         source.buffer = this.loadedBuffers[id];
         source.loop = loop;
 
-        let gainNode = this.ctx.createGain();
+        const gainNode = this.ctx.createGain();
         gainNode.gain.value = volume;
 
-        // Маршрутизация (музыка или эффекты)
         const targetBus = type === 'music' ? this.masterMusic : this.masterEffects;
 
-        // Пространственный звук (3D)
+        // --- ПРОСТРАНСТВЕННЫЙ ЗВУК ---
         if (position && this.audioMode !== 'mono') {
             const panner = this.ctx.createPanner();
-            panner.panningModel = this.audioMode === 'surround' ? 'HRTF' : 'equalpower';
-            panner.positionX.value = position.x;
-            panner.positionY.value = position.y;
-            panner.positionZ.value = position.z;
+            
+            // Настройка Spatial Audio
+            if (this.audioMode === 'surround') {
+                // HRTF - настоящий 3D-звук (1:1 как в играх)
+                panner.panningModel = 'HRTF';
+                panner.distanceModel = 'inverse';
+                panner.refDistance = 1;
+                panner.maxDistance = 100;
+                panner.rolloffFactor = 1;
+            } else {
+                // Обычное стерео (просто лево/право)
+                panner.panningModel = 'equalpower';
+            }
+
+            // Установка координат (x, y, z)
+            panner.positionX.value = position.x || 0;
+            panner.positionY.value = position.y || 0;
+            panner.positionZ.value = position.z || 0;
             
             source.connect(panner);
             panner.connect(gainNode);
         } else {
-            // Обычный стерео/моно звук
+            // Плоский звук (если моно или нет позиции)
             source.connect(gainNode);
         }
 
@@ -81,12 +111,22 @@ class SoundEngine {
         source.start(0);
         
         this.activeSounds.add(source);
-        source.onended = () => this.activeSounds.delete(source);
+        source.onended = () => {
+            this.activeSounds.delete(source);
+            source.disconnect();
+        };
         
-        return source; // Возвращаем, чтобы можно было остановить конкретный звук
+        return source; // Возвращаем, чтобы можно было остановить конкретный звук (например, зацикленный)
     }
 
-    // Остановить всё
+    // Остановить один конкретный звук
+    stop(source) {
+        if (source) {
+            try { source.stop(); } catch(e) {}
+        }
+    }
+
+    // Остановить вообще всё (например, при переходе в меню)
     stopAll() {
         this.activeSounds.forEach(source => {
             try { source.stop(); } catch(e) {}
@@ -96,16 +136,19 @@ class SoundEngine {
 
     // Управление громкостью (0.0 - 1.0)
     setMasterVolume(type, value) {
+        this.volumes[type] = value;
         if (!this.ctx) return;
         const bus = type === 'music' ? this.masterMusic : this.masterEffects;
+        // setTargetAtTime делает плавное изменение (без щелчков)
         bus.gain.setTargetAtTime(value, this.ctx.currentTime, 0.1);
     }
 
-    // Переключение режима
+    // Переключение режима (вызывается из settings-manager.js)
     setAudioMode(mode) {
         this.audioMode = mode;
+        console.log('Режим звука изменен на:', mode);
     }
 }
 
-// Создаем глобальный экземпляр, чтобы он был доступен везде
+// Создаем единый экземпляр для всей игры
 window.SoundsEngine = new SoundEngine();

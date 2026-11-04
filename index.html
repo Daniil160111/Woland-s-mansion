@@ -5,24 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Woland's Mansion</title>
     
-    <!-- Иконка для вкладки (GitHub Pages) -->
+    <!-- Иконка для GitHub Pages -->
     <link rel="icon" type="image/jpeg" href="./icon/icon.jpg">
     
-    <!-- PWA Манифест -->
+    <!-- PWA -->
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#000000">
-    
-    <!-- iOS -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Woland">
     <link rel="apple-touch-icon" href="./icon/icon.jpg">
 
     <style>
+        /* --- ПОДКЛЮЧЕНИЕ ШРИФТА --- */
+        @font-face {
+            font-family: 'WolandFont';
+            src: url('./supermario286rusbylyajka.otf') format('opentype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
         body, html { 
             margin: 0; padding: 0; width: 100%; height: 100%; 
             overflow: hidden; background-color: #000; color: white; 
-            font-family: 'Courier New', Courier, monospace; 
+            font-family: 'WolandFont', 'Courier New', monospace; /* Используем твой шрифт */
             user-select: none; transition: filter 0.3s;
         }
         
@@ -32,21 +37,23 @@
             z-index: 10;
         }
 
-        /* Экран PWA для телефона (Браузер) */
+        /* --- ЭКРАН ДЛЯ МОБИЛЬНЫХ (PWA) --- */
         #screen-pwa-install {
-            background: #111; display: none; padding: 20px; text-align: center; box-sizing: border-box;
+            background: #050505; display: none; padding: 20px; text-align: center; box-sizing: border-box;
         }
-        #screen-pwa-install h1 { color: #a00; margin-bottom: 10px; }
-        #screen-pwa-install p { margin: 10px 0; font-size: 16px; line-height: 1.5; color: #ccc; }
-        .pwa-icon { width: 100px; height: 100px; margin-bottom: 20px; border-radius: 20px; }
+        #pwa-logo {
+            width: 80%; max-width: 400px; margin-bottom: 20px;
+            filter: drop-shadow(0 0 10px rgba(255,0,0,0.5));
+        }
+        #screen-pwa-install p { margin: 8px 0; font-size: 14px; line-height: 1.4; color: #aaa; }
         .btn-install {
-            margin-top: 20px; background: #a00; color: white; border: none;
-            padding: 15px 30px; font-size: 18px; font-family: inherit;
-            text-transform: uppercase; cursor: pointer; border-radius: 5px;
+            margin-top: 20px; background: #800000; color: white; border: 2px solid #f00;
+            padding: 12px 24px; font-size: 16px; font-family: 'WolandFont', monospace;
+            text-transform: uppercase; cursor: pointer; box-shadow: 0 0 15px rgba(255,0,0,0.4);
             display: none;
         }
 
-        /* Дисклеймер */
+        /* --- ДИСКЛЕЙМЕР --- */
         #screen-disclaimer {
             background: #000; cursor: pointer; display: none;
         }
@@ -54,42 +61,104 @@
             width: 100%; height: 100%; object-fit: cover;
         }
 
-        /* Затемнение */
+        /* --- ЗАТЕМНЕНИЕ --- */
         #fade-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: #000; z-index: 50; pointer-events: none;
             opacity: 1; transition: opacity 1.5s ease-in-out;
         }
 
-        /* Загрузка */
+        /* --- ЭКРАН ЗАГРУЗКИ --- */
         #screen-loading {
             background: #000; z-index: 20; display: none;
         }
-        .loader-text { font-size: 20px; letter-spacing: 2px; margin-bottom: 20px; }
-        .progress-bar { width: 60%; max-width: 400px; height: 4px; background: #333; }
-        .progress-fill { width: 0%; height: 100%; background: #a00; transition: width 0.2s; }
+        
+        /* Контейнер для 3D-вращения лица */
+        .loader-3d-container {
+            width: 150px; height: 150px;
+            perspective: 800px;
+            margin-bottom: 20px;
+        }
+        .loader-3d-face {
+            width: 100%; height: 100%;
+            object-fit: cover;
+            border-radius: 50%; /* Делаем лицо круглым */
+            box-shadow: 0 0 30px #500;
+            animation: spin3d 4s linear infinite;
+        }
+        @keyframes spin3d {
+            0% { transform: rotateY(0deg); }
+            100% { transform: rotateY(360deg); }
+        }
+
+        /* Анимация текста "Загрузка..." (волна) */
+        .loader-text {
+            font-size: 24px; letter-spacing: 3px; margin-bottom: 15px;
+            display: flex; gap: 2px;
+        }
+        .loader-text span {
+            display: inline-block;
+            animation: wave 1.5s ease-in-out infinite;
+        }
+        /* Задержки для каждой буквы */
+        .loader-text span:nth-child(1) { animation-delay: 0.0s; }
+        .loader-text span:nth-child(2) { animation-delay: 0.1s; }
+        .loader-text span:nth-child(3) { animation-delay: 0.2s; }
+        .loader-text span:nth-child(4) { animation-delay: 0.3s; }
+        .loader-text span:nth-child(5) { animation-delay: 0.4s; }
+        .loader-text span:nth-child(6) { animation-delay: 0.5s; }
+        .loader-text span:nth-child(7) { animation-delay: 0.6s; }
+        .loader-text span:nth-child(8) { animation-delay: 0.7s; }
+        .loader-text span:nth-child(9) { animation-delay: 0.8s; }
+        
+        @keyframes wave {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); color: #f00; }
+        }
+
+        /* Строка статуса загрузки */
+        #load-status {
+            font-size: 12px; color: #666; font-family: monospace;
+            height: 20px; text-align: center;
+        }
+
+        /* Прогресс-бар */
+        .progress-bar { width: 60%; max-width: 400px; height: 4px; background: #222; margin-top: 20px; }
+        .progress-fill { width: 0%; height: 100%; background: #a00; transition: width 0.2s; box-shadow: 0 0 10px #f00; }
     </style>
 </head>
 <body>
 
-    <!-- 1. Экран инструкции PWA -->
+    <!-- 1. Экран инструкции PWA (Только для телефонов в браузере) -->
     <div id="screen-pwa-install" class="screen">
-        <img src="./icon/icon.jpg" class="pwa-icon" alt="Icon">
-        <h1>Установите игру</h1>
-        <p>Для игры на телефоне необходимо установить веб-приложение.</p>
-        <p><strong>iPhone (Safari):</strong><br>Нажмите «Поделиться» <br>и выберите «На экран "Домой"».</p>
-        <p><strong>Android (Chrome):</strong><br>Нажмите на три точки в углу <br>и выберите «Установить приложение».</p>
-        <button id="btn-auto-install" class="btn-install">Установить</button>
+        <img id="pwa-logo" src="./Текстуры/Меню/name1.png" alt="Woland's Mansion" onerror="this.style.display='none'">
+        <p><strong>Игра не установлена</strong></p>
+        <p>Для комфортной игры на телефоне (без адресной строки и в горизонтальном режиме) установите приложение.</p>
+        <p style="color:#888; font-size:12px; margin-top:15px;">
+            <strong>iPhone (Safari):</strong> Поделиться -> На экран "Домой"<br>
+            <strong>Android (Chrome):</strong> Три точки -> Установить приложение
+        </p>
+        <button id="btn-auto-install" class="btn-install">Добавить приложение</button>
     </div>
 
     <!-- 2. Дисклеймер -->
     <div id="screen-disclaimer" class="screen">
-        <img id="disclaimer-img" src="./Текстуры/Меню/Дисклеймер.jpg" alt="Disclaimer">
+        <img id="disclaimer-img" src="" alt="Disclaimer">
     </div>
 
-    <!-- 3. Загрузка -->
+    <!-- 3. Экран загрузки -->
     <div id="screen-loading" class="screen">
-        <div class="loader-text">ЗАГРУЗКА ОСОБНЯКА...</div>
+        <div class="loader-3d-container">
+            <!-- Используем картинку лица. Если её нет - ничего не сломается -->
+            <img class="loader-3d-face" src="./Текстуры/Воланд/лицо1.png" alt="Voland" onerror="this.src='./icon/icon.jpg'">
+        </div>
+        
+        <div class="loader-text">
+            <span>З</span><span>а</span><span>г</span><span>р</span><span>у</span><span>з</span><span>к</span><span>а</span><span>.</span><span>.</span><span>.</span>
+        </div>
+
+        <div id="load-status">Инициализация...</div>
+        
         <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
     </div>
 
@@ -115,8 +184,7 @@
                 window.addEventListener('beforeinstallprompt', (e) => {
                     e.preventDefault();
                     this.deferredPrompt = e;
-                    const btn = document.getElementById('btn-auto-install');
-                    if (btn) btn.style.display = 'block';
+                    document.getElementById('btn-auto-install').style.display = 'block';
                 });
             },
 
@@ -144,124 +212,162 @@
         const screenDisclaimer = document.getElementById('screen-disclaimer');
         const screenLoading = document.getElementById('screen-loading');
         const progressFill = document.getElementById('progress-fill');
+        const loadStatus = document.getElementById('load-status');
+        const discImg = document.getElementById('disclaimer-img');
         
         document.getElementById('btn-auto-install').addEventListener('click', () => Platform.installPWA());
 
-        // --- СИСТЕМА КЭШИРОВАНИЯ ---
-        // Мы используем localStorage для хранения медиа в Base64.
-        // ВАЖНО: Лимит localStorage обычно 5MB. Если файлов много и они тяжелые, 
-        // в будущем стоит перейти на IndexedDB, но для старта это сработает.
+        // --- КЭШИРОВАНИЕ (LocalStorage) ---
         const CACHE_PREFIX = 'woland_asset_';
 
         async function getCachedOrFetch(path) {
             const cacheKey = CACHE_PREFIX + path;
             const cachedData = localStorage.getItem(cacheKey);
-
             if (cachedData) {
-                // Берем из кэша (возвращаем Blob)
                 const res = await fetch(cachedData);
                 return await res.blob();
             }
-
-            // Если нет в кэше — качаем
             const response = await fetch(path);
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            if (!response.ok) throw new Error(`404`);
             const blob = await response.blob();
-
-            // Сохраняем в кэш (переводим в Base64)
+            
             const reader = new FileReader();
             reader.readAsDataURL(blob);
             reader.onloadend = () => {
-                try {
-                    localStorage.setItem(cacheKey, reader.result);
-                } catch (e) {
-                    console.warn('Кэш переполнен, файл не сохранен:', path);
-                }
+                try { localStorage.setItem(cacheKey, reader.result); } catch (e) {}
             };
-
             return blob;
         }
 
-        // --- ЛОГИКА ЗАПУСКА ---
-        if (Platform.isMobile && !Platform.isStandalone) {
-            screenPWA.style.display = 'flex';
-            overlay.style.opacity = '0';
-        } else {
-            // Предзагрузка дисклеймера (по твоему условию — он вне load.json)
-            const discImg = document.getElementById('disclaimer-img');
-            discImg.src = './Текстуры/Меню/Дисклеймер.jpg'; 
+        // --- СТАРТОВАЯ ЛОГИКА ---
+        
+        // 1. Загружаем шрифт и дисклеймер ДО показа экрана
+        async function preloadStartupAssets() {
+            // Шрифт грузится через CSS, принудительно ждем его
+            if (document.fonts) {
+                await document.fonts.load('12px WolandFont');
+            }
             
-            screenDisclaimer.style.display = 'flex';
-            Platform.lockOrientation();
-
-            screenDisclaimer.addEventListener('click', () => {
-                window.SoundsEngine.init();
-                overlay.style.opacity = '1';
-                
-                setTimeout(async () => {
-                    screenDisclaimer.style.display = 'none';
-                    screenLoading.style.display = 'flex';
-                    
-                    await loadAssets();
-                    
-                    setTimeout(() => {
-                        overlay.style.opacity = '0';
-                        screenLoading.style.display = 'none';
-                        Menu.start(); // Передача управления меню
-                    }, 600);
-                    
-                }, 1500);
-            });
-        }
-
-        // --- ЗАГРУЗЧИК ---
-        async function loadAssets() {
+            // Грузим дисклеймер
             try {
-                const response = await fetch('./load.json');
-                const manifest = await response.json();
-
-                let allFiles = [];
-                if (manifest.sounds) allFiles = allFiles.concat(Object.entries(manifest.sounds));
-                if (manifest.textures) allFiles = allFiles.concat(Object.entries(manifest.textures));
-
-                const totalFiles = allFiles.length;
-                let loadedCount = 0;
-
-                const updateProgress = () => {
-                    loadedCount++;
-                    progressFill.style.width = `${Math.floor((loadedCount / totalFiles) * 100)}%`;
-                };
-
-                // Грузим звуки через движок (передаем Blob)
-                if (manifest.sounds) {
-                    for (const [id, path] of Object.entries(manifest.sounds)) {
-                        try {
-                            const blob = await getCachedOrFetch(path);
-                            await window.SoundsEngine.loadSound(id, blob);
-                        } catch (e) { console.warn(`Ошибка звука ${id}:`, e); }
-                        updateProgress();
-                    }
-                }
-
-                // Грузим текстуры (создаем объекты Image из Blob)
-                if (manifest.textures) {
-                    for (const [id, path] of Object.entries(manifest.textures)) {
-                        try {
-                            const blob = await getCachedOrFetch(path);
-                            const imgUrl = URL.createObjectURL(blob);
-                            // Сохраняем URL картинки, чтобы использовать её в меню
-                            window.SoundsEngine.loadedTextures = window.SoundsEngine.loadedTextures || {};
-                            window.SoundsEngine.loadedTextures[id] = imgUrl;
-                        } catch (e) { console.warn(`Ошибка текстуры ${id}:`, e); }
-                        updateProgress();
-                    }
-                }
-                
-                console.log('✅ Все ассеты загружены!');
-            } catch (error) {
-                console.error('Критическая ошибка загрузки:', error);
+                const blob = await getCachedOrFetch('./Текстуры/Меню/Дисклеймер.jpg');
+                discImg.src = URL.createObjectURL(blob);
+            } catch (e) {
+                // Если дисклеймера нет, ставим заглушку, чтобы игра не крашилась
+                discImg.src = './icon/icon.jpg';
             }
         }
+
+        // 2. Главный запуск
+        async function startApp() {
+            await preloadStartupAssets();
+
+            if (Platform.isMobile && !Platform.isStandalone) {
+                // --- МОБИЛЬНЫЙ БРАУЗЕР ---
+                screenPWA.style.display = 'flex';
+                overlay.style.opacity = '0';
+                
+                // Грузим логотип для мобилки
+                try {
+                    const logoBlob = await getCachedOrFetch('./Текстуры/Меню/name1.png');
+                    document.getElementById('pwa-logo').src = URL.createObjectURL(logoBlob);
+                } catch(e){}
+
+            } else {
+                // --- ПК ИЛИ PWA ---
+                screenDisclaimer.style.display = 'flex';
+                Platform.lockOrientation();
+                overlay.style.opacity = '0'; // Показываем дисклеймер
+
+                // Ждем клика по дисклеймеру
+                screenDisclaimer.addEventListener('click', () => {
+                    window.SoundsEngine.init();
+                    
+                    // Плавное затемнение (1.5 сек)
+                    overlay.style.opacity = '1';
+                    
+                    setTimeout(async () => {
+                        screenDisclaimer.style.display = 'none';
+                        screenLoading.style.display = 'flex';
+                        
+                        // Запускаем загрузку
+                        await loadGameAssets();
+                        
+                        // Плавный переход в меню
+                        setTimeout(() => {
+                            overlay.style.opacity = '0';
+                            screenLoading.style.display = 'none';
+                            Menu.start();
+                        }, 600);
+                        
+                    }, 1500); // Ждем завершения анимации затемнения
+                }, { once: true }); // { once: true } чтобы не сработало дважды
+            }
+        }
+
+        // 3. Загрузчик ассетов
+        async function loadGameAssets() {
+            try {
+                const response = await fetch('./load.json');
+                if (!response.ok) throw new Error('load.json не найден');
+                const manifest = await response.json();
+
+                // Собираем список всех файлов с их типами
+                let queue = [];
+                if (manifest.sounds) {
+                    for (const [id, path] of Object.entries(manifest.sounds)) {
+                        queue.push({ type: 'Звуки', id, path, target: 'sound' });
+                    }
+                }
+                if (manifest.textures) {
+                    for (const [id, path] of Object.entries(manifest.textures)) {
+                        queue.push({ type: 'Текстуры', id, path, target: 'texture' });
+                    }
+                }
+
+                const totalFiles = queue.length;
+                let loadedCount = 0;
+
+                // Инициализируем хранилище для текстур в движке звука (или в глобальной переменной)
+                window.GameAssets = window.GameAssets || {};
+
+                for (const item of queue) {
+                    // Обновляем статус (например: "Звуки: menu_theme.mp3")
+                    const fileName = item.path.split('/').pop();
+                    loadStatus.textContent = `${item.type}: ${fileName}`;
+
+                    try {
+                        const blob = await getCachedOrFetch(item.path);
+                        
+                        if (item.target === 'sound') {
+                            await window.SoundsEngine.loadSound(item.id, blob);
+                        } else {
+                            // Сохраняем URL текстуры в глобальный объект
+                            window.GameAssets[item.id] = URL.createObjectURL(blob);
+                        }
+                    } catch (e) {
+                        // Если файла нет — просто идем дальше (игнорируем)
+                        console.warn(`Пропущен файл (не найден): ${item.path}`);
+                    }
+
+                    // Обновляем прогресс (даже если файл пропущен, мы двигаемся дальше)
+                    loadedCount++;
+                    progressFill.style.width = `${Math.floor((loadedCount / totalFiles) * 100)}%`;
+                }
+
+                loadStatus.textContent = "Готово!";
+                console.log('✅ Загрузка завершена.');
+
+            } catch (error) {
+                console.error('Критическая ошибка загрузки:', error);
+                loadStatus.textContent = "Ошибка загрузки данных.";
+                // Даже если load.json битый, мы даем зайти в меню
+            }
+        }
+
+        // ЗАПУСК
+        startApp();
+
     </script>
 </body>
 </html>

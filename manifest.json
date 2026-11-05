@@ -5,7 +5,7 @@
   "description": "Woland's Mansion — 3D хоррор в особняке Воланда.",
   "lang": "ru",
   "dir": "ltr",
-  "start_url": "./",
+  "start_url": "./?source=pwa",
   "scope": "./",
   "display": "standalone",
   "display_override": ["standalone", "fullscreen"],
@@ -16,8 +16,14 @@
   "categories": ["games", "entertainment"],
   "icons": [
     {
-      "src": "icon/icon.jpg",
-      "sizes": "any",
+      "src": "./icon/icon.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon/icon.jpg",
+      "sizes": "512x512",
       "type": "image/jpeg",
       "purpose": "any"
     }

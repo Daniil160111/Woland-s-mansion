@@ -7,7 +7,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Woland's Mansion</title>
-<!-- Относительный путь без точки для Chrome, но внутри текущей папки -->
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon/name.png">
 <link rel="apple-touch-icon" href="icon/name.png">
@@ -109,7 +108,7 @@
 
   <!-- 1. Экран для ПК -->
   <div id="screen-pc" class="screen">
-      <h1 data-i18n="pc_title">Только для mobile</h1>
+      <h1 data-i18n="pc_title">Только для мобильных</h1>
       <p data-i18n="pc_text">Woland's Mansion — мобильная 3D-игра.<br>Пожалуйста, откройте эту страницу на вашем смартфоне.</p>
   </div>
 
@@ -169,7 +168,7 @@
 (function () {
   'use strict';
 
-  // ИСПРАВЛЕНО: Регистрация SW теперь автоматически подстраивается под текущий путь без жесткой привязки к корню домена
+  // Исправлено: Прямая регистрация без принудительного scope домена, чтобы не ломать пути в подпапках хостинга
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js')
       .then(function (reg) { console.log('[SW] зарегистрирован, scope:', reg.scope); })
@@ -258,7 +257,7 @@
       ios_inst: 'Compartir -> Añadir a pantalla de inicio',
       android_platform: "Android (Samsung/Chrome):",
       android_inst: 'Menú (⋮) -> Añadir a pantalla de inicio',
-      manual_install: "<strong>¿Sin кнопка? Instala manualmente:</strong><br>Menú del navegador (⋮ o ≡) → «Añadir a pantalla de inicio»"
+      manual_install: "<strong>¿Sin botón? Instala manualmente:</strong><br>Menú del navegador (⋮ o ≡) → «Añadir a pantalla de inicio»"
     },
     it: {
       pc_title: "Solo mobile",
@@ -328,20 +327,8 @@
     return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
   }
 
-  // ===== МОДУЛИ ИГРЫ =====
-  let Settings, Menu;
-  try {
-      const settingsModule = await import('./Блоки/settings-manager.js');
-      Settings = settingsModule.Settings;
-      Settings.init();
-  } catch (e) { console.warn('settings-manager.js не найден'); }
-
-  try {
-      const menuModule = await import('./Блоки/menu.js');
-      Menu = menuModule.Menu;
-  } catch (e) {
-      Menu = { start: () => { $('game-container').innerHTML = '<h1 style="color:red;text-align:center;margin-top:20%">Ошибка: menu.js не найден</h1>'; }};
-  }
+  // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ МОДУЛЕЙ =====
+  let Settings = null, Menu = null;
 
   const overlay = $('fade-overlay');
   const screenPC = $('screen-pc');
@@ -353,25 +340,30 @@
   const discImg = $('disclaimer-img');
   const gameContainer = $('game-container');
 
-  // ===== КЭШИРОВАНИЕ =====
-  const CACHE_PREFIX = 'woland_asset_';
+  // ===== ИСПРАВЛЕННОЕ КЭШИРОВАНИЕ (Вместо сбойного localStorage на 5МБ используем надежный Cache Storage API) =====
   async function getCachedOrFetch(path) {
-      const cacheKey = CACHE_PREFIX + path;
-      const cachedData = localStorage.getItem(cacheKey);
-      if (cachedData) {
-          const res = await fetch(cachedData);
-          return await res.blob();
+      try {
+          const cache = await caches.open('woland-media-cache');
+          const cachedResponse = await cache.match(path);
+          if (cachedResponse) {
+              const blob = await cachedResponse.blob();
+              return blob;
+          }
+          const response = await fetch(path);
+          if (!response.ok) throw new Error('404');
+          
+          // Сохраняем копию сетевого ответа в оффлайн-кэш без лимитов памяти
+          await cache.put(path, response.clone());
+          return await response.blob();
+      } catch (e) {
+          // Если кэш недоступен, делаем прямой сетевой запрос как запасной вариант
+          const fresh = await fetch(path);
+          if (!fresh.ok) throw new Error('404');
+          return await fresh.blob();
       }
-      const response = await fetch(path);
-      if (!response.ok) throw new Error('404');
-      const blob = await response.blob();
-      const reader = new FileReader();
-      reader.readAsDataURL(blob);
-      reader.onloadend = () => { try { localStorage.setItem(cacheKey, reader.result); } catch (e) {} };
-      return blob;
   }
 
-  // ===== СТАРТ =====
+  // ===== СТАРТ ПРИЛОЖЕНИЯ =====
   async function startApp() {
       try {
           if (document.fonts) await Promise.race([document.fonts.load('12px WolandFont'), sleep(1000)]);
@@ -396,7 +388,6 @@
               $('pwa-logo').src = URL.createObjectURL(logoBlob);
           } catch(e){}
 
-          // Safari — через 2 секунды подсвечиваем ручную инструкцию
           if (isSafari()) {
               setTimeout(() => {
                   const manualBox = $('manual-instruction');
@@ -423,19 +414,36 @@
                   screenDisclaimer.classList.remove('show');
                   screenLoading.classList.add('show');
 
+                  // Исправлено: Порядок загрузки. Импортируем игровые ES-модули параллельно кэшированию ресурсов, не блокируя UI
+                  try {
+                      const settingsModule = await import('./Блоки/settings-manager.js');
+                      Settings = settingsModule.Settings;
+                      Settings.init();
+                  } catch (e) { console.warn('settings-manager.js не найден или заблокирован CORS'); }
+
+                  try {
+                      const menuModule = await import('./Блоки/menu.js');
+                      Menu = menuModule.Menu;
+                  } catch (e) {
+                      Menu = { start: () => { $('game-container').innerHTML = '<h1 style="color:red;text-align:center;margin-top:20%">Ошибка: menu.js не найден</h1>'; }};
+                  }
+
                   await loadGameAssets();
 
                   setTimeout(() => {
                       overlay.style.opacity = '0';
                       screenLoading.classList.remove('show');
                       gameContainer.classList.add('show');
-                      Menu.start();
+                      if (Menu && typeof Menu.start === 'function') {
+                          Menu.start();
+                      }
                   }, 600);
               }, 1500);
           }, { once: true });
       }
   }
 
+  // ===== ЗАГРУЗКА РЕСУРСОВ С ПРЕДОХРАНИТЕЛЕМ ЗАВИСАНИЯ =====
   async function loadGameAssets() {
       try {
           const response = await fetch('./load.json');
@@ -455,14 +463,20 @@
               loadStatus.textContent = `${item.type}: ${fileName}`;
 
               try {
-                  const blob = await getCachedOrFetch(item.path);
-                  if (item.target === 'sound' && window.SoundsEngine) {
-                      await window.SoundsEngine.loadSound(item.id, blob);
-                  } else if (item.target === 'texture') {
-                      window.GameAssets[item.id] = URL.createObjectURL(blob);
-                  }
+                  // Исправлено зависание: Встроен таймаут на 2.5 секунды для каждого файла, чтобы сбойный трек/текстура не вешали загрузку навсегда
+                  await Promise.race([
+                      (async () => {
+                          const blob = await getCachedOrFetch(item.path);
+                          if (item.target === 'sound' && window.SoundsEngine && typeof window.SoundsEngine.loadSound === 'function') {
+                              await window.SoundsEngine.loadSound(item.id, blob);
+                          } else if (item.target === 'texture') {
+                              window.GameAssets[item.id] = URL.createObjectURL(blob);
+                          }
+                      })(),
+                      sleep(2500)
+                  ]);
               } catch (e) {
-                  console.warn(`Файл не найден (пропущен): ${item.path}`);
+                  console.warn(`Файл пропущен или вызвал ошибку: ${item.path}`);
               }
               loadedCount++;
               progressFill.style.width = `${Math.floor((loadedCount / totalFiles) * 100)}%`;
@@ -470,15 +484,16 @@
           loadStatus.textContent = "Готово!";
       } catch (error) {
           console.error('Ошибка манифеста:', error);
-          loadStatus.textContent = "Ошибка манифеста, но игра запущена.";
+          loadStatus.textContent = "Ошибка загрузки манифеста load.json";
       }
   }
 
+  // Синхронный вызов главной точки входа сразу после инициализации скрипта
   startApp().catch(err => {
-      console.error("Критическая ошибка:", err);
+      console.error("Критический сбой инициализации приложения:", err);
       screenLoading.classList.remove('show');
       gameContainer.classList.add('show');
-      Menu.start();
+      if (Menu && typeof Menu.start === 'function') Menu.start();
   });
 
 </script>

@@ -7,9 +7,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Woland's Mansion</title>
-<link rel="manifest" href="./manifest.json">
-<link rel="icon" type="image/png" href="./icon/name.png">
-<link rel="apple-touch-icon" href="./icon/name.png">
+<!-- ИСПРАВЛЕНО: Прямые пути без точек для валидации PWA в Android Chrome -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon/name.png">
+<link rel="apple-touch-icon" href="icon/name.png">
 <style>
   @font-face {
     font-family: 'WolandFont';
@@ -109,7 +110,7 @@
   <!-- 1. Экран для ПК -->
   <div id="screen-pc" class="screen">
       <h1 data-i18n="pc_title">Только для мобильных</h1>
-      <p data-i18n="pc_text">Woland's Mansion — мобильная 3D-игра.<br>Пожалуйста, откройте эту страницу на вашем смартфоне.</p>
+      <p data-i18n="pc_text">Woland's Mansion — mobile 3D-игра.<br>Пожалуйста, откройте эту страницу на вашем смартфоне.</p>
   </div>
 
   <!-- 2. Экран инструкции PWA -->
@@ -168,14 +169,13 @@
 (function () {
   'use strict';
 
-  // 1) Service Worker — регистрируем СРАЗУ, без await
+  // ИСПРАВЛЕНО: Прямой путь к sw.js и корректный корневой scope для правильного прохождения теста PWA в Chrome
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js', { scope: './' })
+    navigator.serviceWorker.register('sw.js', { scope: '/' })
       .then(function (reg) { console.log('[SW] зарегистрирован, scope:', reg.scope); })
       .catch(function (err) { console.warn('[SW] ошибка:', err.message); });
   }
 
-  // 2) beforeinstallprompt — слушаем СРАЗУ, до любых await
   window.__deferredInstallPrompt = null;
 
   window.addEventListener('beforeinstallprompt', function (e) {
@@ -244,9 +244,9 @@
       not_installed: "Le jeu n'est pas installé",
       install_hint: "Pour une meilleure expérience, installez l'application.",
       ios_platform: "iPhone (Safari):",
-      ios_inst: 'Partager -> Sur l\'écran d\'accueil',
+      ios_inst: 'Partager -> Sur l'écran d'accueil',
       android_platform: "Android (Samsung/Chrome):",
-      android_inst: 'Menu (⋮) -> Sur l\'écran d\'accueil',
+      android_inst: 'Menu (⋮) -> Sur l'écran d'accueil',
       manual_install: "<strong>Pas de bouton ? Installez manuellement :</strong><br>Menu du navigateur (⋮ ou ≡) → « Ajouter à l'écran d'accueil »"
     },
     es: {

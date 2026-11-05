@@ -24,9 +24,11 @@
     #install-screen p { max-width: 560px; line-height: 1.65; color: #ddd; }
     .install-card { width: min(92vw, 540px); padding: 18px 22px; margin: 8px; border: 1px solid #562323; border-radius: 12px; background: #ffffff0b; line-height: 1.7; }
     .install-card strong { color: #ff7777; }
-    .action { min-width: 190px; padding: 13px 22px; color: #fff; background: linear-gradient(135deg,#9c1111,#440707); border: 1px solid #e45a5a; border-radius: 8px; cursor: pointer; box-shadow: 0 0 20px #9c111155; transition: transform .2s, box-shadow .2s, background .2s; }
+    .action { min-width: 190px; padding: 13px 22px; color: #fff; background: linear-gradient(135deg,#9c1111,#440707); border: 1px solid #e45a5a; border-radius: 8px; cursor: pointer; box-shadow: 0 0 20px #9c111155; transition: transform .2s, box-shadow .2s; }
     .action:hover, .action:focus-visible { transform: translateY(-2px); box-shadow: 0 0 28px #e22a2a88; }
+    .action:disabled { opacity: .6; cursor: wait; }
     #install-button { display: none; margin-top: 12px; }
+    #continue-button { margin-top: 16px; background: #241a24; border-color: #887788; box-shadow: none; }
     #disclaimer-screen { background: #050407; }
     #disclaimer-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
     #disclaimer-content { position: relative; z-index: 1; margin-top: auto; padding-bottom: 12px; }
@@ -45,11 +47,12 @@
   <main>
     <section id="install-screen" class="screen" aria-labelledby="install-title">
       <img src="./Текстуры/Меню/name1.png" alt="Woland's Mansion" onerror="this.hidden=true">
-      <h1 id="install-title">Установите игру на телефон</h1>
-      <p>Чтобы играть, добавьте Woland’s Mansion на главный экран. После установки запустите приложение с его значка.</p>
+      <h1 id="install-title">Woland's Mansion</h1>
+      <p>Установите игру на главный экран, чтобы запускать её как приложение. Или продолжите играть прямо в браузере.</p>
       <div class="install-card"><strong>iPhone / iPad (Safari)</strong><br>Нажмите «Поделиться» → «На экран Домой» → «Добавить».</div>
       <div class="install-card"><strong>Android (Chrome / Samsung Internet)</strong><br>Откройте меню браузера (⋮) → «Установить приложение» или «Добавить на главный экран».</div>
       <button id="install-button" class="action" type="button">Установить приложение</button>
+      <button id="continue-button" class="action" type="button">Продолжить в браузере</button>
     </section>
 
     <section id="disclaimer-screen" class="screen" aria-label="Дисклеймер">
@@ -98,17 +101,20 @@
         $('game-container').classList.remove('active');
         if (id) $(id).classList.add('active');
       };
+      const openDisclaimer = () => {
+        const image = $('disclaimer-image');
+        image.addEventListener('load', () => { image.hidden = false; }, { once: true });
+        image.addEventListener('error', () => { image.hidden = true; }, { once: true });
+        image.src = './Текстуры/Меню/Дисклеймер.jpg';
+        activate('disclaimer-screen');
+      };
 
       if (isMobileDevice() && !isStandalone()) {
         activate('install-screen');
-        return;
+        $('continue-button').addEventListener('click', openDisclaimer);
+      } else {
+        openDisclaimer();
       }
-
-      const disclaimerImage = $('disclaimer-image');
-      disclaimerImage.addEventListener('load', () => { disclaimerImage.hidden = false; }, { once: true });
-      disclaimerImage.addEventListener('error', () => { disclaimerImage.hidden = true; }, { once: true });
-      disclaimerImage.src = './Текстуры/Меню/Дисклеймер.jpg';
-      activate('disclaimer-screen');
 
       $('begin-button').addEventListener('click', async () => {
         $('begin-button').disabled = true;
@@ -135,7 +141,7 @@
           $('begin-button').disabled = false;
           setTimeout(() => { activate('disclaimer-screen'); }, 2600);
         }
-      }, { once: true });
+      });
 
       async function fetchWithTimeout(url, timeoutMs = 8000) {
         const controller = new AbortController();

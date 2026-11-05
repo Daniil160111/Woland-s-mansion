@@ -17,40 +17,50 @@
     html, body { width: 100%; min-height: 100%; margin: 0; background: #0a0616; color: #fff; font-family: WolandFont, 'Courier New', monospace; }
     body { min-height: 100dvh; overflow: hidden; }
     button { font: inherit; }
-    .screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom)); text-align: center; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .65s ease, visibility .65s; }
+    .screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); text-align: center; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .5s ease, visibility .5s; }
     .screen.active { opacity: 1; visibility: visible; pointer-events: auto; }
     #install-screen { background: radial-gradient(ellipse at center, #201020, #050407 75%); overflow-y: auto; }
-    #install-screen img { width: min(90vw, 540px); max-height: 30vh; object-fit: contain; margin-bottom: 20px; filter: drop-shadow(0 0 18px #800); }
-    #install-screen p { max-width: 560px; line-height: 1.65; color: #ddd; }
-    .install-card { width: min(92vw, 540px); padding: 18px 22px; margin: 8px; border: 1px solid #562323; border-radius: 12px; background: #ffffff0b; line-height: 1.7; }
+    #install-screen > img { width: min(86vw, 500px); max-height: 24vh; object-fit: contain; margin-bottom: 12px; filter: drop-shadow(0 0 18px #800); }
+    #install-screen p { max-width: 560px; line-height: 1.5; color: #ddd; margin: 8px; }
+    .install-card { width: min(92vw, 500px); padding: 10px 16px; margin: 5px; border: 1px solid #562323; border-radius: 10px; background: #ffffff0b; line-height: 1.45; }
     .install-card strong { color: #ff7777; }
-    .action { min-width: 190px; padding: 13px 22px; color: #fff; background: linear-gradient(135deg,#9c1111,#440707); border: 1px solid #e45a5a; border-radius: 8px; cursor: pointer; box-shadow: 0 0 20px #9c111155; transition: transform .2s, box-shadow .2s; }
-    .action:hover, .action:focus-visible { transform: translateY(-2px); box-shadow: 0 0 28px #e22a2a88; }
+    .action { min-width: 190px; padding: 12px 20px; color: #fff; background: linear-gradient(135deg,#9c1111,#440707); border: 1px solid #e45a5a; border-radius: 8px; cursor: pointer; box-shadow: 0 0 20px #9c111155; }
     .action:disabled { opacity: .6; cursor: wait; }
-    #install-button { display: none; margin-top: 12px; }
-    #continue-button { margin-top: 16px; background: #241a24; border-color: #887788; box-shadow: none; }
-    #disclaimer-screen { background: #050407; }
+    #install-button { display: none; margin-top: 10px; }
+    #continue-button { margin-top: 10px; background: #241a24; border-color: #887788; box-shadow: none; }
+    #disclaimer-screen, #loading-screen { background: #050407; }
     #disclaimer-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
-    #disclaimer-content { position: relative; z-index: 1; margin-top: auto; padding-bottom: 12px; }
-    #loading-screen { z-index: 5; background: #050407; }
-    .spinner { width: 58px; height: 58px; margin-bottom: 24px; border: 3px solid #ffffff22; border-top-color: #e22; border-radius: 50%; animation: spin 1s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    #loading-status { min-height: 1.5em; color: #ccc; }
-    .progress { width: min(70vw, 360px); height: 5px; margin-top: 16px; overflow: hidden; background: #292329; border-radius: 5px; }
+    #disclaimer-content { position: relative; z-index: 1; margin-top: auto; padding-bottom: 10px; }
+    #loading-screen { z-index: 5; }
+    .loader-copy { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: -6vh; }
+    .loader-title { display: flex; gap: 3px; font-size: clamp(24px, 6vw, 36px); letter-spacing: 2px; text-shadow: 0 0 12px #f00; }
+    .loader-title span { display: inline-block; animation: wave 1.15s ease-in-out infinite; }
+    .loader-title span:nth-child(1) { animation-delay: 0s; } .loader-title span:nth-child(2) { animation-delay: .08s; }
+    .loader-title span:nth-child(3) { animation-delay: .16s; } .loader-title span:nth-child(4) { animation-delay: .24s; }
+    .loader-title span:nth-child(5) { animation-delay: .32s; } .loader-title span:nth-child(6) { animation-delay: .4s; }
+    .loader-title span:nth-child(7) { animation-delay: .48s; } .loader-title span:nth-child(8) { animation-delay: .56s; }
+    .loader-title span:nth-child(9) { animation-delay: .64s; } .loader-title span:nth-child(10) { animation-delay: .72s; }
+    .loader-title span:nth-child(11) { animation-delay: .8s; }
+    @keyframes wave { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); color: #f44; } }
+    #loading-status { min-height: 1.5em; max-width: 80vw; overflow-wrap: anywhere; color: #bbb; font-size: 13px; }
+    .progress { width: min(70vw, 360px); height: 5px; overflow: hidden; background: #292329; border-radius: 5px; }
     #progress-fill { width: 0; height: 100%; background: linear-gradient(90deg,#8c1010,#f44); transition: width .3s ease; }
-    #game-container { position: fixed; inset: 0; z-index: 2; opacity: 0; visibility: hidden; transition: opacity .8s ease, visibility .8s; }
+    #loading-face { position: fixed; right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); width: clamp(52px, 14vw, 90px); height: clamp(52px, 14vw, 90px); object-fit: cover; border-radius: 50%; filter: drop-shadow(0 0 12px #a00); animation: face-spin 2s linear infinite; }
+    @keyframes face-spin { to { transform: rotateY(360deg); } }
+    #game-container { position: fixed; inset: 0; z-index: 2; opacity: 0; visibility: hidden; transition: opacity .6s ease, visibility .6s; }
     #game-container.active { opacity: 1; visibility: visible; }
-    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+    @media (max-height: 600px) { .install-card { padding: 7px 12px; margin: 3px; } #install-screen > img { max-height: 18vh; margin-bottom: 4px; } #install-screen p { margin: 4px; } .loader-copy { margin-top: -2vh; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
   </style>
 </head>
 <body>
   <main>
     <section id="install-screen" class="screen" aria-labelledby="install-title">
       <img src="./Текстуры/Меню/name1.png" alt="Woland's Mansion" onerror="this.hidden=true">
-      <h1 id="install-title">Woland's Mansion</h1>
-      <p>Установите игру на главный экран, чтобы запускать её как приложение. Или продолжите играть прямо в браузере.</p>
-      <div class="install-card"><strong>iPhone / iPad (Safari)</strong><br>Нажмите «Поделиться» → «На экран Домой» → «Добавить».</div>
-      <div class="install-card"><strong>Android (Chrome / Samsung Internet)</strong><br>Откройте меню браузера (⋮) → «Установить приложение» или «Добавить на главный экран».</div>
+      <h1 id="install-title">Установка игры</h1>
+      <p>Установите игру на главный экран или продолжите играть прямо в браузере.</p>
+      <div class="install-card"><strong>iPhone / iPad (Safari)</strong><br>«Поделиться» → «На экран Домой» → «Добавить».</div>
+      <div class="install-card"><strong>Android (Chrome / Samsung Internet)</strong><br>Меню (⋮) → «Установить приложение» или «Добавить на главный экран».</div>
       <button id="install-button" class="action" type="button">Установить приложение</button>
       <button id="continue-button" class="action" type="button">Продолжить в браузере</button>
     </section>
@@ -61,9 +71,12 @@
     </section>
 
     <section id="loading-screen" class="screen" aria-live="polite">
-      <div class="spinner" aria-hidden="true"></div>
-      <div id="loading-status">Подготовка игры…</div>
-      <div class="progress"><div id="progress-fill"></div></div>
+      <div class="loader-copy">
+        <div class="loader-title" aria-label="Загрузка"><span>З</span><span>а</span><span>г</span><span>р</span><span>у</span><span>з</span><span>к</span><span>а</span><span>.</span><span>.</span><span>.</span></div>
+        <div id="loading-status">Подготовка…</div>
+        <div class="progress" aria-hidden="true"><div id="progress-fill"></div></div>
+      </div>
+      <img id="loading-face" src="./Текстуры/Воланд/Воланд_глаза_открыты.png" alt="" onerror="this.hidden=true">
     </section>
 
     <div id="game-container" aria-live="polite"></div>
@@ -73,10 +86,7 @@
       'use strict';
       const $ = (id) => document.getElementById(id);
       const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches || window.navigator.standalone === true;
-      const isMobileDevice = () => {
-        const ua = navigator.userAgent || '';
-        return /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || (matchMedia('(pointer: coarse)').matches && matchMedia('(hover: none)').matches);
-      };
+      const isMobileDevice = () => /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || (matchMedia('(pointer: coarse)').matches && matchMedia('(hover: none)').matches);
       let installPrompt = null;
       window.addEventListener('beforeinstallprompt', (event) => {
         event.preventDefault();
@@ -112,15 +122,13 @@
       if (isMobileDevice() && !isStandalone()) {
         activate('install-screen');
         $('continue-button').addEventListener('click', openDisclaimer);
-      } else {
-        openDisclaimer();
-      }
+      } else openDisclaimer();
 
       $('begin-button').addEventListener('click', async () => {
         $('begin-button').disabled = true;
         activate('loading-screen');
         try {
-          await new Promise((resolve) => setTimeout(resolve, 220));
+          await new Promise((resolve) => setTimeout(resolve, 180));
           await import('./Фон/sounds.js').catch((error) => console.warn('[Audio] Sound module unavailable:', error));
           try {
             const settings = await import('./Фон/settings-manager.js');
@@ -137,13 +145,13 @@
           $('game-container').classList.add('active');
         } catch (error) {
           console.error('[Startup] Could not start the game:', error);
-          $('loading-status').textContent = 'Не удалось запустить игру. Обновите страницу и попробуйте снова.';
+          $('loading-status').textContent = 'Не удалось запустить игру. Проверьте подключение и повторите.';
           $('begin-button').disabled = false;
-          setTimeout(() => { activate('disclaimer-screen'); }, 2600);
+          setTimeout(() => activate('disclaimer-screen'), 2600);
         }
       });
 
-      async function fetchWithTimeout(url, timeoutMs = 8000) {
+      async function fetchWithTimeout(url, timeoutMs = 10000) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {
@@ -158,17 +166,16 @@
         const progress = $('progress-fill');
         window.GameAssets = window.GameAssets || {};
         let manifest;
-        try {
-          manifest = await (await fetchWithTimeout('./load.json')).json();
-        } catch (error) {
+        try { manifest = await (await fetchWithTimeout('./load.json')).json(); }
+        catch (error) {
           console.warn('[Assets] Could not load load.json; starting menu without optional assets:', error);
           status.textContent = 'Манифест недоступен — запускаем меню…';
           progress.style.width = '100%';
           return;
         }
         const queue = [
-          ...Object.entries(manifest.textures || {}).map(([id, url]) => ({ id, url, type: 'texture' })),
-          ...Object.entries(manifest.sounds || {}).map(([id, url]) => ({ id, url, type: 'sound' }))
+          ...Object.entries(manifest.sounds || {}).map(([id, url]) => ({ id, url, type: 'Звуки' })),
+          ...Object.entries(manifest.textures || {}).map(([id, url]) => ({ id, url, type: 'Текстуры' }))
         ];
         if (!queue.length) { progress.style.width = '100%'; status.textContent = 'Ресурсы готовы'; return; }
         let completed = 0;
@@ -176,12 +183,13 @@
         const worker = async () => {
           while (next < queue.length) {
             const item = queue[next++];
-            status.textContent = `Загрузка: ${decodeURIComponent(item.url.split('/').pop())}`;
+            let fileName = item.url.split('/').pop();
+            try { fileName = decodeURIComponent(fileName); } catch (_) {}
+            status.textContent = `${item.type}: ${fileName}`;
             try {
-              const blob = await (await fetchWithTimeout(item.url, 10000)).blob();
-              if (item.type === 'texture') {
-                window.GameAssets[item.id] = URL.createObjectURL(blob);
-              } else if (window.SoundsEngine && typeof window.SoundsEngine.loadSound === 'function') {
+              const blob = await (await fetchWithTimeout(item.url, 15000)).blob();
+              if (item.type === 'Текстуры') window.GameAssets[id = item.id] = URL.createObjectURL(blob);
+              else if (window.SoundsEngine && typeof window.SoundsEngine.loadSound === 'function') {
                 await Promise.race([window.SoundsEngine.loadSound(item.id, blob), new Promise((resolve) => setTimeout(resolve, 10000))]);
               }
             } catch (error) { console.warn(`[Assets] Skipped ${item.url}:`, error); }

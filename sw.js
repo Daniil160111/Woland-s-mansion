@@ -1,97 +1,55 @@
 /* =====================================================================
-   Woland's Mansion — Service Worker
-   Путь: ./sw.js
-
-   Задачи:
-   1) Пройти критерий устанавливаемости PWA (Chrome/Edge/Samsung Internet):
-      — зарегистрирован
-      — активен (activate)
-      — имеет обработчик fetch
-   2) Не ломать офлайн-логику игры: игра сама кэширует медиа
-      через localStorage (CACHE_PREFIX = 'woland_asset_').
-   3) Дать минимальный app-shell кэш, чтобы при отсутствии сети
-      index.html / manifest.json / sw.js всё же открывались.
+   Woland's Mansion — Service Worker (Исправленный)
+   Путь: sw.js (в корневой папке рядом с index.html)
    ===================================================================== */
 
-const SW_VERSION   = 'v1.0.0';
-const CACHE_SHELL  = 'woland-shell-' + SW_VERSION;
-
-const SHELL_ASSETS = [
-  './',
-  './index.html',
-  './manifest.json',
-  './sw.js'
+const CACHE_NAME = 'woland-v1';
+const ASSETS_TO_CACHE = [
+  'index.html',
+  'manifest.json',
+  'sw.js',
+  'icon/name.png'
 ];
 
-/* ---------- install ---------- */
+// Установка: кэшируем только критически важные файлы для PWA
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    (async () => {
-      try {
-        const cache = await caches.open(CACHE_SHELL);
-        await Promise.all(
-          SHELL_ASSETS.map(async (url) => {
-            try {
-              const resp = await fetch(url, { cache: 'reload' });
-              if (resp && resp.ok) await cache.put(url, resp.clone());
-            } catch (e) {}
-          })
-        );
-      } catch (e) {}
-    })()
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(ASSETS_TO_CACHE).catch(() => {
+        console.log('Один из файлов не кэшировался, но это не помешает установке.');
+      });
+    })
   );
 });
 
-/* ---------- activate ---------- */
+// Активация: захватываем управление вкладками
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    (async () => {
-      const keys = await caches.keys();
-      await Promise.all(
-        keys.map((k) => (k !== CACHE_SHELL ? caches.delete(k) : null))
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.map((key) => {
+          if (key !== CACHE_NAME) return caches.delete(key);
+        })
       );
-      await self.clients.claim();
-    })()
+    }).then(() => self.clients.claim())
   );
 });
 
-/* ---------- fetch ---------- */
+// Обработка запросов: отдаем из сети, при сбое — из кэша
 self.addEventListener('fetch', (event) => {
-  const req = event.request;
-
-  if (req.method !== 'GET') return;
-
-  const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return;
+  if (event.request.method !== 'GET') return;
 
   event.respondWith(
-    (async () => {
-      try {
-        const fresh = await fetch(req);
-        if (fresh && fresh.ok && fresh.type === 'basic') {
-          const cache = await caches.open(CACHE_SHELL);
-          cache.put(req, fresh.clone()).catch(() => {});
+    fetch(event.request).catch(() => {
+      return caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) return cachedResponse;
+        
+        // Если это переход на страницу, возвращаем index.html оффлайн
+        if (event.request.mode === 'navigate') {
+          return caches.match('index.html');
         }
-        return fresh;
-      } catch (e) {
-        const cached = await caches.match(req);
-        if (cached) return cached;
-
-        if (req.mode === 'navigate') {
-          const shell = await caches.match('./index.html');
-          if (shell) return shell;
-        }
-
-        return new Response('', { status: 504, statusText: 'Offline' });
-      }
-    })()
+      });
+    })
   );
-});
-
-/* ---------- message ---------- */
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
 });

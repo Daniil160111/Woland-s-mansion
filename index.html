@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Woland's Mansion</title>
-<!-- ИСПРАВЛЕНО: Прямые пути без точек для валидации PWA в Android Chrome -->
+<!-- Относительный путь без точки для Chrome, но внутри текущей папки -->
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon/name.png">
 <link rel="apple-touch-icon" href="icon/name.png">
@@ -109,8 +109,8 @@
 
   <!-- 1. Экран для ПК -->
   <div id="screen-pc" class="screen">
-      <h1 data-i18n="pc_title">Только для мобильных</h1>
-      <p data-i18n="pc_text">Woland's Mansion — mobile 3D-игра.<br>Пожалуйста, откройте эту страницу на вашем смартфоне.</p>
+      <h1 data-i18n="pc_title">Только для mobile</h1>
+      <p data-i18n="pc_text">Woland's Mansion — мобильная 3D-игра.<br>Пожалуйста, откройте эту страницу на вашем смартфоне.</p>
   </div>
 
   <!-- 2. Экран инструкции PWA -->
@@ -169,9 +169,9 @@
 (function () {
   'use strict';
 
-  // ИСПРАВЛЕНО: Прямой путь к sw.js и корректный корневой scope для правильного прохождения теста PWA в Chrome
+  // ИСПРАВЛЕНО: Регистрация SW теперь автоматически подстраивается под текущий путь без жесткой привязки к корню домена
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js', { scope: '/' })
+    navigator.serviceWorker.register('sw.js')
       .then(function (reg) { console.log('[SW] зарегистрирован, scope:', reg.scope); })
       .catch(function (err) { console.warn('[SW] ошибка:', err.message); });
   }
@@ -258,7 +258,7 @@
       ios_inst: 'Compartir -> Añadir a pantalla de inicio',
       android_platform: "Android (Samsung/Chrome):",
       android_inst: 'Menú (⋮) -> Añadir a pantalla de inicio',
-      manual_install: "<strong>¿Sin botón? Instala manualmente:</strong><br>Menú del navegador (⋮ o ≡) → «Añadir a pantalla de inicio»"
+      manual_install: "<strong>¿Sin кнопка? Instala manualmente:</strong><br>Menú del navegador (⋮ o ≡) → «Añadir a pantalla de inicio»"
     },
     it: {
       pc_title: "Solo mobile",

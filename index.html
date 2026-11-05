@@ -1,501 +1,192 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#0a0616">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Woland's Mansion</title>
-<link rel="manifest" href="manifest.json">
-<link rel="icon" type="image/png" href="icon/name.png">
-<link rel="apple-touch-icon" href="icon/name.png">
-<style>
-  @font-face {
-    font-family: 'WolandFont';
-    src: url('./supermario286rusbylyajka.otf') format('opentype');
-    font-weight: normal; font-style: normal; font-display: swap;
-  }
-  *, *::before, *::after {
-    font-family: 'WolandFont', 'Courier New', monospace !important;
-    margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent;
-  }
-  html, body {
-    width:100%; height:100%; overflow:hidden; background:#0a0616; color:#fff;
-    user-select:none; touch-action:none;
-    -webkit-user-select:none; -webkit-touch-callout:none;
-    -webkit-user-drag: none; user-drag: none;
-  }
-  #app { position:fixed; inset:0; overflow:hidden; }
-  img, canvas {
-    -webkit-user-drag: none;
-    user-drag: none;
-    pointer-events: none;
-  }
-
-  .screen {
-    position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center;
-    z-index:10; text-align:center; padding:20px;
-  }
-  .screen.show { display:flex; }
-
-  /* --- ЭКРАН ДЛЯ ПК --- */
-  #screen-pc { background:#0a0616; }
-  #screen-pc h1 { color:#ff3a3a; font-size:28px; margin-bottom:15px; text-transform:uppercase; letter-spacing:2px;}
-  #screen-pc p { color:#c8d4ff; font-size:18px; margin-bottom:20px; line-height:1.6; max-width:80%;}
-
-  /* --- ЭКРАН ДЛЯ МОБИЛЬНЫХ (PWA) --- */
-  #screen-pwa-install { background:#050505; overflow-y:auto; }
-
-  #pwa-logo {
-    width: 95%; max-width: 600px; margin-bottom: 10px;
-    filter: drop-shadow(0 0 15px rgba(255,0,0,0.6));
-    opacity: 0; transform: translateY(20px); transition: opacity 0.9s ease, transform 0.9s ease;
-  }
-  #screen-pwa-install.show #pwa-logo { opacity: 1; transform: translateY(0); }
-
-  #screen-pwa-install p { margin: 5px 0; font-size: 14px; line-height: 1.4; color: #aaa; }
-  .instruction-box {
-    background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin: 10px 0;
-    width: 90%; max-width: 400px;
-  }
-  .instruction-box p { color: #ccc; font-size: 12px; }
-
-  .lang-switch {
-    display: flex; gap: 10px; margin-top: 25px; justify-content: center;
-  }
-  .lang-btn {
-    background: transparent; color: #888; border: 1px solid #333;
-    padding: 5px 10px; cursor: pointer; border-radius: 5px; font-size: 12px;
-    transition: all 0.4s ease;
-  }
-  .lang-btn.active { color: #fff; border-color: #f00; background: rgba(255,0,0,0.2); }
-
-  .i18n-text { display: inline; transition: opacity 0.5s ease; }
-
-  /* --- ЗАТЕМНЕНИЕ --- */
-  #fade-overlay {
-    position: absolute; inset: 0; background: #000; z-index: 50; pointer-events: none;
-    opacity: 1; transition: opacity 1.5s ease-in-out;
-  }
-
-  /* --- ЭКРАН ЗАГРУЗКИ --- */
-  #screen-loading { background: #000; z-index: 90; }
-
-  .loader-3d-container { width: 150px; height: 150px; perspective: 800px; margin-bottom: 20px; }
-  .loader-3d-face { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; box-shadow: 0 0 30px #500; animation: spin3d 4s linear infinite; }
-  @keyframes spin3d { 0% { transform: rotateY(0deg); } 100% { transform: rotateY(360deg); } }
-
-  .loader-text { font-size: 24px; letter-spacing: 3px; margin-bottom: 15px; display: flex; gap: 2px; text-shadow: 0 0 10px #f00;}
-  .loader-text span { display: inline-block; animation: wave 1.5s ease-in-out infinite; }
-  .loader-text span:nth-child(1) { animation-delay: 0.0s; } .loader-text span:nth-child(2) { animation-delay: 0.1s; }
-  .loader-text span:nth-child(3) { animation-delay: 0.2s; } .loader-text span:nth-child(4) { animation-delay: 0.3s; }
-  .loader-text span:nth-child(5) { animation-delay: 0.4s; } .loader-text span:nth-child(6) { animation-delay: 0.5s; }
-  .loader-text span:nth-child(7) { animation-delay: 0.6s; } .loader-text span:nth-child(8) { animation-delay: 0.7s; }
-  .loader-text span:nth-child(9) { animation-delay: 0.8s; } .loader-text span:nth-child(10) { animation-delay: 0.9s; }
-  @keyframes wave { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); color: #f00; } }
-
-  #load-status { font-size: 12px; color: #aaa; font-family: monospace; height: 20px; text-align: center; }
-  .progress-bar { width: 60%; max-width: 400px; height: 4px; background: #222; margin-top: 20px; border-radius: 2px;}
-  .progress-fill { width: 0%; height: 100%; background: #a00; transition: width 0.2s; box-shadow: 0 0 10px #f00; border-radius: 2px;}
-
-  #game-container { position: absolute; inset: 0; z-index: 10; display: none; }
-  #game-container.show { display: block; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0616">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Woland's Mansion</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icon/icon.jpg" type="image/jpeg">
+  <link rel="apple-touch-icon" href="./icon/icon.jpg">
+  <style>
+    @font-face { font-family: WolandFont; src: url('./supermario286rusbylyajka.otf') format('opentype'); font-display: swap; }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; min-height: 100%; margin: 0; background: #0a0616; color: #fff; font-family: WolandFont, 'Courier New', monospace; }
+    body { min-height: 100dvh; overflow: hidden; }
+    button { font: inherit; }
+    .screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom)); text-align: center; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .65s ease, visibility .65s; }
+    .screen.active { opacity: 1; visibility: visible; pointer-events: auto; }
+    #install-screen { background: radial-gradient(ellipse at center, #201020, #050407 75%); overflow-y: auto; }
+    #install-screen img { width: min(90vw, 540px); max-height: 30vh; object-fit: contain; margin-bottom: 20px; filter: drop-shadow(0 0 18px #800); }
+    #install-screen p { max-width: 560px; line-height: 1.65; color: #ddd; }
+    .install-card { width: min(92vw, 540px); padding: 18px 22px; margin: 8px; border: 1px solid #562323; border-radius: 12px; background: #ffffff0b; line-height: 1.7; }
+    .install-card strong { color: #ff7777; }
+    .action { min-width: 190px; padding: 13px 22px; color: #fff; background: linear-gradient(135deg,#9c1111,#440707); border: 1px solid #e45a5a; border-radius: 8px; cursor: pointer; box-shadow: 0 0 20px #9c111155; transition: transform .2s, box-shadow .2s, background .2s; }
+    .action:hover, .action:focus-visible { transform: translateY(-2px); box-shadow: 0 0 28px #e22a2a88; }
+    #install-button { display: none; margin-top: 12px; }
+    #disclaimer-screen { background: #050407; }
+    #disclaimer-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+    #disclaimer-content { position: relative; z-index: 1; margin-top: auto; padding-bottom: 12px; }
+    #loading-screen { z-index: 5; background: #050407; }
+    .spinner { width: 58px; height: 58px; margin-bottom: 24px; border: 3px solid #ffffff22; border-top-color: #e22; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-status { min-height: 1.5em; color: #ccc; }
+    .progress { width: min(70vw, 360px); height: 5px; margin-top: 16px; overflow: hidden; background: #292329; border-radius: 5px; }
+    #progress-fill { width: 0; height: 100%; background: linear-gradient(90deg,#8c1010,#f44); transition: width .3s ease; }
+    #game-container { position: fixed; inset: 0; z-index: 2; opacity: 0; visibility: hidden; transition: opacity .8s ease, visibility .8s; }
+    #game-container.active { opacity: 1; visibility: visible; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+  </style>
 </head>
 <body>
-<div id="app">
+  <main>
+    <section id="install-screen" class="screen" aria-labelledby="install-title">
+      <img src="./Текстуры/Меню/name1.png" alt="Woland's Mansion" onerror="this.hidden=true">
+      <h1 id="install-title">Установите игру на телефон</h1>
+      <p>Чтобы играть, добавьте Woland’s Mansion на главный экран. После установки запустите приложение с его значка.</p>
+      <div class="install-card"><strong>iPhone / iPad (Safari)</strong><br>Нажмите «Поделиться» → «На экран Домой» → «Добавить».</div>
+      <div class="install-card"><strong>Android (Chrome / Samsung Internet)</strong><br>Откройте меню браузера (⋮) → «Установить приложение» или «Добавить на главный экран».</div>
+      <button id="install-button" class="action" type="button">Установить приложение</button>
+    </section>
 
-  <!-- 1. Экран для ПК -->
-  <div id="screen-pc" class="screen">
-      <h1 data-i18n="pc_title">Только для мобильных</h1>
-      <p data-i18n="pc_text">Woland's Mansion — мобильная 3D-игра.<br>Пожалуйста, откройте эту страницу на вашем смартфоне.</p>
-  </div>
+    <section id="disclaimer-screen" class="screen" aria-label="Дисклеймер">
+      <img id="disclaimer-image" alt="Дисклеймер игры" hidden>
+      <div id="disclaimer-content"><button id="begin-button" class="action" type="button">Продолжить</button></div>
+    </section>
 
-  <!-- 2. Экран инструкции PWA -->
-  <div id="screen-pwa-install" class="screen">
-      <img id="pwa-logo" src="./Текстуры/Меню/name1.png" alt="Woland's Mansion" onerror="this.style.display='none'">
+    <section id="loading-screen" class="screen" aria-live="polite">
+      <div class="spinner" aria-hidden="true"></div>
+      <div id="loading-status">Подготовка игры…</div>
+      <div class="progress"><div id="progress-fill"></div></div>
+    </section>
 
-      <p><strong data-i18n="not_installed">Игра не установлена</strong></p>
-      <p data-i18n="install_hint">Для комфортной игры на телефоне (без адресной строки и в горизонтальном режиме) установите приложение.</p>
+    <div id="game-container" aria-live="polite"></div>
+  </main>
+  <script>
+    (() => {
+      'use strict';
+      const $ = (id) => document.getElementById(id);
+      const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches || window.navigator.standalone === true;
+      const isMobileDevice = () => {
+        const ua = navigator.userAgent || '';
+        return /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) || (matchMedia('(pointer: coarse)').matches && matchMedia('(hover: none)').matches);
+      };
+      let installPrompt = null;
+      window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        installPrompt = event;
+        $('install-button').style.display = 'inline-block';
+      });
+      $('install-button').addEventListener('click', async () => {
+        if (!installPrompt) return;
+        installPrompt.prompt();
+        await installPrompt.userChoice.catch(() => {});
+        installPrompt = null;
+        $('install-button').style.display = 'none';
+      });
+      window.addEventListener('appinstalled', () => { installPrompt = null; });
 
-      <div class="instruction-box" id="manual-instruction">
-          <p>
-              <strong><span data-i18n="ios_platform">iPhone (Safari):</span></strong> <span data-i18n="ios_inst">Поделиться -> На экран "Домой"</span><br>
-              <strong><span data-i18n="android_platform">Android (Samsung/Chrome):</span></strong> <span data-i18n="android_inst">Меню (⋮) -> Добавить на главный экран</span>
-          </p>
-      </div>
-
-      <div class="instruction-box" style="margin-top: 15px;">
-          <p style="color:#ccc; font-size:12px;" data-i18n="manual_install">
-              <strong>Если кнопки нет — установите вручную:</strong><br>
-              Меню браузера (⋮ или ≡) → «Добавить на главный экран» / «Установить приложение»
-          </p>
-      </div>
-
-      <div class="lang-switch">
-          <button class="lang-btn active" data-lang="ru">RU</button>
-          <button class="lang-btn" data-lang="en">EN</button>
-          <button class="lang-btn" data-lang="fr">FR</button>
-          <button class="lang-btn" data-lang="es">ES</button>
-          <button class="lang-btn" data-lang="it">IT</button>
-      </div>
-  </div>
-
-  <!-- 3. Дисклеймер -->
-  <div id="screen-disclaimer" class="screen" style="background:#000; cursor:pointer; z-index:100;">
-      <img id="disclaimer-img" src="" alt="" style="width:100%; height:100%; object-fit:contain;">
-  </div>
-
-  <!-- 4. Экран загрузки -->
-  <div id="screen-loading" class="screen">
-      <div class="loader-3d-container">
-          <img class="loader-3d-face" src="./Текстуры/Воланд/лицо1.png" alt="Voland" onerror="this.src='./icon/name.png'">
-      </div>
-      <div class="loader-text">
-          <span>З</span><span>а</span><span>г</span><span>р</span><span>у</span><span>з</span><span>к</span><span>а</span><span>.</span><span>.</span><span>.</span>
-      </div>
-      <div id="load-status">Инициализация...</div>
-      <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-  </div>
-
-  <div id="game-container"></div>
-  <div id="fade-overlay"></div>
-</div>
-
-<!-- ★ РАННИЙ СКРИПТ (НЕ module): регистрация SW + перехват beforeinstallprompt -->
-<script>
-(function () {
-  'use strict';
-
-  // Исправлено: Прямая регистрация без принудительного scope домена, чтобы не ломать пути в подпапках хостинга
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js')
-      .then(function (reg) { console.log('[SW] зарегистрирован, scope:', reg.scope); })
-      .catch(function (err) { console.warn('[SW] ошибка:', err.message); });
-  }
-
-  window.__deferredInstallPrompt = null;
-
-  window.addEventListener('beforeinstallprompt', function (e) {
-    e.preventDefault();
-    window.__deferredInstallPrompt = e;
-    console.log('✅ beforeinstallprompt сработал');
-    window.dispatchEvent(new CustomEvent('woland:install-available'));
-  });
-
-  window.addEventListener('appinstalled', function () {
-    console.log('✅ Приложение установлено');
-    window.__deferredInstallPrompt = null;
-  });
-})();
-</script>
-
-<script type="module">
-  'use strict';
-
-  // ★ ЗАЩИТА ОТ КОПИРОВАНИЯ, СКАЧИВАНИЯ И ПРАВОГО КЛИКА
-  document.addEventListener('contextmenu', e => e.preventDefault());
-  document.addEventListener('dragstart', e => e.preventDefault());
-  document.addEventListener('selectstart', e => e.preventDefault());
-  document.addEventListener('copy', e => e.preventDefault());
-  document.addEventListener('cut', e => e.preventDefault());
-
-  document.addEventListener('keydown', e => {
-      if ((e.ctrlKey && (e.key === 'c' || e.key === 's' || e.key === 'u')) ||
-          e.key === 'F12' ||
-          (e.ctrlKey && e.shiftKey && e.key === 'I')) {
-          e.preventDefault();
-          return false;
-      }
-  });
-
-  const $ = id => document.getElementById(id);
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-  // ===== СЛОВАРИ ПЕРЕВОДОВ =====
-  const translations = {
-    ru: {
-      pc_title: "Только для мобильных",
-      pc_text: "Woland's Mansion — мобильная 3D-игра.<br>Пожалуйста, откройте эту страницу на вашем смартфоне.",
-      not_installed: "Игра не установлена",
-      install_hint: "Для комфортной игры на телефоне установите приложение.",
-      ios_platform: "iPhone (Safari):",
-      ios_inst: 'Поделиться -> На экран "Домой"',
-      android_platform: "Android (Samsung/Chrome):",
-      android_inst: 'Меню (⋮) -> Добавить на главный экран',
-      manual_install: "<strong>Если кнопки нет — установите вручную:</strong><br>Меню браузера (⋮ или ≡) → «Добавить на главный экран» / «Установить приложение»"
-    },
-    en: {
-      pc_title: "Mobile Only",
-      pc_text: "Woland's Mansion is a mobile 3D game.<br>Please open this page on your smartphone.",
-      not_installed: "Game is not installed",
-      install_hint: "For the best experience, install the app.",
-      ios_platform: "iPhone (Safari):",
-      ios_inst: 'Share -> Add to Home Screen',
-      android_platform: "Android (Samsung/Chrome):",
-      android_inst: 'Menu (⋮) -> Add to Home Screen',
-      manual_install: "<strong>No button? Install manually:</strong><br>Browser menu (⋮ or ≡) → 'Add to Home Screen' / 'Install app'"
-    },
-    fr: {
-      pc_title: "Mobile uniquement",
-      pc_text: "Woland's Mansion est un jeu 3D mobile.<br>Veuillez ouvrir cette page sur votre smartphone.",
-      not_installed: "Le jeu n'est pas installé",
-      install_hint: "Pour une meilleure expérience, installez l'application.",
-      ios_platform: "iPhone (Safari):",
-      ios_inst: 'Partager -> Sur l'écran d'accueil',
-      android_platform: "Android (Samsung/Chrome):",
-      android_inst: 'Menu (⋮) -> Sur l'écran d'accueil',
-      manual_install: "<strong>Pas de bouton ? Installez manuellement :</strong><br>Menu du navigateur (⋮ ou ≡) → « Ajouter à l'écran d'accueil »"
-    },
-    es: {
-      pc_title: "Solo móviles",
-      pc_text: "Woland's Mansion es un juego 3D móvil.<br>Abre esta página en tu smartphone.",
-      not_installed: "El juego no está instalado",
-      install_hint: "Para una mejor experiencia, instala la aplicación.",
-      ios_platform: "iPhone (Safari):",
-      ios_inst: 'Compartir -> Añadir a pantalla de inicio',
-      android_platform: "Android (Samsung/Chrome):",
-      android_inst: 'Menú (⋮) -> Añadir a pantalla de inicio',
-      manual_install: "<strong>¿Sin botón? Instala manualmente:</strong><br>Menú del navegador (⋮ o ≡) → «Añadir a pantalla de inicio»"
-    },
-    it: {
-      pc_title: "Solo mobile",
-      pc_text: "Woland's Mansion è un gioco 3D mobile.<br>Apri questa pagina sul tuo smartphone.",
-      not_installed: "Il gioco non è installato",
-      install_hint: "Per un'esperienza migliore, installa l'app.",
-      ios_platform: "iPhone (Safari):",
-      ios_inst: 'Condividi -> Aggiungi alla schermata Home',
-      android_platform: "Android (Samsung/Chrome):",
-      android_inst: 'Menu (⋮) -> Aggiungi alla schermata Home',
-      manual_install: "<strong>Nessun pulsante? Installa manualmente:</strong><br>Menu del browser (⋮ o ≡) → «Aggiungi alla schermata Home»"
-    }
-  };
-
-  let currentLang = 'ru';
-
-  async function setLanguage(lang, force = false) {
-    if (currentLang === lang && !force) return;
-    currentLang = lang;
-
-    document.querySelectorAll('.lang-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-lang') === lang);
-    });
-
-    const elements = document.querySelectorAll('[data-i18n]');
-    elements.forEach(el => {
-        el.style.transition = 'opacity 0.5s ease';
-        el.style.opacity = '0';
-    });
-    await sleep(250);
-    elements.forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        if (translations[lang] && translations[lang][key]) {
-            el.innerHTML = translations[lang][key];
-        }
-        el.style.transition = 'opacity 0.5s ease';
-        el.style.opacity = '1';
-    });
-  }
-
-  document.querySelectorAll('.lang-btn').forEach(btn => {
-      btn.addEventListener('click', () => setLanguage(btn.getAttribute('data-lang')));
-  });
-
-  // ===== ПЛАТФОРМА =====
-  function isPWA() {
-    const standalone = window.matchMedia('(display-mode: standalone)').matches;
-    const fullscreen = window.matchMedia('(display-mode: fullscreen)').matches;
-    const minimalUI  = window.matchMedia('(display-mode: minimal-ui)').matches;
-    const iosStandalone = window.navigator.standalone === true;
-    return standalone || fullscreen || minimalUI || iosStandalone;
-  }
-
-  function isMobile() {
-    const coarse  = window.matchMedia('(pointer: coarse)').matches;
-    const touch   = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-    const noHover = window.matchMedia('(hover: none)').matches;
-    return [coarse, touch, noHover].filter(Boolean).length >= 2;
-  }
-
-  function isDesktopUA() {
-    const ua = navigator.userAgent.toLowerCase();
-    return /windows nt|macintosh|linux x86_64|x11/.test(ua) && !/android|iphone|ipad|ipod|mobile/.test(ua);
-  }
-
-  function isSafari() {
-    return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-  }
-
-  // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ МОДУЛЕЙ =====
-  let Settings = null, Menu = null;
-
-  const overlay = $('fade-overlay');
-  const screenPC = $('screen-pc');
-  const screenPWA = $('screen-pwa-install');
-  const screenDisclaimer = $('screen-disclaimer');
-  const screenLoading = $('screen-loading');
-  const progressFill = $('progress-fill');
-  const loadStatus = $('load-status');
-  const discImg = $('disclaimer-img');
-  const gameContainer = $('game-container');
-
-  // ===== ИСПРАВЛЕННОЕ КЭШИРОВАНИЕ (Вместо сбойного localStorage на 5МБ используем надежный Cache Storage API) =====
-  async function getCachedOrFetch(path) {
-      try {
-          const cache = await caches.open('woland-media-cache');
-          const cachedResponse = await cache.match(path);
-          if (cachedResponse) {
-              const blob = await cachedResponse.blob();
-              return blob;
-          }
-          const response = await fetch(path);
-          if (!response.ok) throw new Error('404');
-          
-          // Сохраняем копию сетевого ответа в оффлайн-кэш без лимитов памяти
-          await cache.put(path, response.clone());
-          return await response.blob();
-      } catch (e) {
-          // Если кэш недоступен, делаем прямой сетевой запрос как запасной вариант
-          const fresh = await fetch(path);
-          if (!fresh.ok) throw new Error('404');
-          return await fresh.blob();
-      }
-  }
-
-  // ===== СТАРТ ПРИЛОЖЕНИЯ =====
-  async function startApp() {
-      try {
-          if (document.fonts) await Promise.race([document.fonts.load('12px WolandFont'), sleep(1000)]);
-          const blob = await getCachedOrFetch('./Текстуры/Меню/Дисклеймер.jpg');
-          discImg.src = URL.createObjectURL(blob);
-      } catch (e) {
-          discImg.style.display = 'none';
-          screenDisclaimer.style.backgroundColor = '#300';
+      if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+        navigator.serviceWorker.register(new URL('./sw.js', location.href)).catch((error) => console.warn('[SW] Registration failed:', error));
       }
 
-      if (isDesktopUA()) {
-          screenPC.classList.add('show');
-          overlay.style.opacity = '0';
-          setLanguage('ru', true);
+      const activate = (id) => {
+        document.querySelectorAll('.screen').forEach((el) => el.classList.remove('active'));
+        $('game-container').classList.remove('active');
+        if (id) $(id).classList.add('active');
+      };
+
+      if (isMobileDevice() && !isStandalone()) {
+        activate('install-screen');
+        return;
       }
-      else if (isMobile() && !isPWA()) {
-          screenPWA.classList.add('show');
-          overlay.style.opacity = '0';
-          setLanguage('ru', true);
+
+      const disclaimerImage = $('disclaimer-image');
+      disclaimerImage.addEventListener('load', () => { disclaimerImage.hidden = false; }, { once: true });
+      disclaimerImage.addEventListener('error', () => { disclaimerImage.hidden = true; }, { once: true });
+      disclaimerImage.src = './Текстуры/Меню/Дисклеймер.jpg';
+      activate('disclaimer-screen');
+
+      $('begin-button').addEventListener('click', async () => {
+        $('begin-button').disabled = true;
+        activate('loading-screen');
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 220));
+          await import('./Фон/sounds.js').catch((error) => console.warn('[Audio] Sound module unavailable:', error));
           try {
-              const logoBlob = await getCachedOrFetch('./Текстуры/Меню/name1.png');
-              $('pwa-logo').src = URL.createObjectURL(logoBlob);
-          } catch(e){}
-
-          if (isSafari()) {
-              setTimeout(() => {
-                  const manualBox = $('manual-instruction');
-                  if (manualBox) {
-                      manualBox.style.border = '2px solid #f00';
-                      manualBox.style.background = 'rgba(255,0,0,0.15)';
-                      manualBox.style.boxShadow = '0 0 20px rgba(255,0,0,0.5)';
-                  }
-              }, 2000);
+            const settings = await import('./Фон/settings-manager.js');
+            settings.Settings.init();
+          } catch (error) { console.warn('[Settings] Settings module unavailable:', error); }
+          if (window.SoundsEngine) {
+            try { window.SoundsEngine.init(); } catch (error) { console.warn('[Audio] Audio initialization skipped:', error); }
           }
+          await loadAssets();
+          const menuModule = await import('./Блоки/menu.js');
+          await menuModule.Menu.start();
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          $('loading-screen').classList.remove('active');
+          $('game-container').classList.add('active');
+        } catch (error) {
+          console.error('[Startup] Could not start the game:', error);
+          $('loading-status').textContent = 'Не удалось запустить игру. Обновите страницу и попробуйте снова.';
+          $('begin-button').disabled = false;
+          setTimeout(() => { activate('disclaimer-screen'); }, 2600);
+        }
+      }, { once: true });
+
+      async function fetchWithTimeout(url, timeoutMs = 8000) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const response = await fetch(url, { signal: controller.signal, cache: 'no-cache' });
+          if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
+          return response;
+        } finally { clearTimeout(timer); }
       }
-      else {
-          screenDisclaimer.classList.add('show');
-          if (screen.orientation && screen.orientation.lock) {
-              screen.orientation.lock('landscape').catch(() => {});
-          }
-          overlay.style.opacity = '0';
 
-          screenDisclaimer.addEventListener('click', () => {
-              if (window.SoundsEngine) window.SoundsEngine.init();
-              overlay.style.opacity = '1';
-
-              setTimeout(async () => {
-                  screenDisclaimer.classList.remove('show');
-                  screenLoading.classList.add('show');
-
-                  // Исправлено: Порядок загрузки. Импортируем игровые ES-модули параллельно кэшированию ресурсов, не блокируя UI
-                  try {
-                      const settingsModule = await import('./Блоки/settings-manager.js');
-                      Settings = settingsModule.Settings;
-                      Settings.init();
-                  } catch (e) { console.warn('settings-manager.js не найден или заблокирован CORS'); }
-
-                  try {
-                      const menuModule = await import('./Блоки/menu.js');
-                      Menu = menuModule.Menu;
-                  } catch (e) {
-                      Menu = { start: () => { $('game-container').innerHTML = '<h1 style="color:red;text-align:center;margin-top:20%">Ошибка: menu.js не найден</h1>'; }};
-                  }
-
-                  await loadGameAssets();
-
-                  setTimeout(() => {
-                      overlay.style.opacity = '0';
-                      screenLoading.classList.remove('show');
-                      gameContainer.classList.add('show');
-                      if (Menu && typeof Menu.start === 'function') {
-                          Menu.start();
-                      }
-                  }, 600);
-              }, 1500);
-          }, { once: true });
-      }
-  }
-
-  // ===== ЗАГРУЗКА РЕСУРСОВ С ПРЕДОХРАНИТЕЛЕМ ЗАВИСАНИЯ =====
-  async function loadGameAssets() {
-      try {
-          const response = await fetch('./load.json');
-          if (!response.ok) throw new Error('load.json не найден');
-          const manifest = await response.json();
-
-          let queue = [];
-          if (manifest.sounds) for (const [id, path] of Object.entries(manifest.sounds)) queue.push({ type: 'Звуки', id, path, target: 'sound' });
-          if (manifest.textures) for (const [id, path] of Object.entries(manifest.textures)) queue.push({ type: 'Текстуры', id, path, target: 'texture' });
-
-          const totalFiles = queue.length || 1;
-          let loadedCount = 0;
-          window.GameAssets = window.GameAssets || {};
-
-          for (const item of queue) {
-              const fileName = item.path.split('/').pop();
-              loadStatus.textContent = `${item.type}: ${fileName}`;
-
-              try {
-                  // Исправлено зависание: Встроен таймаут на 2.5 секунды для каждого файла, чтобы сбойный трек/текстура не вешали загрузку навсегда
-                  await Promise.race([
-                      (async () => {
-                          const blob = await getCachedOrFetch(item.path);
-                          if (item.target === 'sound' && window.SoundsEngine && typeof window.SoundsEngine.loadSound === 'function') {
-                              await window.SoundsEngine.loadSound(item.id, blob);
-                          } else if (item.target === 'texture') {
-                              window.GameAssets[item.id] = URL.createObjectURL(blob);
-                          }
-                      })(),
-                      sleep(2500)
-                  ]);
-              } catch (e) {
-                  console.warn(`Файл пропущен или вызвал ошибку: ${item.path}`);
+      async function loadAssets() {
+        const status = $('loading-status');
+        const progress = $('progress-fill');
+        window.GameAssets = window.GameAssets || {};
+        let manifest;
+        try {
+          manifest = await (await fetchWithTimeout('./load.json')).json();
+        } catch (error) {
+          console.warn('[Assets] Could not load load.json; starting menu without optional assets:', error);
+          status.textContent = 'Манифест недоступен — запускаем меню…';
+          progress.style.width = '100%';
+          return;
+        }
+        const queue = [
+          ...Object.entries(manifest.textures || {}).map(([id, url]) => ({ id, url, type: 'texture' })),
+          ...Object.entries(manifest.sounds || {}).map(([id, url]) => ({ id, url, type: 'sound' }))
+        ];
+        if (!queue.length) { progress.style.width = '100%'; status.textContent = 'Ресурсы готовы'; return; }
+        let completed = 0;
+        let next = 0;
+        const worker = async () => {
+          while (next < queue.length) {
+            const item = queue[next++];
+            status.textContent = `Загрузка: ${decodeURIComponent(item.url.split('/').pop())}`;
+            try {
+              const blob = await (await fetchWithTimeout(item.url, 10000)).blob();
+              if (item.type === 'texture') {
+                window.GameAssets[item.id] = URL.createObjectURL(blob);
+              } else if (window.SoundsEngine && typeof window.SoundsEngine.loadSound === 'function') {
+                await Promise.race([window.SoundsEngine.loadSound(item.id, blob), new Promise((resolve) => setTimeout(resolve, 10000))]);
               }
-              loadedCount++;
-              progressFill.style.width = `${Math.floor((loadedCount / totalFiles) * 100)}%`;
+            } catch (error) { console.warn(`[Assets] Skipped ${item.url}:`, error); }
+            completed++;
+            progress.style.width = `${Math.round(completed / queue.length * 100)}%`;
           }
-          loadStatus.textContent = "Готово!";
-      } catch (error) {
-          console.error('Ошибка манифеста:', error);
-          loadStatus.textContent = "Ошибка загрузки манифеста load.json";
+        };
+        await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker));
+        status.textContent = 'Ресурсы готовы';
       }
-  }
-
-  // Синхронный вызов главной точки входа сразу после инициализации скрипта
-  startApp().catch(err => {
-      console.error("Критический сбой инициализации приложения:", err);
-      screenLoading.classList.remove('show');
-      gameContainer.classList.add('show');
-      if (Menu && typeof Menu.start === 'function') Menu.start();
-  });
-
-</script>
+    })();
+  </script>
 </body>
 </html>

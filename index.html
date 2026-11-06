@@ -96,12 +96,8 @@
     #install-btn { display: none; }
 
     /* --- ДИСКЛЕЙМЕР --- */
-    #disclaimer-screen { 
-      background: #000; cursor: pointer; z-index: 100; padding: 0; 
-    }
-    #disclaimer-img { 
-      width: 100vw; height: 100vh; object-fit: cover; display: block; 
-    }
+    #disclaimer-screen { background: #000; cursor: pointer; z-index: 100; padding: 0; }
+    #disclaimer-img { width: 100vw; height: 100vh; object-fit: cover; display: block; }
 
     /* --- ЗАТЕМНЕНИЕ --- */
     #fade-overlay {
@@ -129,13 +125,11 @@
     }
     @keyframes spin-record { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-    /* Последовательная волна текста (одна волна за другой) */
     .loader-title {
       display: flex; gap: 3px; font-size: clamp(20px, 4vh, 36px); letter-spacing: 2px; text-shadow: 0 0 12px #f00;
     }
     .loader-title span {
-      display: inline-block;
-      animation: wave-sequence 1.8s infinite linear;
+      display: inline-block; animation: wave-sequence 1.8s infinite linear;
     }
     @keyframes wave-sequence {
       0%, 60%, 100% { transform: translateY(0); opacity: 0.3; text-shadow: none; }
@@ -144,7 +138,6 @@
 
     #loading-status { font-size: clamp(10px, 1.5vh, 14px); color: #aaa; min-height: 20px; max-width: 60vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     
-    /* Полоска загрузки строго слева направо */
     .progress { width: min(60vw, 300px); height: clamp(4px, 0.8vh, 8px); overflow: hidden; background: #222; border-radius: 5px; direction: ltr; }
     #progress-fill { width: 0%; height: 100%; background: #a00; transition: width 0.3s ease; box-shadow: 0 0 10px #f00; float: left; }
 
@@ -157,7 +150,7 @@
   <!-- 1. ЭКРАН УСТАНОВКИ -->
   <section id="install-screen" class="screen">
     <div class="install-content">
-      <img src="./Текстуры/Меню/name1.png" alt="Woland's Mansion" onerror="this.hidden=true">
+      <img src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" onerror="this.hidden=true">
       <p data-i18n="install_hint">Для комфортной игры на телефоне установите приложение.</p>
       <div class="install-card">
         <strong data-i18n="ios_title">iPhone / iPad (Safari)</strong>
@@ -186,14 +179,11 @@
 
   <!-- 3. ЗАГРУЗКА -->
   <section id="loading-screen" class="screen">
-    <!-- Логотип при загрузке теперь на месте и виден -->
-    <img id="loading-logo" src="./Текстуры/Меню/name1.png" alt="Woland's Mansion" onerror="this.hidden=true">
+    <img id="loading-logo" src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" onerror="this.hidden=true">
     
     <div class="loading-corner">
       <img id="loading-face" src="./Текстуры/Воланд/лицо1.png" alt="" onerror="this.hidden=true;">
-      
       <div class="loader-title" id="loader-title" aria-label="Загрузка"></div>
-      
       <div id="loading-status">Подготовка...</div>
       <div class="progress"><div id="progress-fill"></div></div>
     </div>
@@ -223,13 +213,12 @@
 
     const $ = id => document.getElementById(id);
 
-    // Генерация последовательной волны для слова "Загрузка..."
+    // Генерация последовательной волны
     const textContainer = $('loader-title');
     const loadingText = "Загрузка...";
     [...loadingText].forEach((char, index) => {
       const span = document.createElement('span');
       span.textContent = char;
-      // Каждая буква начинает прыгать ровно после предыдущей, создавая волну друг за другом
       span.style.animationDelay = `${index * 0.12}s`;
       textContainer.appendChild(span);
     });
@@ -344,7 +333,6 @@
       }
     }, { once: true });
 
-    // Загрузка ассетов с честной пропорциональной полосой слева направо
     async function loadAssets() {
       const status = $('loading-status');
       const progress = $('progress-fill');
@@ -376,7 +364,6 @@
             console.warn(`[Пропуск] ${item.url}`);
           }
           loaded++;
-          // Точный расчет процентов слева направо без искажений
           const percent = Math.round((loaded / total) * 100);
           progress.style.width = `${percent}%`;
         }

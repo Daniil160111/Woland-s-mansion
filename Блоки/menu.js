@@ -6,13 +6,17 @@ import { About } from './about.js';
 
 const MENU_BG = './Текстуры/Меню/Фон.jpg';
 const MENU_LIGHTNING = './Текстуры/Меню/Фон-молния.jpg';
-const MENU_LOGO = './Текстуры/Меню/Название.jpg';
+const MENU_LOGO = './Текстуры/Меню/name1.png';
 
 export const Menu = {
   isMounted: false,
   lightningTimeout: null,
 
-  start(fromSubmenu = false) {
+  // mode может быть 'title' или 'menu' (поддерживается также true/false для старого кода)
+  start(mode = 'title') {
+    if (mode === true) mode = 'menu';
+    if (mode === false || !mode) mode = 'title';
+
     const container = document.getElementById('game-container');
     if (!container) throw new Error('game-container was not found');
 
@@ -22,29 +26,29 @@ export const Menu = {
     const lightning = (window.GameAssets && window.GameAssets.menu_lightning) || MENU_LIGHTNING;
     const logo = (window.GameAssets && window.GameAssets.menu_logo) || MENU_LOGO;
 
-    const isReturn = fromSubmenu;
+    const isMenu = mode === 'menu';
 
     container.innerHTML = `
       <section class="woland-menu" aria-label="Главное меню">
-        <div class="woland-menu__bg-wrapper ${isReturn ? '' : 'zoom-in'}">
+        <div class="woland-menu__bg-wrapper ${isMenu ? 'normal-scale' : 'zoom-in'}">
           <div class="woland-menu__bg" style="background-image: url('${bg}')"></div>
           <div class="woland-menu__lightning" style="background-image: url('${lightning}')"></div>
         </div>
         
-        <div class="woland-menu__shade"></div>
+        <div class="woland-menu__shade ${isMenu ? 'darkened' : ''}"></div>
         
         <!-- Логотип на самом верхнем слое (z-index: 10) -->
-        <div class="woland-menu__logo-container ${isReturn ? 'menu-mode' : ''}">
-          <img class="woland-menu__logo" src="${logo}" alt="Woland's Mansion" onerror="this.hidden=true">
+        <div class="woland-menu__logo-container ${isMenu ? 'menu-mode animate-instant' : ''}">
+          <img class="woland-menu__logo ${isMenu ? 'animate-in' : ''}" src="${logo}" alt="Woland's Mansion" onerror="this.hidden=true">
         </div>
 
         <!-- ТИТУЛЬНЫЙ ЭКРАН -->
-        <div class="woland-menu__title-screen ${isReturn ? 'hidden' : ''}">
+        <div class="woland-menu__title-screen ${isMenu ? 'hidden' : ''}">
           <div class="woland-menu__press-to-continue">Нажмите чтобы продолжить</div>
         </div>
 
         <!-- ЭКРАН МЕНЮ -->
-        <div class="woland-menu__buttons-screen ${isReturn ? 'visible' : ''}">
+        <div class="woland-menu__buttons-screen ${isMenu ? 'visible' : ''}">
           <div class="woland-menu__content">
             <button class="btn-folder" id="btn-play" type="button">Играть</button>
             <button class="btn-folder" id="btn-settings" type="button">Настройки</button>
@@ -53,23 +57,24 @@ export const Menu = {
           </div>
         </div>
 
-        <div class="woland-menu__footer ${isReturn ? 'visible' : ''}">HTML Gaming 2026</div>
+        <div class="woland-menu__footer ${isMenu ? 'visible' : ''}">HTML Gaming 2026</div>
       </section>
       
       <style>
         .woland-menu {
           position: absolute; inset: 0; overflow: hidden; background: #000;
-          opacity: ${isReturn ? '1' : '0'}; transition: opacity 1s ease;
+          opacity: ${isMenu ? '1' : '0'}; transition: opacity 1s ease;
         }
         .woland-menu.active { opacity: 1; }
 
+        /* Зум фона от 1.50 до 1.00 */
         .woland-menu__bg-wrapper {
           position: absolute; inset: 0; z-index: 0;
-          transform: scale(1.15);
+          transform: scale(1.50);
           transition: transform 1s ease;
         }
         .woland-menu__bg-wrapper.normal-scale {
-          transform: scale(1);
+          transform: scale(1.00);
         }
 
         .woland-menu__bg, .woland-menu__lightning {
@@ -84,6 +89,7 @@ export const Menu = {
           background: rgba(0, 0, 0, 0.2);
           transition: background 1.5s ease;
         }
+        .woland-menu__shade.darkened,
         .woland-menu__buttons-screen.visible ~ .woland-menu__shade {
           background: rgba(0, 0, 0, 0.5);
         }
@@ -95,6 +101,9 @@ export const Menu = {
           transition: top 1.5s cubic-bezier(0.2, 0.8, 0.2, 1), transform 1.5s cubic-bezier(0.2, 0.8, 0.2, 1);
           width: 100%;
         }
+        .woland-menu__logo-container.animate-instant {
+          transition: none !important;
+        }
         .woland-menu__logo {
           width: min(80vw, 600px); max-height: 40vh; object-fit: contain;
           filter: drop-shadow(0 0 20px rgba(170,21,21,0.7));
@@ -102,6 +111,9 @@ export const Menu = {
           transition: transform 1s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 1s ease;
         }
         .woland-menu__logo.animate-in { opacity: 1; transform: scaleY(1); }
+        .woland-menu__logo-container.animate-instant .woland-menu__logo {
+          transition: none !important; opacity: 1 !important; transform: scaleY(1) !important;
+        }
 
         .woland-menu__logo-container.menu-mode {
           top: 8%;
@@ -173,7 +185,7 @@ export const Menu = {
         .woland-menu__footer {
           position: absolute; bottom: 15px; width: 100%; text-align: center;
           color: #555; font-size: 12px; letter-spacing: 1px; z-index: 5;
-          opacity: ${isReturn ? '1' : '0'}; transition: opacity 1s ease;
+          opacity: ${isMenu ? '1' : '0'}; transition: opacity 1s ease;
         }
         .woland-menu__footer.visible { opacity: 1; }
       </style>
@@ -189,7 +201,7 @@ export const Menu = {
     const footerEl = container.querySelector('.woland-menu__footer');
     const lightningEl = container.querySelector('.woland-menu__lightning');
 
-    // Музыка (не перезапускается, если уже играет)
+    // --- МУЗЫКА ---
     if (window.SoundsEngine) {
       const currentTrack = window.SoundsEngine.currentMusic || window.SoundsEngine.playingMusic;
       if (currentTrack !== 'menu_theme') {
@@ -203,10 +215,39 @@ export const Menu = {
           if (vol >= targetVol) { vol = targetVol; clearInterval(fadeIn); }
           window.SoundsEngine.setMasterVolume('music', vol);
         }, 50);
+      } else if (isMenu) {
+        window.SoundsEngine.setMasterVolume('music', 0.8);
       }
     }
 
-    // Логика молний
+    // --- РЕАЛИСТИЧНЫЙ СТЕРЕО ЗВУК ГРОМА ---
+    const playThunder = () => {
+      if (!window.SoundsEngine) return;
+      
+      // Различные позиции панорамирования: слева, по центру, справа, чуть ближе к краям
+      const stereoPositions = [-0.85, -0.5, -0.2, 0, 0.3, 0.65, 0.9];
+      const randomPan = stereoPositions[Math.floor(Math.random() * stereoPositions.length)];
+
+      if (window.SoundsEngine.playWithPan) {
+        window.SoundsEngine.playWithPan('thunder', { type: 'effects', pan: randomPan });
+      } else {
+        window.SoundsEngine.play('thunder', { type: 'effects' });
+      }
+
+      // С вероятностью раската грома — второй удар через небольшую паузу с другого ракурса
+      if (Math.random() > 0.4) {
+        setTimeout(() => {
+          const secondPan = stereoPositions[Math.floor(Math.random() * stereoPositions.length)];
+          if (window.SoundsEngine.playWithPan) {
+            window.SoundsEngine.playWithPan('thunder', { type: 'effects', pan: secondPan });
+          } else {
+            window.SoundsEngine.play('thunder', { type: 'effects' });
+          }
+        }, Math.random() * 600 + 400);
+      }
+    };
+
+    // --- ЛОГИКА МОЛНИЙ ---
     const triggerLightning = () => {
       if (!lightningEl) return;
       const flashes = Math.floor(Math.random() * 2) + 2; 
@@ -217,6 +258,10 @@ export const Menu = {
         lightningEl.style.transition = 'opacity 0.1s ease';
         lightningEl.style.opacity = '1';
         
+        if (count === 0) {
+          playThunder();
+        }
+
         setTimeout(() => {
           lightningEl.style.transition = 'opacity 0.7s ease';
           lightningEl.style.opacity = '0';
@@ -239,7 +284,7 @@ export const Menu = {
 
     let startupTimeout = null;
 
-    if (!isReturn) {
+    if (!isMenu) {
       requestAnimationFrame(() => {
         menuEl.classList.add('active');
         bgWrapper.classList.add('normal-scale');
@@ -251,7 +296,6 @@ export const Menu = {
       }, 1000);
     } else {
       bgWrapper.classList.add('normal-scale');
-      logoEl.classList.add('animate-in');
     }
 
     scheduleLightning();
@@ -268,7 +312,7 @@ export const Menu = {
       titleScreen.classList.add('hidden');
       buttonsScreen.classList.add('visible');
       
-      if (window.SoundsEngine) window.SoundsEngine.play('Переход', { type: 'effects' });
+      if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' });
     };
 
     titleScreen.addEventListener('click', goToMenu, { once: true });
@@ -278,7 +322,7 @@ export const Menu = {
     };
 
     const handleSubmenuTransition = (callback) => {
-      playSfx('Кнопка');
+      playSfx('btn_click');
       menuEl.style.transition = 'opacity 1.5s ease';
       menuEl.style.opacity = '0';
       setTimeout(() => {
@@ -287,8 +331,8 @@ export const Menu = {
     };
 
     container.querySelector('#btn-back').addEventListener('click', () => {
-      playSfx('Назад');
-      this.start(false);
+      playSfx('btn_back');
+      this.start('title');
     });
 
     container.querySelector('#btn-play').addEventListener('click', () => {

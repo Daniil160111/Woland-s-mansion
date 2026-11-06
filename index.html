@@ -55,7 +55,7 @@
     }
     .screen.active { opacity: 1; visibility: visible; pointer-events: auto; }
 
-    /* --- ЭКРАН УСТАНОВКИ (Только мобильный браузер вне PWA) --- */
+    /* --- ЭКРАН УСТАНОВКИ --- */
     #install-screen {
       background: radial-gradient(ellipse at center, #201020, #050407 75%);
       overflow-y: auto; justify-content: flex-start; padding-top: 5vh; z-index: 110;
@@ -111,13 +111,15 @@
 
     /* --- ЭКРАН ЗАГРУЗКИ --- */
     #loading-screen { background: #050407; z-index: 90; padding: 0; overflow: hidden; }
+    
     #loading-logo {
-      position: absolute; top: 8%; left: 50%; transform: translateX(-50%);
-      width: min(60vw, 350px); max-height: 15vh; object-fit: contain;
+      position: absolute; top: 10%; left: 50%; transform: translateX(-50%);
+      width: min(70vw, 400px); max-height: 25vh; object-fit: contain;
       filter: drop-shadow(0 0 20px rgba(255,0,0,0.6));
     }
+
     .loading-corner {
-      position: absolute; bottom: max(20px, env(safe-area-inset-bottom)); right: max(20px, env(safe-area-inset-right));
+      position: absolute; bottom: max(25px, env(safe-area-inset-bottom)); right: max(25px, env(safe-area-inset-right));
       display: flex; flex-direction: column; align-items: flex-end; gap: clamp(8px, 1.5vh, 15px); text-align: right;
     }
     #loading-face {
@@ -127,30 +129,24 @@
     }
     @keyframes spin-record { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
+    /* Последовательная волна текста (одна волна за другой) */
     .loader-title {
       display: flex; gap: 3px; font-size: clamp(20px, 4vh, 36px); letter-spacing: 2px; text-shadow: 0 0 12px #f00;
     }
-    .loader-title span { display: inline-block; animation: wave-bounce 1.2s infinite ease-in-out; }
-    .loader-title span:nth-child(1) { animation-delay: 0.0s; }
-    .loader-title span:nth-child(2) { animation-delay: 0.1s; }
-    .loader-title span:nth-child(3) { animation-delay: 0.2s; }
-    .loader-title span:nth-child(4) { animation-delay: 0.3s; }
-    .loader-title span:nth-child(5) { animation-delay: 0.4s; }
-    .loader-title span:nth-child(6) { animation-delay: 0.5s; }
-    .loader-title span:nth-child(7) { animation-delay: 0.6s; }
-    .loader-title span:nth-child(8) { animation-delay: 0.7s; }
-    .loader-title span:nth-child(9) { animation-delay: 0.8s; }
-    .loader-title span:nth-child(10) { animation-delay: 0.9s; }
-    .loader-title span:nth-child(11) { animation-delay: 1.0s; }
-
-    @keyframes wave-bounce {
-      0%, 100% { transform: translateY(0); opacity: 0.3; }
-      50% { transform: translateY(-12px); opacity: 1; color: #f00; text-shadow: 0 0 10px rgba(255,0,0,0.8); }
+    .loader-title span {
+      display: inline-block;
+      animation: wave-sequence 1.8s infinite linear;
+    }
+    @keyframes wave-sequence {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.3; text-shadow: none; }
+      20% { transform: translateY(-12px); opacity: 1; color: #f00; text-shadow: 0 0 10px rgba(255,0,0,0.8); }
     }
 
     #loading-status { font-size: clamp(10px, 1.5vh, 14px); color: #aaa; min-height: 20px; max-width: 60vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .progress { width: min(60vw, 300px); height: clamp(4px, 0.8vh, 8px); overflow: hidden; background: #222; border-radius: 5px; direction: rtl; }
-    #progress-fill { width: 0; height: 100%; background: #a00; transition: width 0.2s; box-shadow: 0 0 10px #f00; float: right; }
+    
+    /* Полоска загрузки строго слева направо */
+    .progress { width: min(60vw, 300px); height: clamp(4px, 0.8vh, 8px); overflow: hidden; background: #222; border-radius: 5px; direction: ltr; }
+    #progress-fill { width: 0%; height: 100%; background: #a00; transition: width 0.3s ease; box-shadow: 0 0 10px #f00; float: left; }
 
     #game-container { position: fixed; inset: 0; z-index: 10; display: none; }
     #game-container.active { display: block; }
@@ -190,12 +186,14 @@
 
   <!-- 3. ЗАГРУЗКА -->
   <section id="loading-screen" class="screen">
+    <!-- Логотип при загрузке теперь на месте и виден -->
     <img id="loading-logo" src="./Текстуры/Меню/name1.png" alt="Woland's Mansion" onerror="this.hidden=true">
+    
     <div class="loading-corner">
       <img id="loading-face" src="./Текстуры/Воланд/лицо1.png" alt="" onerror="this.hidden=true;">
-      <div class="loader-title" aria-label="Загрузка">
-        <span>З</span><span>а</span><span>г</span><span>р</span><span>у</span><span>з</span><span>к</span><span>а</span><span>.</span><span>.</span><span>.</span>
-      </div>
+      
+      <div class="loader-title" id="loader-title" aria-label="Загрузка"></div>
+      
       <div id="loading-status">Подготовка...</div>
       <div class="progress"><div id="progress-fill"></div></div>
     </div>
@@ -220,12 +218,21 @@
     });
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js', { scope: './' })
-        .then(reg => console.log('[SW] OK', reg.scope))
-        .catch(err => console.warn('[SW] Error', err));
+      navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {});
     }
 
     const $ = id => document.getElementById(id);
+
+    // Генерация последовательной волны для слова "Загрузка..."
+    const textContainer = $('loader-title');
+    const loadingText = "Загрузка...";
+    [...loadingText].forEach((char, index) => {
+      const span = document.createElement('span');
+      span.textContent = char;
+      // Каждая буква начинает прыгать ровно после предыдущей, создавая волну друг за другом
+      span.style.animationDelay = `${index * 0.12}s`;
+      textContainer.appendChild(span);
+    });
 
     const translations = {
       ru: { install_hint: "Для комфортной игры на телефоне установите приложение.", ios_title: "iPhone / iPad (Safari)", ios_text: "Поделиться → На экран 'Домой'", android_title: "Android (Chrome / Samsung)", android_text: "Меню (⋮) → Установить приложение", install_btn: "Установить приложение" },
@@ -311,17 +318,16 @@
 
         await loadAssets();
 
-        // Безопасный динамический импорт меню (если файла вдруг нет, игра не упадет)
         try {
           const menuModule = await import('./Блоки/menu.js');
           if (menuModule && menuModule.Menu && typeof menuModule.Menu.start === 'function') {
             await menuModule.Menu.start('title');
           } else {
-            console.warn('Метод Menu.start не найден в module.');
+            console.warn('Метод Menu.start не найден');
           }
         } catch (menuErr) {
-          console.error('Не удалось загрузить модуль menu.js:', menuErr);
-          $('loading-status').textContent = 'Ошибка модуля menu.js';
+          console.error('Ошибка в menu.js:', menuErr);
+          $('loading-status').textContent = 'Ошибка загрузки меню';
           return;
         }
 
@@ -333,11 +339,12 @@
         fade.style.opacity = '0';
 
       } catch (err) {
-        console.error('Критическая ошибка загрузки:', err);
+        console.error('Критическая ошибка:', err);
         $('loading-status').textContent = 'Ошибка загрузки. Проверьте консоль.';
       }
     }, { once: true });
 
+    // Загрузка ассетов с честной пропорциональной полосой слева направо
     async function loadAssets() {
       const status = $('loading-status');
       const progress = $('progress-fill');
@@ -352,11 +359,12 @@
         ];
 
         let loaded = 0;
+        const total = queue.length;
         window.GameAssets = window.GameAssets || {};
 
         for (const item of queue) {
           const fileName = item.url.split('/').pop();
-          status.textContent = `Скачивание [${loaded + 1}/${queue.length}] ${item.type}: ${fileName}`;
+          status.textContent = `Скачивание [${loaded + 1}/${total}] ${item.type}: ${fileName}`;
           try {
             const blob = await (await fetch(item.url)).blob();
             if (item.type === 'Текстуры') {
@@ -368,7 +376,9 @@
             console.warn(`[Пропуск] ${item.url}`);
           }
           loaded++;
-          progress.style.width = `${Math.round((loaded / queue.length) * 100)}%`;
+          // Точный расчет процентов слева направо без искажений
+          const percent = Math.round((loaded / total) * 100);
+          progress.style.width = `${percent}%`;
         }
         status.textContent = 'Ресурсы готовы!';
       } catch (e) {

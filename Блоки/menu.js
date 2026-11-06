@@ -2,17 +2,19 @@
 
 const MENU_BG = './Текстуры/Меню/Фон.jpg';
 const MENU_LIGHTNING = './Текстуры/Меню/Фон-молния.jpg';
-const MENU_LOGO = './Текстуры/Меню/Название.jpg';
+const MENU_LOGO = './Текстуры/Меню/Название.jpg'; // Точный путь из структуры
 
 export const Menu = {
   isMounted: false,
   lightningTimeout: null,
-  currentState: 'title', // 'title' или 'menu'
+  currentState: 'title',
+  isTransitioning: false, // Защита от повторных нажатий во время анимации
 
   start(mode = 'title') {
     if (mode === true) mode = 'menu';
     if (mode === false || !mode) mode = 'title';
     this.currentState = mode;
+    this.isTransitioning = false;
 
     const container = document.getElementById('game-container');
     if (!container) throw new Error('game-container was not found');
@@ -25,7 +27,6 @@ export const Menu = {
 
     const isMenu = mode === 'menu';
 
-    // Рендерим разметку один раз, чтобы титульный экран и меню были единым связанным блоком
     if (!this.isMounted || !container.querySelector('.woland-menu')) {
       container.innerHTML = `
         <section class="woland-menu ${isMenu ? 'menu-mode dark-shade' : ''}" aria-label="Главное меню">
@@ -63,7 +64,6 @@ export const Menu = {
           }
           .woland-menu.active { opacity: 1; }
 
-          /* Плавный зум фона от 1.50 до 1.00 */
           .woland-menu__bg-wrapper {
             position: absolute; inset: 0; z-index: 0;
             transform: scale(1.50);
@@ -82,14 +82,13 @@ export const Menu = {
 
           .woland-menu__shade {
             position: absolute; inset: 0; z-index: 1;
-            background: rgba(0, 0, 0, 0.2);
+            background: rgba(0, 0, 0, 0.3);
             transition: background 1.5s ease;
           }
           .woland-menu.dark-shade .woland-menu__shade {
-            background: rgba(0, 0, 0, 0.55);
+            background: rgba(0, 0, 0, 0.7);
           }
 
-          /* --- ЛОГОТИП --- */
           .woland-menu__logo-container {
             position: absolute; top: 18%; left: 50%; transform: translateX(-50%);
             z-index: 10; display: flex; justify-content: center; pointer-events: none;
@@ -109,7 +108,6 @@ export const Menu = {
             transform: translateX(-50%) scale(0.65);
           }
 
-          /* --- ТИТУЛЬНЫЙ ЭКРАН --- */
           .woland-menu__title-screen {
             position: absolute; inset: 0; z-index: 5;
             display: flex; align-items: flex-end; justify-content: center; padding-bottom: 12vh;
@@ -128,7 +126,6 @@ export const Menu = {
             50% { opacity: 1; text-shadow: 0 0 15px rgba(255,0,0,0.8); }
           }
 
-          /* --- ЭКРАН МЕНЮ (КНОПКИ) --- */
           .woland-menu__buttons-screen {
             position: absolute; inset: 0; z-index: 5;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -144,7 +141,6 @@ export const Menu = {
             width: 100%; max-width: 340px; margin-top: 12vh;
           }
 
-          /* --- СТИЛЬНЫЕ КНОПКИ-ПАПКИ СО СКОСОМ И ВКЛАДКОЙ --- */
           .btn-folder {
             position: relative;
             background: linear-gradient(135deg, #351216 0%, #1a080a 100%);
@@ -197,7 +193,7 @@ export const Menu = {
       menuEl.classList.add('active');
     });
 
-    // --- МУЗЫКА БЕЗ ПОВТОРНЫХ НАЛОЖЕНИЙ ---
+    // Музыка без наложений
     if (window.SoundsEngine) {
       window.SoundsEngine.init();
       if (window.SoundsEngine.currentMusicTrack !== 'menu_theme') {
@@ -215,42 +211,54 @@ export const Menu = {
       }
     }
 
-    // --- СТЕРЕО ГРОМ И МОЛНИИ ---
+    // --- РЕАЛИСТИЧНЫЙ СТЕРЕО ГРОМ С РЕВЕРБЕРАЦИЕЙ ---
     const playThunder = () => {
       if (!window.SoundsEngine) return;
-      const pans = [-0.8, -0.4, 0, 0.4, 0.8];
+      const pans = [-0.85, -0.45, 0, 0.45, 0.85];
       const pan = pans[Math.floor(Math.random() * pans.length)];
+      
+      // Вызываем гром со спецэффектом реверберации и стереопозиционированием
       window.SoundsEngine.play('thunder', { 
         type: 'effects', 
-        position: { x: pan, y: 0, z: 1 } 
+        position: { x: pan, y: 0, z: 1 },
+        reverb: true // Включает реалистичный отзвук эха о стены особняка
       });
     };
 
+    // --- УЛУЧШЕННЫЕ МНОГОСТУПЕНЧАТЫЕ МОЛНИИ ---
     const triggerLightning = () => {
       const lightningEl = container.querySelector('.woland-menu__lightning');
       if (!lightningEl) return;
-      const flashes = Math.floor(Math.random() * 2) + 2; 
-      let count = 0;
+      
+      // Настоящий многофазный паттерн молнии
+      const flashSteps = [
+        { opacity: 0.95, duration: 50 },
+        { opacity: 0.15, duration: 70 },
+        { opacity: 0.80, duration: 40 },
+        { opacity: 0.30, duration: 100 },
+        { opacity: 1.00, duration: 60 },
+        { opacity: 0.00, duration: 500 }
+      ];
 
-      const doFlash = () => {
-        if (count >= flashes) return;
-        lightningEl.style.transition = 'opacity 0.08s ease';
-        lightningEl.style.opacity = '1';
-        
-        if (count === 0) playThunder();
+      playThunder();
 
-        setTimeout(() => {
-          lightningEl.style.transition = 'opacity 0.6s ease';
+      let currentStep = 0;
+      const runFlash = () => {
+        if (currentStep >= flashSteps.length) {
           lightningEl.style.opacity = '0';
-          count++;
-          if (count < flashes) setTimeout(doFlash, 150);
-        }, 90);
+          return;
+        }
+        const stepData = flashSteps[currentStep];
+        lightningEl.style.transition = `opacity ${stepData.duration / 1000}s ease`;
+        lightningEl.style.opacity = stepData.opacity;
+        currentStep++;
+        setTimeout(runFlash, stepData.duration);
       };
-      doFlash();
+      runFlash();
     };
 
     const scheduleLightning = () => {
-      const delay = Math.random() * 8000 + 8000; 
+      const delay = Math.random() * 8000 + 7000; 
       this.lightningTimeout = setTimeout(() => {
         triggerLightning();
         scheduleLightning();
@@ -259,7 +267,6 @@ export const Menu = {
 
     scheduleLightning();
 
-    // Функция переключения состояний без перезапуска и пересоздания DOM
     const applyState = (targetMode) => {
       this.currentState = targetMode;
       if (targetMode === 'menu') {
@@ -280,12 +287,15 @@ export const Menu = {
       setTimeout(() => { logoEl.classList.add('animate-in'); }, 400);
     }
 
+    // Переход в меню с защитой от двойных кликов
     const goToMenu = () => {
-      if (this.currentState === 'menu') return;
+      if (this.isTransitioning || this.currentState === 'menu') return;
+      this.isTransitioning = true;
       applyState('menu');
       if (window.SoundsEngine) {
         window.SoundsEngine.play('transition', { type: 'effects' });
       }
+      setTimeout(() => { this.isTransitioning = false; }, 1500); // Снимаем блок по окончании анимации
     };
 
     titleScreen.onclick = () => goToMenu();
@@ -297,58 +307,49 @@ export const Menu = {
     const backBtn = container.querySelector('#btn-back');
     if (backBtn) {
       backBtn.onclick = () => {
+        if (this.isTransitioning) return;
+        this.isTransitioning = true;
         playSfx('btn_back');
         applyState('title');
+        setTimeout(() => { this.isTransitioning = false; }, 1000);
       };
     }
 
-    const playBtn = container.querySelector('#btn-play');
-    if (playBtn) {
-      playBtn.onclick = () => {
-        playSfx('btn_click');
-        menuEl.style.opacity = '0';
-        setTimeout(async () => {
-          try {
-            const gameMod = await import('./game.js').catch(() => null);
-            if (gameMod && gameMod.Game && typeof gameMod.Game.start === 'function') {
-              gameMod.Game.start();
+    // Обработчики кнопок с блокировкой повторных кликов
+    const setupSubmenuButton = (btnId, moduleImportCallback) => {
+      const btn = container.querySelector(btnId);
+      if (btn) {
+        btn.onclick = () => {
+          if (this.isTransitioning) return;
+          this.isTransitioning = true;
+          playSfx('btn_click');
+          menuEl.style.opacity = '0';
+          setTimeout(async () => {
+            try {
+              await moduleImportCallback();
+            } catch (e) {
+              this.isTransitioning = false;
+              menuEl.style.opacity = '1';
             }
-          } catch (e) {}
-        }, 1000);
-      };
-    }
+          }, 1000);
+        };
+      }
+    };
 
-    const settingsBtn = container.querySelector('#btn-settings');
-    if (settingsBtn) {
-      settingsBtn.onclick = () => {
-        playSfx('btn_click');
-        menuEl.style.opacity = '0';
-        setTimeout(async () => {
-          try {
-            const setMod = await import('./settings.js').catch(() => null);
-            if (setMod && setMod.Settings && typeof setMod.Settings.start === 'function') {
-              setMod.Settings.start();
-            }
-          } catch (e) {}
-        }, 1000);
-      };
-    }
+    setupSubmenuButton('#btn-play', async () => {
+      const mod = await import('./game.js').catch(() => null);
+      if (mod && mod.Game) mod.Game.start();
+    });
 
-    const aboutBtn = container.querySelector('#btn-about');
-    if (aboutBtn) {
-      aboutBtn.onclick = () => {
-        playSfx('btn_click');
-        menuEl.style.opacity = '0';
-        setTimeout(async () => {
-          try {
-            const aboutMod = await import('./about.js').catch(() => null);
-            if (aboutMod && aboutMod.About && typeof aboutMod.About.start === 'function') {
-              aboutMod.About.start();
-            }
-          } catch (e) {}
-        }, 1000);
-      };
-    }
+    setupSubmenuButton('#btn-settings', async () => {
+      const mod = await import('./settings.js').catch(() => null);
+      if (mod && mod.Settings) mod.Settings.start();
+    });
+
+    setupSubmenuButton('#btn-about', async () => {
+      const mod = await import('./about.js').catch(() => null);
+      if (mod && mod.About) mod.About.start();
+    });
 
     this.isMounted = true;
   }

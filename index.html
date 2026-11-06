@@ -18,18 +18,42 @@
       src: url('./supermario286rusbylyajka.otf') format('opentype');
       font-display: swap;
     }
-    *, *::before, *::after {
+
+    /* ★ ЗАЩИТА ОТ СИНИХ ВЫДЕЛЕНИЙ И МАСШТАБИРОВАНИЯ */
+    * {
       box-sizing: border-box;
       margin: 0; padding: 0;
       font-family: 'WolandFont', 'Courier New', monospace;
-      user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+      
+      -webkit-tap-highlight-color: transparent; /* Убирает синий фон при тапе */
+      -webkit-touch-callout: none;              /* Запрет меню на iOS */
+      -webkit-user-select: none;                /* Запрет выделения */
+      -khtml-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
     }
+
     html, body {
       width: 100%; height: 100%; overflow: hidden;
-      background: #050407; color: #fff; touch-action: none;
-      text-size-adjust: 100%; -webkit-text-size-adjust: 100%;
+      background: #050407; color: #fff;
+      
+      /* Запрет масштабирования и прокрутки */
+      touch-action: none;
+      overscroll-behavior: none;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
     }
-    img { pointer-events: none; -webkit-user-drag: none; }
+
+    /* Запрет на выделение и перетаскивание для медиа-элементов */
+    img, canvas, video {
+      pointer-events: none;
+      -webkit-user-drag: none;
+      -khtml-user-drag: none;
+      -moz-user-drag: none;
+      -o-user-drag: none;
+      user-drag: none;
+    }
 
     /* --- ОБЩИЕ ЭКРАНЫ --- */
     .screen {
@@ -45,7 +69,7 @@
     }
     .screen.active { opacity: 1; visibility: visible; pointer-events: auto; }
 
-    /* --- ЭКРАН УСТАНОВКИ (Только для мобильных в браузере) --- */
+    /* --- ЭКРАН УСТАНОВКИ --- */
     #install-screen {
       background: radial-gradient(ellipse at center, #201020, #050407 75%);
       overflow-y: auto;
@@ -59,7 +83,6 @@
       gap: clamp(10px, 2vh, 20px);
     }
 
-    /* Обновленный путь к логотипу */
     #install-screen > .install-content > img {
       width: min(80vw, 400px); max-height: 20vh; object-fit: contain;
       filter: drop-shadow(0 0 15px rgba(255,0,0,0.5));
@@ -102,14 +125,13 @@
     .btn:active { transform: scale(0.97); }
     #install-btn { display: none; }
 
-    /* --- ДИСКЛЕЙМЕР (21:9 cover) --- */
+    /* --- ДИСКЛЕЙМЕР --- */
     #disclaimer-screen { 
-      background: #000; cursor: pointer; z-index: 100; 
-      padding: 0; 
+      background: #000; cursor: pointer; z-index: 100; padding: 0; 
     }
     #disclaimer-img { 
       width: 100vw; height: 100vh; 
-      object-fit: cover; /* Растягивает на весь экран, обрезая края для 21:9 */
+      object-fit: cover; 
       display: none; 
     }
     #disclaimer-text { 
@@ -128,26 +150,23 @@
       background: #050407; z-index: 90; padding: 0; overflow: hidden; 
     }
     
-    /* Логотип по центру сверху (обновлен путь) */
     #loading-logo {
       position: absolute; top: 8%; left: 50%; transform: translateX(-50%);
       width: min(60vw, 350px); max-height: 15vh; object-fit: contain;
       filter: drop-shadow(0 0 20px rgba(255,0,0,0.6));
     }
 
-    /* Блок в правом нижнем углу */
     .loading-corner {
       position: absolute;
       bottom: max(20px, env(safe-area-inset-bottom));
       right: max(20px, env(safe-area-inset-right));
       display: flex;
       flex-direction: column;
-      align-items: flex-end; /* Выравнивание по правому краю */
+      align-items: flex-end; 
       gap: clamp(8px, 1.5vh, 15px);
       text-align: right;
     }
 
-    /* Воланд */
     #loading-face {
       width: clamp(50px, 12vh, 100px); 
       height: clamp(50px, 12vh, 100px);
@@ -156,7 +175,6 @@
     }
     @keyframes spin-record { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-    /* Анимация текста "Загрузка..." */
     .loader-title {
       display: flex; gap: 3px; 
       font-size: clamp(20px, 4vh, 36px);
@@ -170,7 +188,6 @@
     .loader-title span:nth-child(9) { animation-delay: 0.8s; } .loader-title span:nth-child(10) { animation-delay: 0.9s; }
     @keyframes wave { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); color: #f00; } }
 
-    /* Статус */
     #loading-status { 
       font-size: clamp(10px, 1.5vh, 14px); 
       color: #aaa; 
@@ -179,7 +196,6 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     
-    /* Прогресс-бар */
     .progress { 
       width: min(60vw, 300px); height: clamp(4px, 0.8vh, 8px); 
       overflow: hidden; background: #222; border-radius: 5px; 
@@ -217,7 +233,6 @@
   <!-- 1. ЭКРАН УСТАНОВКИ -->
   <section id="install-screen" class="screen">
     <div class="install-content">
-      <!-- Обновленный путь к логотипу -->
       <img src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" onerror="this.hidden=true">
       
       <p data-i18n="install_hint">Для комфортной игры на телефоне установите приложение.</p>
@@ -252,10 +267,8 @@
 
   <!-- 3. ЗАГРУЗКА -->
   <section id="loading-screen" class="screen">
-    <!-- Логотип сверху по центру -->
     <img id="loading-logo" src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" onerror="this.hidden=true">
     
-    <!-- Блок в правом нижнем углу -->
     <div class="loading-corner">
       <img id="loading-face" src="./Текстуры/Воланд/лицо1.png" alt="" onerror="this.hidden=true;">
       
@@ -276,7 +289,7 @@
   <script type="module">
     'use strict';
 
-    // ★ ЗАЩИТА КОНТЕНТА
+    // ★ ЗАЩИТА КОНТЕНТА (Дополнительно к sounds.js)
     document.addEventListener('contextmenu', e => e.preventDefault());
     document.addEventListener('dragstart', e => e.preventDefault());
     document.addEventListener('selectstart', e => e.preventDefault());
@@ -287,6 +300,9 @@
         e.preventDefault();
       }
     });
+    document.addEventListener('touchmove', e => {
+      if (e.touches.length > 1) e.preventDefault();
+    }, { passive: false });
 
     // ★ РЕГИСТРАЦИЯ SERVICE WORKER
     if ('serviceWorker' in navigator) {
@@ -343,7 +359,6 @@
 
     let currentLang = 'ru';
 
-    // ★ ПЛАВНАЯ СМЕНА ЯЗЫКОВ
     async function setLanguage(lang, force = false) {
       if (currentLang === lang && !force) return;
       currentLang = lang;
@@ -417,7 +432,7 @@
       activateScreen('disclaimer-screen');
     }
 
-    // ★ ПЕРЕХОД: ДИСКЛЕЙМЕР -> ЗАТЕМНЕНИЕ -> ЗАГРУЗКА -> МЕНЮ
+    // ★ ПЕРЕХОД
     $('disclaimer-screen').addEventListener('click', async () => {
       const fade = $('fade-overlay');
       
@@ -503,4 +518,4 @@
 
   </script>
 </body>
-</html>
+  </html>

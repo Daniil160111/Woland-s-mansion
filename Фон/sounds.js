@@ -1,5 +1,29 @@
 // js/sounds.js
 
+// ★ ГЛОБАЛЬНАЯ ЗАЩИТА ОТ КОПИРОВАНИЯ, СКАЧИВАНИЯ И ВЫДЕЛЕНИЙ
+(function() {
+    'use strict';
+    // Запрет правого клика
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    // Запрет перетаскивания (скачивания) картинок
+    document.addEventListener('dragstart', e => e.preventDefault());
+    // Запрет выделения текста
+    document.addEventListener('selectstart', e => e.preventDefault());
+    // Запрет копирования и вырезания
+    document.addEventListener('copy', e => e.preventDefault());
+    document.addEventListener('cut', e => e.preventDefault());
+    // Запрет горячих клавиш (Ctrl+C, Ctrl+S, Ctrl+U, F12, Ctrl+Shift+I)
+    document.addEventListener('keydown', e => {
+        if ((e.ctrlKey && ['c','s','u'].includes(e.key.toLowerCase())) || e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I')) {
+            e.preventDefault();
+        }
+    });
+    // Запрет масштабирования жестами (pinch-zoom) на мобильных
+    document.addEventListener('touchmove', e => {
+        if (e.touches.length > 1) e.preventDefault();
+    }, { passive: false });
+})();
+
 class SoundEngine {
     constructor() {
         this.ctx = null;

@@ -7,7 +7,7 @@ class SoundEngine {
         this.activeSounds = new Set(); 
         this.currentMusicTrack = null;
         
-        this.audioMode = 'stereo'; // 'mono', 'stereo', 'surround'
+        this.audioMode = 'stereo';
         this.volumes = { music: 0.8, effects: 0.8 };
     }
 
@@ -30,8 +30,6 @@ class SoundEngine {
         
         this.setMasterVolume('music', this.volumes.music);
         this.setMasterVolume('effects', this.volumes.effects);
-        
-        console.log('🔊 Аудио-движок запущен. Режим:', this.audioMode);
     }
 
     async loadSound(id, source) {
@@ -54,16 +52,14 @@ class SoundEngine {
     }
 
     play(id, options = {}) {
-        if (!this.ctx || !this.loadedBuffers[id]) {
-            console.warn(`Звук "${id}" не загружен или аудио-контекст не инициализирован.`);
-            return null;
-        }
+        if (!this.ctx || !this.loadedBuffers[id]) return null;
 
         const { 
             loop = false, 
             type = 'effects', 
             volume = 1.0, 
-            position = null 
+            position = null,
+            reverb = false 
         } = options;
 
         const source = this.ctx.createBufferSource();
@@ -75,31 +71,47 @@ class SoundEngine {
 
         const targetBus = type === 'music' ? this.masterMusic : this.masterEffects;
 
-        // --- ПРОСТРАНСТВЕННЫЙ ЗВУК / СТЕРЕО ПАНОРАМА ---
+        let lastNode = source;
+
+        // --- ПРОСТРАНСТВЕННЫЙ ЗВУК И СТЕРЕО ПАНОРАМА ---
         if (position && this.audioMode !== 'mono' && this.ctx.createPanner) {
             const panner = this.ctx.createPanner();
-            
-            if (this.audioMode === 'surround') {
-                panner.panningModel = 'HRTF';
-                panner.distanceModel = 'inverse';
-                panner.refDistance = 1;
-                panner.maxDistance = 100;
-                panner.rolloffFactor = 1;
-            } else {
-                panner.panningModel = 'equalpower';
-            }
-
+            panner.panningModel = 'equalpower';
             panner.positionX.value = position.x || 0;
             panner.positionY.value = position.y || 0;
             panner.positionZ.value = position.z || 1;
             
-            source.connect(panner);
-            panner.connect(gainNode);
-        } else {
-            source.connect(gainNode);
+            lastNode.connect(panner);
+            lastNode = panner;
         }
 
-        gainNode.connect(targetBus);
+        // --- ЭФФЕКТ РЕВЕРБЕРАЦИИ (ЭХО ДЛЯ ГРОМА) ---
+        if (reverb && type === 'effects') {
+            const delayNode = this.ctx.createDelay();
+            delayNode.delayTime.value = 0.28; // задержка эха
+
+            const feedbackGain = this.ctx.createGain();
+            feedbackGain.gain.value = 0.35; // сила затухания эха
+
+            const filterNode = this.ctx.createBiquadFilter();
+            filterNode.type = 'lowpass';
+            filterNode.frequency.value = 1200; // приглушение высоких частот для реалистичности
+
+            // Цепь реверберации
+            lastNode.connect(gainNode);
+            gainNode.connect(targetBus);
+
+            // Параллельный контур эха
+            gainNode.connect(delayNode);
+            delayNode.connect(filterNode);
+            filterNode.connect(feedbackGain);
+            feedbackGain.connect(delayNode);
+            feedbackGain.connect(targetBus);
+        } else {
+            lastNode.connect(gainNode);
+            gainNode.connect(targetBus);
+        }
+
         source.start(0);
         
         this.activeSounds.add(source);
@@ -136,7 +148,6 @@ class SoundEngine {
 
     setAudioMode(mode) {
         this.audioMode = mode;
-        console.log('Режим звука изменен на:', mode);
     }
 }
 

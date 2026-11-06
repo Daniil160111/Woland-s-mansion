@@ -8,6 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Woland's Mansion</title>
   
+  <!-- Связь с manifest -->
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" href="./icon/icon.jpg" type="image/jpeg">
   <link rel="apple-touch-icon" href="./icon/icon.jpg">
@@ -20,17 +21,13 @@
     }
     *, *::before, *::after {
       box-sizing: border-box;
-      margin: 0;
-      padding: 0;
+      margin: 0; padding: 0;
       font-family: 'WolandFont', 'Courier New', monospace;
-      user-select: none;
-      -webkit-user-select: none;
-      -webkit-touch-callout: none;
+      user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
     }
     html, body {
       width: 100%; height: 100%; overflow: hidden;
-      background: #050407; color: #fff;
-      touch-action: none;
+      background: #050407; color: #fff; touch-action: none;
     }
     img { pointer-events: none; -webkit-user-drag: none; }
 
@@ -45,7 +42,7 @@
     }
     .screen.active { opacity: 1; visibility: visible; pointer-events: auto; }
 
-    /* --- ЭКРАН УСТАНОВКИ (Мобилки в браузере) --- */
+    /* --- ЭКРАН УСТАНОВКИ --- */
     #install-screen {
       background: radial-gradient(ellipse at center, #201020, #050407 75%);
       overflow-y: auto;
@@ -128,9 +125,10 @@
     .progress { width: min(70vw, 360px); height: 4px; overflow: hidden; background: #222; border-radius: 5px; }
     #progress-fill { width: 0; height: 100%; background: #a00; transition: width 0.2s; box-shadow: 0 0 10px #f00; }
 
-    /* Воланд (крутится как пластинка) */
+    /* Воланд (маленький, в правом нижнем углу, крутится как пластинка) */
     #loading-face {
-      position: absolute; right: 20px; bottom: 20px; width: clamp(60px, 15vw, 100px); height: clamp(60px, 15vw, 100px);
+      position: absolute; right: 20px; bottom: 20px; 
+      width: clamp(50px, 12vw, 80px); height: clamp(50px, 12vw, 80px);
       object-fit: cover; border-radius: 50%; filter: drop-shadow(0 0 10px #a00);
       animation: spin-record 4s linear infinite;
     }
@@ -149,7 +147,7 @@
 </head>
 <body>
 
-  <!-- 1. ЭКРАН УСТАНОВКИ (Мобильный браузер) -->
+  <!-- 1. ЭКРАН УСТАНОВКИ -->
   <section id="install-screen" class="screen">
     <img src="./Текстуры/Меню/name1.png" alt="Woland's Mansion" onerror="this.hidden=true">
     
@@ -167,7 +165,6 @@
     <button id="install-btn" class="btn" data-i18n="install_btn">Установить приложение</button>
     <button id="continue-btn" class="btn" data-i18n="continue_btn">Продолжить в браузере</button>
 
-    <!-- Языки -->
     <div class="lang-switch">
       <button class="lang-btn active" data-lang="ru">RU</button>
       <button class="lang-btn" data-lang="en">EN</button>
@@ -197,14 +194,12 @@
       <div class="progress"><div id="progress-fill"></div></div>
     </div>
 
-    <!-- Воланд в правом нижнем углу -->
+    <!-- Маленький Воланд -->
     <img id="loading-face" src="./Текстуры/Воланд/лицо1.png" alt="" onerror="this.hidden=true;">
   </section>
 
   <!-- 4. КОНТЕЙНЕР ДЛЯ MENU.JS -->
   <div id="game-container"></div>
-
-  <!-- Затемнение -->
   <div id="fade-overlay"></div>
 
   <script type="module">
@@ -282,13 +277,15 @@
 
     let currentLang = 'ru';
 
+    // ★ ПЛАВНАЯ СМЕНА ЯЗЫКОВ
     async function setLanguage(lang, force = false) {
       if (currentLang === lang && !force) return;
       currentLang = lang;
       document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.lang === lang));
 
       const elements = document.querySelectorAll('[data-i18n]');
-      elements.forEach(el => el.style.opacity = '0');
+      
+      elements.forEach(el => { el.style.transition = 'opacity 0.5s ease'; el.style.opacity = '0'; });
       await new Promise(r => setTimeout(r, 250));
       
       elements.forEach(el => {
@@ -316,7 +313,6 @@
       return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches);
     }
 
-    // ★ ПЕРЕХВАТ УСТАНОВКИ
     let deferredPrompt = null;
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
@@ -341,15 +337,9 @@
 
     async function startApp() {
       if (isMobile() && !isPWA()) {
-        // МОБИЛЬНЫЙ БРАУЗЕР -> Экран установки
         activateScreen('install-screen');
         setLanguage('ru', true);
-
-        $('continue-btn').addEventListener('click', () => {
-          openDisclaimer();
-        });
       } else {
-        // ПК ИЛИ PWA -> Дисклеймер
         openDisclaimer();
       }
     }
@@ -361,39 +351,42 @@
       activateScreen('disclaimer-screen');
     }
 
+    // ★ ПЕРЕХОД: ДИСКЛЕЙМЕР -> ЗАТЕМНЕНИЕ (1.5с) -> ЗАГРУЗКА (0.5с) -> МЕНЮ (1с)
     $('disclaimer-screen').addEventListener('click', async () => {
-      // Затемнение (1.5с)
       const fade = $('fade-overlay');
-      fade.style.opacity = '1';
       
+      // 1. Затемнение на 1.5с
+      fade.style.transition = 'opacity 1.5s ease-in-out';
+      fade.style.opacity = '1';
       await new Promise(r => setTimeout(r, 1500));
 
-      // Показываем загрузку
+      // 2. Показываем загрузку
       activateScreen('loading-screen');
       
-      // Ждем 0.5с для плавного появления
+      // 3. Ждем 0.5с для появления экрана
       await new Promise(r => setTimeout(r, 500));
       
-      // Плавно убираем затемнение
-      fade.style.transition = 'opacity 0.5s ease';
+      // 4. Плавно убираем затемнение (уже под загрузкой)
       fade.style.opacity = '0';
 
       try {
-        // Загружаем модули
         await import('./Фон/settings-manager.js').then(m => m.Settings.init()).catch(() => console.warn('Settings not found'));
         await import('./Фон/sounds.js').catch(() => console.warn('Sounds not found'));
         if (window.SoundsEngine) window.SoundsEngine.init();
 
-        // Загрузка ассетов
         await loadAssets();
 
-        // Запуск меню
         const menuModule = await import('./Блоки/menu.js');
         await menuModule.Menu.start();
 
-        // Переход в игру
+        // 5. Затемнение на 1с и переход в игру
+        fade.style.transition = 'opacity 1s ease-in-out';
+        fade.style.opacity = '1';
+        await new Promise(r => setTimeout(r, 1000));
+        
         activateScreen(null);
         $('game-container').classList.add('active');
+        fade.style.opacity = '0';
 
       } catch (err) {
         console.error('Критическая ошибка:', err);
@@ -421,7 +414,7 @@
 
         for (const item of queue) {
           const fileName = item.url.split('/').pop();
-          status.textContent = `${item.type}: ${fileName} [${loaded + 1}/${queue.length}]`;
+          status.textContent = `Скачивание [${loaded + 1}/${queue.length}] ${item.type}: ${fileName}`;
 
           try {
             const blob = await (await fetch(item.url)).blob();
@@ -446,7 +439,6 @@
       }
     }
 
-    // ЗАПУСК
     startApp();
 
   </script>

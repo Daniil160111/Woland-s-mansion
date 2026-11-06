@@ -1,18 +1,13 @@
 // Блоки/menu.js
 
-import { Game } from './game.js';
-import { Settings } from './settings.js';
-import { About } from './about.js';
-
 const MENU_BG = './Текстуры/Меню/Фон.jpg';
 const MENU_LIGHTNING = './Текстуры/Меню/Фон-молния.jpg';
-const MENU_LOGO = './Текстуры/Меню/name1.png';
+const MENU_LOGO = './Текстуры/Меню/Название.jpg';
 
 export const Menu = {
   isMounted: false,
   lightningTimeout: null,
 
-  // mode может быть 'title' или 'menu' (поддерживается также true/false для старого кода)
   start(mode = 'title') {
     if (mode === true) mode = 'menu';
     if (mode === false || !mode) mode = 'title';
@@ -37,17 +32,14 @@ export const Menu = {
         
         <div class="woland-menu__shade ${isMenu ? 'darkened' : ''}"></div>
         
-        <!-- Логотип на самом верхнем слое (z-index: 10) -->
         <div class="woland-menu__logo-container ${isMenu ? 'menu-mode animate-instant' : ''}">
           <img class="woland-menu__logo ${isMenu ? 'animate-in' : ''}" src="${logo}" alt="Woland's Mansion" onerror="this.hidden=true">
         </div>
 
-        <!-- ТИТУЛЬНЫЙ ЭКРАН -->
         <div class="woland-menu__title-screen ${isMenu ? 'hidden' : ''}">
           <div class="woland-menu__press-to-continue">Нажмите чтобы продолжить</div>
         </div>
 
-        <!-- ЭКРАН МЕНЮ -->
         <div class="woland-menu__buttons-screen ${isMenu ? 'visible' : ''}">
           <div class="woland-menu__content">
             <button class="btn-folder" id="btn-play" type="button">Играть</button>
@@ -67,43 +59,35 @@ export const Menu = {
         }
         .woland-menu.active { opacity: 1; }
 
-        /* Зум фона от 1.50 до 1.00 */
         .woland-menu__bg-wrapper {
           position: absolute; inset: 0; z-index: 0;
           transform: scale(1.50);
           transition: transform 1s ease;
         }
-        .woland-menu__bg-wrapper.normal-scale {
-          transform: scale(1.00);
-        }
+        .woland-menu__bg-wrapper.normal-scale { transform: scale(1.00); }
 
         .woland-menu__bg, .woland-menu__lightning {
           position: absolute; inset: 0; background-size: cover; background-position: center;
         }
-        .woland-menu__lightning {
-          opacity: 0; pointer-events: none;
-        }
+        .woland-menu__lightning { opacity: 0; pointer-events: none; }
 
         .woland-menu__shade {
           position: absolute; inset: 0; z-index: 1;
-          background: rgba(0, 0, 0, 0.2);
-          transition: background 1.5s ease;
+          background: rgba(0, 0, 0, 0.2); transition: background 1.5s ease;
         }
         .woland-menu__shade.darkened,
         .woland-menu__buttons-screen.visible ~ .woland-menu__shade {
           background: rgba(0, 0, 0, 0.5);
         }
 
-        /* --- ЛОГОТИП (Самый верхний слой z-index: 10) --- */
         .woland-menu__logo-container {
           position: absolute; top: 15%; left: 50%; transform: translateX(-50%);
           z-index: 10; display: flex; justify-content: center; pointer-events: none;
           transition: top 1.5s cubic-bezier(0.2, 0.8, 0.2, 1), transform 1.5s cubic-bezier(0.2, 0.8, 0.2, 1);
           width: 100%;
         }
-        .woland-menu__logo-container.animate-instant {
-          transition: none !important;
-        }
+        .woland-menu__logo-container.animate-instant { transition: none !important; }
+        
         .woland-menu__logo {
           width: min(80vw, 600px); max-height: 40vh; object-fit: contain;
           filter: drop-shadow(0 0 20px rgba(170,21,21,0.7));
@@ -116,11 +100,9 @@ export const Menu = {
         }
 
         .woland-menu__logo-container.menu-mode {
-          top: 8%;
-          transform: translateX(-50%) scale(0.7);
+          top: 8%; transform: translateX(-50%) scale(0.7);
         }
 
-        /* --- ТИТУЛЬНЫЙ ЭКРАН --- */
         .woland-menu__title-screen {
           position: absolute; inset: 0; z-index: 5;
           display: flex; align-items: flex-end; justify-content: center; padding-bottom: 15vh;
@@ -136,7 +118,6 @@ export const Menu = {
           0% { opacity: 0; } 50% { opacity: 1; } 100% { opacity: 0; }
         }
 
-        /* --- ЭКРАН МЕНЮ --- */
         .woland-menu__buttons-screen {
           position: absolute; inset: 0; z-index: 5;
           display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -150,7 +131,6 @@ export const Menu = {
           width: 100%; max-width: 320px; margin-top: 15vh;
         }
 
-        /* --- КНОПКИ-ПАПКИ СО СКОСОМ / / --- */
         .btn-folder {
           position: relative;
           background: linear-gradient(180deg, #2a1014, #150709);
@@ -207,9 +187,7 @@ export const Menu = {
       if (currentTrack !== 'menu_theme') {
         window.SoundsEngine.setMasterVolume('music', 0);
         window.SoundsEngine.play('menu_theme', { loop: true, type: 'music' });
-        let vol = 0; 
-        const targetVol = 0.8; 
-        const step = targetVol / 20;
+        let vol = 0; const targetVol = 0.8; const step = targetVol / 20;
         const fadeIn = setInterval(() => {
           vol += step;
           if (vol >= targetVol) { vol = targetVol; clearInterval(fadeIn); }
@@ -220,34 +198,20 @@ export const Menu = {
       }
     }
 
-    // --- РЕАЛИСТИЧНЫЙ СТЕРЕО ЗВУК ГРОМА ---
+    // --- ГРОМ ---
     const playThunder = () => {
       if (!window.SoundsEngine) return;
+      const positions = [-0.85, -0.5, -0.2, 0, 0.3, 0.65, 0.9];
+      const pan = positions[Math.floor(Math.random() * positions.length)];
       
-      // Различные позиции панорамирования: слева, по центру, справа, чуть ближе к краям
-      const stereoPositions = [-0.85, -0.5, -0.2, 0, 0.3, 0.65, 0.9];
-      const randomPan = stereoPositions[Math.floor(Math.random() * stereoPositions.length)];
-
       if (window.SoundsEngine.playWithPan) {
-        window.SoundsEngine.playWithPan('thunder', { type: 'effects', pan: randomPan });
+        window.SoundsEngine.playWithPan('thunder', { type: 'effects', pan });
       } else {
         window.SoundsEngine.play('thunder', { type: 'effects' });
       }
-
-      // С вероятностью раската грома — второй удар через небольшую паузу с другого ракурса
-      if (Math.random() > 0.4) {
-        setTimeout(() => {
-          const secondPan = stereoPositions[Math.floor(Math.random() * stereoPositions.length)];
-          if (window.SoundsEngine.playWithPan) {
-            window.SoundsEngine.playWithPan('thunder', { type: 'effects', pan: secondPan });
-          } else {
-            window.SoundsEngine.play('thunder', { type: 'effects' });
-          }
-        }, Math.random() * 600 + 400);
-      }
     };
 
-    // --- ЛОГИКА МОЛНИЙ ---
+    // --- МОЛНИИ ---
     const triggerLightning = () => {
       if (!lightningEl) return;
       const flashes = Math.floor(Math.random() * 2) + 2; 
@@ -258,17 +222,13 @@ export const Menu = {
         lightningEl.style.transition = 'opacity 0.1s ease';
         lightningEl.style.opacity = '1';
         
-        if (count === 0) {
-          playThunder();
-        }
+        if (count === 0) playThunder();
 
         setTimeout(() => {
           lightningEl.style.transition = 'opacity 0.7s ease';
           lightningEl.style.opacity = '0';
           count++;
-          if (count < flashes) {
-            setTimeout(doFlash, 200);
-          }
+          if (count < flashes) setTimeout(doFlash, 200);
         }, 100);
       };
       doFlash();
@@ -290,10 +250,7 @@ export const Menu = {
         bgWrapper.classList.add('normal-scale');
         footerEl.classList.add('visible');
       });
-      
-      startupTimeout = setTimeout(() => {
-        logoEl.classList.add('animate-in');
-      }, 1000);
+      startupTimeout = setTimeout(() => { logoEl.classList.add('animate-in'); }, 1000);
     } else {
       bgWrapper.classList.add('normal-scale');
     }
@@ -306,51 +263,46 @@ export const Menu = {
       logoEl.classList.add('animate-in');
       bgWrapper.classList.add('normal-scale');
       footerEl.classList.add('visible');
-
       pressEl.style.display = 'none';
       logoCont.classList.add('menu-mode');
       titleScreen.classList.add('hidden');
       buttonsScreen.classList.add('visible');
       
-      if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' });
+      if (window.SoundsEngine) window.SoundsEngine.play('Переход', { type: 'effects' });
     };
 
     titleScreen.addEventListener('click', goToMenu, { once: true });
 
-    const playSfx = (name) => {
-      if (window.SoundsEngine) window.SoundsEngine.play(name, { type: 'effects' });
-    };
-
-    const handleSubmenuTransition = (callback) => {
-      playSfx('btn_click');
-      menuEl.style.transition = 'opacity 1.5s ease';
-      menuEl.style.opacity = '0';
-      setTimeout(() => {
-        if (callback) callback();
-      }, 1500);
-    };
+    // Обработчики кнопок с безопасным динамическим импортом
+    const playSfx = (name) => { if (window.SoundsEngine) window.SoundsEngine.play(name, { type: 'effects' }); };
 
     container.querySelector('#btn-back').addEventListener('click', () => {
-      playSfx('btn_back');
+      playSfx('Назад');
       this.start('title');
     });
 
-    container.querySelector('#btn-play').addEventListener('click', () => {
-      handleSubmenuTransition(() => {
-        if (typeof Game !== 'undefined' && Game.start) Game.start();
-      });
+    container.querySelector('#btn-play').addEventListener('click', async () => {
+      playSfx('Кнопка');
+      try {
+        const gameModule = await import('./game.js');
+        if (gameModule.Game) gameModule.Game.start();
+      } catch (e) { console.warn('game.js еще не создан'); }
     });
 
-    container.querySelector('#btn-settings').addEventListener('click', () => {
-      handleSubmenuTransition(() => {
-        if (typeof Settings !== 'undefined' && Settings.start) Settings.start();
-      });
+    container.querySelector('#btn-settings').addEventListener('click', async () => {
+      playSfx('Кнопка');
+      try {
+        const settingsModule = await import('./settings.js');
+        if (settingsModule.Settings) settingsModule.Settings.start();
+      } catch (e) { console.warn('settings.js еще не создан'); }
     });
 
-    container.querySelector('#btn-about').addEventListener('click', () => {
-      handleSubmenuTransition(() => {
-        if (typeof About !== 'undefined' && About.start) About.start();
-      });
+    container.querySelector('#btn-about').addEventListener('click', async () => {
+      playSfx('Кнопка');
+      try {
+        const aboutModule = await import('./about.js');
+        if (aboutModule.About) aboutModule.About.start();
+      } catch (e) { console.warn('about.js еще не создан'); }
     });
 
     this.isMounted = true;

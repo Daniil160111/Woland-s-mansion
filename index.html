@@ -55,10 +55,10 @@
     }
     .screen.active { opacity: 1; visibility: visible; pointer-events: auto; }
 
-    /* --- ЭКРАН УСТАНОВКИ --- */
+    /* --- ЭКРАН УСТАНОВКИ (Только для мобильных браузеров вне PWA) --- */
     #install-screen {
       background: radial-gradient(ellipse at center, #201020, #050407 75%);
-      overflow-y: auto; justify-content: flex-start; padding-top: 5vh;
+      overflow-y: auto; justify-content: flex-start; padding-top: 5vh; z-index: 110;
     }
     .install-content {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -95,7 +95,7 @@
     }
     #install-btn { display: none; }
 
-    /* --- ДИСКЛЕЙМЕР (Чистый черный экран, ждем пока картинка загрузится) --- */
+    /* --- ДИСКЛЕЙМЕР --- */
     #disclaimer-screen { 
       background: #000; cursor: pointer; z-index: 100; padding: 0; 
     }
@@ -127,7 +127,7 @@
     }
     @keyframes spin-record { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-    /* Исправленная волновая анимация без сломанной последней точки */
+    /* Волновой текст загрузки */
     .loader-title {
       display: flex; gap: 3px; font-size: clamp(20px, 4vh, 36px); letter-spacing: 2px; text-shadow: 0 0 12px #f00;
     }
@@ -159,7 +159,7 @@
 </head>
 <body>
 
-  <!-- 1. ЭКРАН УСТАНОВКИ -->
+  <!-- 1. ЭКРАН УСТАНОВКИ (Только мобильный браузер вне PWA) -->
   <section id="install-screen" class="screen">
     <div class="install-content">
       <img src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" onerror="this.hidden=true">
@@ -184,7 +184,7 @@
     <div id="footer-credit">HTML Gaming 2026</div>
   </section>
 
-  <!-- 2. ДИСКЛЕЙМЕР (Без надписей, чистый экран) -->
+  <!-- 2. ДИСКЛЕЙМЕР -->
   <section id="disclaimer-screen" class="screen">
     <img id="disclaimer-img" src="./Текстуры/Меню/Дисклеймер.jpg" alt="Disclaimer" onerror="this.style.display='none';">
   </section>
@@ -283,7 +283,8 @@
       if (id) $(id).classList.add('active');
     };
 
-    async function startApp() {
+    // Точная проверка: инструкция только для мобильных браузеров вне PWA
+    function startApp() {
       if (isMobile() && !isPWA()) {
         activateScreen('install-screen');
         setLanguage('ru', true);

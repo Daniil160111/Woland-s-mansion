@@ -1,6 +1,6 @@
 // Блоки/menu.js
 
-import { Game } from './game.js';       // Убедись, что пути к файлам подходят под твою структуру
+import { Game } from './game.js';
 import { Settings } from './settings.js';
 import { About } from './about.js';
 
@@ -33,7 +33,7 @@ export const Menu = {
         
         <div class="woland-menu__shade"></div>
         
-        <!-- Логотип на самом верхнем слое -->
+        <!-- Логотип на самом верхнем слое (z-index: 10) -->
         <div class="woland-menu__logo-container ${isReturn ? 'menu-mode' : ''}">
           <img class="woland-menu__logo" src="${logo}" alt="Woland's Mansion" onerror="this.hidden=true">
         </div>
@@ -63,7 +63,6 @@ export const Menu = {
         }
         .woland-menu.active { opacity: 1; }
 
-        /* Обертка для зума фона при первом запуске (1 секунда) */
         .woland-menu__bg-wrapper {
           position: absolute; inset: 0; z-index: 0;
           transform: scale(1.15);
@@ -80,7 +79,6 @@ export const Menu = {
           opacity: 0; pointer-events: none;
         }
 
-        /* Затемнение фона (плавно меняется до 50% при переходе в меню) */
         .woland-menu__shade {
           position: absolute; inset: 0; z-index: 1;
           background: rgba(0, 0, 0, 0.2);
@@ -105,7 +103,6 @@ export const Menu = {
         }
         .woland-menu__logo.animate-in { opacity: 1; transform: scaleY(1); }
 
-        /* Позиция логотипа в меню (меньше на 30% -> scale(0.7) и выше) */
         .woland-menu__logo-container.menu-mode {
           top: 8%;
           transform: translateX(-50%) scale(0.7);
@@ -141,7 +138,7 @@ export const Menu = {
           width: 100%; max-width: 320px; margin-top: 15vh;
         }
 
-        /* --- КНОПКИ-ПАПКИ (Со скошенными краями / /) --- */
+        /* --- КНОПКИ-ПАПКИ СО СКОСОМ / / --- */
         .btn-folder {
           position: relative;
           background: linear-gradient(180deg, #2a1014, #150709);
@@ -151,10 +148,8 @@ export const Menu = {
           cursor: pointer; transition: all 0.2s ease;
           text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.8);
           letter-spacing: 2px;
-          /* Скос в стиле / / */
           clip-path: polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%);
         }
-        /* Язычок папки */
         .btn-folder::before {
           content: ''; position: absolute; top: -8px; left: 12px;
           width: 40%; height: 8px;
@@ -194,7 +189,7 @@ export const Menu = {
     const footerEl = container.querySelector('.woland-menu__footer');
     const lightningEl = container.querySelector('.woland-menu__lightning');
 
-    // --- МУЗЫКА (Без перезапуска, работает непрерывно) ---
+    // Музыка (не перезапускается, если уже играет)
     if (window.SoundsEngine) {
       const currentTrack = window.SoundsEngine.currentMusic || window.SoundsEngine.playingMusic;
       if (currentTrack !== 'menu_theme') {
@@ -211,7 +206,7 @@ export const Menu = {
       }
     }
 
-    // --- ЛОГИКА МОЛНИЙ ---
+    // Логика молний
     const triggerLightning = () => {
       if (!lightningEl) return;
       const flashes = Math.floor(Math.random() * 2) + 2; 
@@ -242,18 +237,15 @@ export const Menu = {
       }, delay);
     };
 
-    // --- СТАРТ АНИМАЦИИ ---
     let startupTimeout = null;
 
     if (!isReturn) {
-      // 1. Появление фона и уменьшение зума за 1 секунду + одновременное появление футера и HTML Gaming 2026
       requestAnimationFrame(() => {
         menuEl.classList.add('active');
         bgWrapper.classList.add('normal-scale');
         footerEl.classList.add('visible');
       });
       
-      // 2. После 1 секунды ожидания появляются название и надпись «Нажмите чтобы продолжить»
       startupTimeout = setTimeout(() => {
         logoEl.classList.add('animate-in');
       }, 1000);
@@ -264,9 +256,7 @@ export const Menu = {
 
     scheduleLightning();
 
-    // Функция перехода из титульного экрана в меню по клику
     const goToMenu = () => {
-      // Если анимация старта еще не дошла до показа логотипа, прерываем и выводим всё сразу
       if (startupTimeout) clearTimeout(startupTimeout);
       logoEl.style.transition = 'none';
       logoEl.classList.add('animate-in');
@@ -278,30 +268,24 @@ export const Menu = {
       titleScreen.classList.add('hidden');
       buttonsScreen.classList.add('visible');
       
-      // Звук перехода
       if (window.SoundsEngine) window.SoundsEngine.play('Переход', { type: 'effects' });
     };
 
     titleScreen.addEventListener('click', goToMenu, { once: true });
 
-    // --- УНИВЕРСАЛЬНЫЙ ПЕРЕХОД В ПОДМЕНЮ (Звук -> Затемнение 1.5 сек -> Модуль) ---
+    const playSfx = (name) => {
+      if (window.SoundsEngine) window.SoundsEngine.play(name, { type: 'effects' });
+    };
+
     const handleSubmenuTransition = (callback) => {
       playSfx('Кнопка');
-      
-      // Делаем полное затемнение экрана за 1.5 секунды
       menuEl.style.transition = 'opacity 1.5s ease';
       menuEl.style.opacity = '0';
-
       setTimeout(() => {
         if (callback) callback();
       }, 1500);
     };
 
-    const playSfx = (name) => {
-      if (window.SoundsEngine) window.SoundsEngine.play(name, { type: 'effects' });
-    };
-
-    // --- ОБРАБОТЧИКИ КНОПОК ---
     container.querySelector('#btn-back').addEventListener('click', () => {
       playSfx('Назад');
       this.start(false);
@@ -309,31 +293,19 @@ export const Menu = {
 
     container.querySelector('#btn-play').addEventListener('click', () => {
       handleSubmenuTransition(() => {
-        if (typeof Game !== 'undefined' && Game.start) {
-          Game.start();
-        } else {
-          console.log('Game module is missing');
-        }
+        if (typeof Game !== 'undefined' && Game.start) Game.start();
       });
     });
 
     container.querySelector('#btn-settings').addEventListener('click', () => {
       handleSubmenuTransition(() => {
-        if (typeof Settings !== 'undefined' && Settings.start) {
-          Settings.start();
-        } else {
-          console.log('Settings module is missing');
-        }
+        if (typeof Settings !== 'undefined' && Settings.start) Settings.start();
       });
     });
 
     container.querySelector('#btn-about').addEventListener('click', () => {
       handleSubmenuTransition(() => {
-        if (typeof About !== 'undefined' && About.start) {
-          About.start();
-        } else {
-          console.log('About module is missing');
-        }
+        if (typeof About !== 'undefined' && About.start) About.start();
       });
     });
 

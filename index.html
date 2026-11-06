@@ -27,22 +27,20 @@
     html, body {
       width: 100%; height: 100%; overflow: hidden;
       background: #050407; color: #fff; touch-action: none;
-      /* Запрет масштабирования интерфейса браузером на мобильных */
       text-size-adjust: 100%; -webkit-text-size-adjust: 100%;
     }
     img { pointer-events: none; -webkit-user-drag: none; }
 
-    /* --- ОБЩИЕ ЭКРАНЫ (АДАПТИВНЫЕ) --- */
+    /* --- ОБЩИЕ ЭКРАНЫ --- */
     .screen {
       position: fixed; inset: 0; z-index: 10;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       opacity: 0; visibility: hidden; pointer-events: none;
       transition: opacity 0.5s ease, visibility 0.5s;
-      
-      /* Отступы безопасности и адаптивные отступы */
-      padding: clamp(10px, 3vmin, 40px);
-      padding-top: max(clamp(10px, 3vmin, 40px), env(safe-area-inset-top));
-      padding-bottom: max(clamp(10px, 3vmin, 40px), env(safe-area-inset-bottom));
+      padding: max(clamp(10px, 3vmin, 40px), env(safe-area-inset-top)) 
+               max(clamp(10px, 3vmin, 40px), env(safe-area-inset-right)) 
+               max(clamp(10px, 3vmin, 40px), env(safe-area-inset-bottom)) 
+               max(clamp(10px, 3vmin, 40px), env(safe-area-inset-left));
       text-align: center;
     }
     .screen.active { opacity: 1; visibility: visible; pointer-events: auto; }
@@ -50,42 +48,24 @@
     /* --- ЭКРАН УСТАНОВКИ --- */
     #install-screen {
       background: radial-gradient(ellipse at center, #201020, #050407 75%);
-      overflow-y: auto;
-      /* Отключаем скролл на десктопе, если все влезает */
-      justify-content: flex-start; 
-      padding-top: 5vh;
+      overflow-y: auto; justify-content: flex-start; padding-top: 5vh;
     }
-    
-    /* Центральный контейнер для установки (чтобы не разлеталось на 21:9) */
     .install-content {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      width: 100%; max-width: 600px; margin: auto 0;
-      gap: clamp(10px, 2vh, 20px);
+      width: 100%; max-width: 600px; margin: auto 0; gap: clamp(10px, 2vh, 20px);
     }
-
     #install-screen > .install-content > img {
       width: min(80vw, 400px); max-height: 20vh; object-fit: contain;
       filter: drop-shadow(0 0 15px rgba(255,0,0,0.5));
     }
-    
-    #install-screen p { 
-      color: #aaa; 
-      font-size: clamp(12px, 1.8vh, 16px); 
-      line-height: 1.5; 
-    }
-
+    #install-screen p { color: #aaa; font-size: clamp(12px, 1.8vh, 16px); line-height: 1.5; }
     .install-card {
       width: 100%; padding: clamp(8px, 1.5vh, 15px) clamp(10px, 2vw, 20px);
       border: 1px solid #562323; border-radius: 8px; background: rgba(255,255,255,0.05);
       font-size: clamp(11px, 1.6vh, 14px); line-height: 1.4; text-align: left;
     }
     .install-card strong { color: #ff7777; display: block; margin-bottom: 4px; }
-    
-    /* Переключатель языков */
-    .lang-switch { 
-      display: flex; gap: clamp(5px, 1vw, 10px); 
-      margin-top: clamp(10px, 2vh, 20px); justify-content: center; flex-wrap: wrap;
-    }
+    .lang-switch { display: flex; gap: clamp(5px, 1vw, 10px); margin-top: clamp(10px, 2vh, 20px); justify-content: center; flex-wrap: wrap; }
     .lang-btn {
       background: transparent; color: #888; border: 1px solid #333;
       padding: clamp(4px, 0.8vh, 8px) clamp(8px, 1.5vw, 12px); 
@@ -93,15 +73,10 @@
       transition: all 0.4s ease;
     }
     .lang-btn.active { color: #fff; border-color: #f00; background: rgba(255,0,0,0.2); }
-
-    /* Футер (всегда внизу) */
     #footer-credit {
       position: absolute; bottom: max(15px, env(safe-area-inset-bottom)); 
-      width: 100%; text-align: center; 
-      font-size: clamp(10px, 1.2vh, 12px); color: #555; letter-spacing: 1px;
+      width: 100%; text-align: center; font-size: clamp(10px, 1.2vh, 12px); color: #555; letter-spacing: 1px;
     }
-
-    /* Кнопки */
     .btn {
       padding: clamp(10px, 1.5vh, 15px) clamp(20px, 4vw, 30px); 
       font-size: clamp(14px, 2vh, 18px);
@@ -115,11 +90,8 @@
 
     /* --- ДИСКЛЕЙМЕР --- */
     #disclaimer-screen { background: #000; cursor: pointer; z-index: 100; padding: 0; }
-    #disclaimer-img { width: 100%; height: 100%; object-fit: contain; display: none; }
-    #disclaimer-text { 
-      font-size: clamp(16px, 2.5vh, 24px); color: #888; 
-      padding: 20px; text-align: center;
-    }
+    #disclaimer-img { width: 100vw; height: 100vh; object-fit: cover; display: none; }
+    #disclaimer-text { font-size: clamp(16px, 2.5vh, 24px); color: #888; padding: 20px; text-align: center; }
 
     /* --- ЗАТЕМНЕНИЕ --- */
     #fade-overlay {
@@ -130,21 +102,30 @@
     /* --- ЭКРАН ЗАГРУЗКИ --- */
     #loading-screen { background: #050407; z-index: 90; padding: 0; overflow: hidden; }
     
-    /* Название сверху */
     #loading-logo {
-      position: absolute; top: 8%; width: min(60vw, 350px); 
-      max-height: 15vh; object-fit: contain;
+      position: absolute; top: 8%; left: 50%; transform: translateX(-50%);
+      width: min(60vw, 350px); max-height: 15vh; object-fit: contain;
       filter: drop-shadow(0 0 20px rgba(255,0,0,0.6));
     }
 
-    /* Центральный блок текста */
-    .loader-copy {
-      display: flex; flex-direction: column; align-items: center; 
-      gap: clamp(8px, 1.5vh, 15px);
+    /* Блок в правом нижнем углу */
+    .loading-corner {
+      position: absolute;
+      bottom: max(20px, env(safe-area-inset-bottom));
+      right: max(20px, env(safe-area-inset-right));
+      display: flex; flex-direction: column; align-items: flex-end;
+      gap: clamp(8px, 1.5vh, 15px); text-align: right;
     }
+
+    #loading-face {
+      width: clamp(50px, 12vh, 100px); height: clamp(50px, 12vh, 100px);
+      object-fit: cover; border-radius: 50%; filter: drop-shadow(0 0 10px #a00);
+      animation: spin-record 4s linear infinite;
+    }
+    @keyframes spin-record { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
     .loader-title {
-      display: flex; gap: 3px; 
-      font-size: clamp(20px, 4vh, 36px);
+      display: flex; gap: 3px; font-size: clamp(20px, 4vh, 36px);
       letter-spacing: 2px; text-shadow: 0 0 12px #f00;
     }
     .loader-title span { display: inline-block; animation: wave 1.5s ease-in-out infinite; }
@@ -156,51 +137,25 @@
     @keyframes wave { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); color: #f00; } }
 
     #loading-status { 
-      font-size: clamp(10px, 1.5vh, 14px); 
-      color: #aaa; text-align: center; 
-      min-height: 20px; max-width: 80vw;
+      font-size: clamp(10px, 1.5vh, 14px); color: #aaa; 
+      min-height: 20px; max-width: 70vw;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     
-    /* Прогресс-бар */
     .progress { 
       width: min(60vw, 300px); height: clamp(4px, 0.8vh, 8px); 
       overflow: hidden; background: #222; border-radius: 5px; 
+      direction: rtl; /* Заполнение справа налево (от угла) */
     }
-    #progress-fill { width: 0; height: 100%; background: #a00; transition: width 0.2s; box-shadow: 0 0 10px #f00; }
-
-    /* Воланд (Адаптивный, не наезжает на текст) */
-    #loading-face {
-      position: absolute; 
-      right: max(15px, 3vw); 
-      bottom: max(15px, 3vh); 
-      width: clamp(40px, 10vh, 90px); 
-      height: clamp(40px, 10vh, 90px);
-      object-fit: cover; border-radius: 50%; filter: drop-shadow(0 0 10px #a00);
-      animation: spin-record 4s linear infinite;
+    #progress-fill { 
+      width: 0; height: 100%; background: #a00; 
+      transition: width 0.2s; box-shadow: 0 0 10px #f00; 
+      float: right;
     }
-    @keyframes spin-record { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
     /* --- КОНТЕЙНЕР ИГРЫ --- */
     #game-container { position: fixed; inset: 0; z-index: 10; display: none; }
     #game-container.active { display: block; }
-
-    /* --- СПЕЦИАЛЬНЫЕ АДАПТАЦИИ --- */
-    /* Для очень широких экранов (21:9, 21:10) */
-    @media (min-aspect-ratio: 2/1) {
-      .install-content { max-width: 50vw; } /* Ограничиваем ширину, чтобы текст не растягивался в одну строку */
-    }
-    
-    /* Для экранов с маленькой высотой (ландшафт телефонов) */
-    @media (max-height: 500px) {
-      #loading-logo { top: 4%; width: min(40vw, 250px); }
-      .loader-title { font-size: clamp(16px, 5vh, 24px); }
-      #loading-face { width: 50px; height: 50px; right: 10px; bottom: 10px; }
-      .install-content { gap: 5px; }
-      #install-screen > .install-content > img { max-height: 15vh; }
-      .install-card { padding: 5px 10px; }
-      .btn { padding: 8px 15px; }
-    }
   </style>
 </head>
 <body>
@@ -209,9 +164,7 @@
   <section id="install-screen" class="screen">
     <div class="install-content">
       <img src="./Текстуры/Меню/name1.png" alt="Woland's Mansion" onerror="this.hidden=true">
-      
       <p data-i18n="install_hint">Для комфортной игры на телефоне установите приложение.</p>
-      
       <div class="install-card">
         <strong data-i18n="ios_title">iPhone / iPad (Safari)</strong>
         <span data-i18n="ios_text">Поделиться → На экран "Домой"</span>
@@ -220,10 +173,7 @@
         <strong data-i18n="android_title">Android (Chrome / Samsung)</strong>
         <span data-i18n="android_text">Меню (⋮) → Установить приложение</span>
       </div>
-
       <button id="install-btn" class="btn" data-i18n="install_btn">Установить приложение</button>
-      <button id="continue-btn" class="btn" data-i18n="continue_btn">Продолжить в браузере</button>
-
       <div class="lang-switch">
         <button class="lang-btn active" data-lang="ru">RU</button>
         <button class="lang-btn" data-lang="en">EN</button>
@@ -245,16 +195,17 @@
   <section id="loading-screen" class="screen">
     <img id="loading-logo" src="./Текстуры/Меню/name1.png" alt="Woland's Mansion" onerror="this.hidden=true">
     
-    <div class="loader-copy">
+    <div class="loading-corner">
+      <img id="loading-face" src="./Текстуры/Воланд/лицо1.png" alt="" onerror="this.hidden=true;">
+      
       <div class="loader-title" aria-label="Загрузка">
         <span>З</span><span>а</span><span>г</span><span>р</span><span>у</span><span>з</span><span>к</span><span>а</span><span>.</span><span>.</span><span>.</span>
       </div>
-      <div id="loading-status">Подготовка...</div>
+      
+      <div id="loading-status">Проверка кэша...</div>
+      
       <div class="progress"><div id="progress-fill"></div></div>
     </div>
-
-    <!-- Воланд -->
-    <img id="loading-face" src="./Текстуры/Воланд/лицо1.png" alt="" onerror="this.hidden=true;">
   </section>
 
   <!-- 4. КОНТЕЙНЕР ДЛЯ ИГРЫ -->
@@ -293,8 +244,7 @@
         ios_text: "Поделиться → На экран 'Домой'",
         android_title: "Android (Chrome / Samsung)",
         android_text: "Меню (⋮) → Установить приложение",
-        install_btn: "Установить приложение",
-        continue_btn: "Продолжить в браузере"
+        install_btn: "Установить приложение"
       },
       en: {
         install_hint: "For the best experience on mobile, install the app.",
@@ -302,8 +252,7 @@
         ios_text: "Share → Add to Home Screen",
         android_title: "Android (Chrome / Samsung)",
         android_text: "Menu (⋮) → Install app",
-        install_btn: "Install App",
-        continue_btn: "Continue in Browser"
+        install_btn: "Install App"
       },
       fr: {
         install_hint: "Pour une meilleure expérience, installez l'application.",
@@ -311,8 +260,7 @@
         ios_text: "Partager → Sur l'écran d'accueil",
         android_title: "Android (Chrome / Samsung)",
         android_text: "Menu (⋮) → Installer l'application",
-        install_btn: "Installer l'App",
-        continue_btn: "Continuer dans le navigateur"
+        install_btn: "Installer l'App"
       },
       es: {
         install_hint: "Para una mejor experiencia, instala la aplicación.",
@@ -320,8 +268,7 @@
         ios_text: "Compartir → Añadir a pantalla de inicio",
         android_title: "Android (Chrome / Samsung)",
         android_text: "Menú (⋮) → Instalar aplicación",
-        install_btn: "Instalar App",
-        continue_btn: "Continuar en el navegador"
+        install_btn: "Instalar App"
       },
       it: {
         install_hint: "Per un'esperienza migliore, installa l'app.",
@@ -329,24 +276,19 @@
         ios_text: "Condividi → Aggiungi alla schermata Home",
         android_title: "Android (Chrome / Samsung)",
         android_text: "Menu (⋮) → Installa app",
-        install_btn: "Installa App",
-        continue_btn: "Continua nel browser"
+        install_btn: "Installa App"
       }
     };
 
     let currentLang = 'ru';
 
-    // ★ ПЛАВНАЯ СМЕНА ЯЗЫКОВ
     async function setLanguage(lang, force = false) {
       if (currentLang === lang && !force) return;
       currentLang = lang;
       document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.lang === lang));
-
       const elements = document.querySelectorAll('[data-i18n]');
-      
       elements.forEach(el => { el.style.transition = 'opacity 0.5s ease'; el.style.opacity = '0'; });
       await new Promise(r => setTimeout(r, 250));
-      
       elements.forEach(el => {
         const key = el.dataset.i18n;
         if (translations[lang][key]) el.innerHTML = translations[lang][key];
@@ -363,10 +305,6 @@
       return window.matchMedia('(display-mode: standalone)').matches || 
              window.matchMedia('(display-mode: fullscreen)').matches || 
              window.navigator.standalone === true;
-    }
-    function isDesktopUA() {
-      const ua = navigator.userAgent.toLowerCase();
-      return /windows nt|macintosh|linux x86_64|x11/.test(ua) && !/android|iphone|ipad|ipod|mobile/.test(ua);
     }
     function isMobile() {
       return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches);
@@ -410,29 +348,34 @@
       activateScreen('disclaimer-screen');
     }
 
-    // ★ ПЕРЕХОД
+    // ★ ПЕРЕХОД: ДИСКЛЕЙМЕР -> ЗАТЕМНЕНИЕ -> ЗАГРУЗКА -> МЕНЮ
     $('disclaimer-screen').addEventListener('click', async () => {
       const fade = $('fade-overlay');
       
+      // 1. Затемнение (1.5с)
       fade.style.transition = 'opacity 1.5s ease-in-out';
       fade.style.opacity = '1';
       await new Promise(r => setTimeout(r, 1500));
 
+      // 2. Появление загрузки (0.5с)
       activateScreen('loading-screen');
       await new Promise(r => setTimeout(r, 500));
-      
       fade.style.opacity = '0';
 
       try {
+        // Загрузка модулей
         await import('./Фон/settings-manager.js').then(m => m.Settings.init()).catch(() => console.warn('Settings not found'));
         await import('./Фон/sounds.js').catch(() => console.warn('Sounds not found'));
         if (window.SoundsEngine) window.SoundsEngine.init();
 
+        // Запуск умной загрузки
         await loadAssets();
 
+        // Запуск меню
         const menuModule = await import('./Блоки/menu.js');
         await menuModule.Menu.start();
 
+        // Переход в игру
         fade.style.transition = 'opacity 1s ease-in-out';
         fade.style.opacity = '1';
         await new Promise(r => setTimeout(r, 1000));
@@ -443,53 +386,91 @@
 
       } catch (err) {
         console.error('Критическая ошибка:', err);
-        $('loading-status').textContent = 'Ошибка загрузки. Проверьте консоль.';
+        $('loading-status').textContent = 'Ошибка загрузки. Перезагрузка...';
+        setTimeout(() => window.location.reload(), 3000);
       }
     }, { once: true });
 
-    // ===== ЗАГРУЗКА АССЕТОВ =====
+
+    // ===== УМНЫЙ ЗАГРУЗЧИК =====
+    const CACHE_KEY = 'woland_assets_v1';
+
     async function loadAssets() {
       const status = $('loading-status');
       const progress = $('progress-fill');
       
+      // 1. Проверяем наличие кэша
+      let cachedData = localStorage.getItem(CACHE_KEY);
+      if (cachedData) {
+        status.textContent = 'Файлы в кэше. Пропуск скачивания...';
+        progress.style.width = '100%';
+        await new Promise(r => setTimeout(r, 500));
+        return; // Сразу выходим, файлы уже есть
+      }
+
+      // 2. Кэша нет — начинаем качать
+      let manifest;
       try {
         const resp = await fetch('./load.json');
         if (!resp.ok) throw new Error('load.json не найден');
-        const manifest = await resp.json();
-
-        const queue = [
-          ...Object.entries(manifest.sounds || {}).map(([id, url]) => ({ id, url, type: 'Звуки' })),
-          ...Object.entries(manifest.textures || {}).map(([id, url]) => ({ id, url, type: 'Текстуры' }))
-        ];
-
-        let loaded = 0;
-        window.GameAssets = window.GameAssets || {};
-
-        for (const item of queue) {
-          const fileName = item.url.split('/').pop();
-          status.textContent = `Скачивание [${loaded + 1}/${queue.length}] ${item.type}: ${fileName}`;
-
-          try {
-            const blob = await (await fetch(item.url)).blob();
-            if (item.type === 'Текстуры') {
-              window.GameAssets[item.id] = URL.createObjectURL(blob);
-            } else if (window.SoundsEngine) {
-              await window.SoundsEngine.loadSound(item.id, blob);
-            }
-          } catch (e) {
-            console.warn(`[Пропуск] ${item.url}`);
-          }
-          
-          loaded++;
-          progress.style.width = `${Math.round((loaded / queue.length) * 100)}%`;
-        }
-        status.textContent = 'Ресурсы готовы!';
-        
+        manifest = await resp.json();
       } catch (e) {
-        console.warn('Ошибка загрузки ассетов:', e);
-        status.textContent = 'Пропуск ассетов...';
+        console.warn('Ошибка load.json:', e);
+        status.textContent = 'Ошибка манифеста. Запуск без ассетов...';
         progress.style.width = '100%';
+        return;
       }
+
+      const queue = [
+        ...Object.entries(manifest.sounds || {}).map(([id, url]) => ({ id, url, type: 'Звуки' })),
+        ...Object.entries(manifest.textures || {}).map(([id, url]) => ({ id, url, type: 'Текстуры' }))
+      ];
+
+      let loaded = 0;
+      window.GameAssets = window.GameAssets || {};
+      let success = true;
+
+      for (const item of queue) {
+        const fileName = item.url.split('/').pop();
+        status.textContent = `Скачивание [${loaded + 1}/${queue.length}] ${item.type}: ${fileName}`;
+
+        try {
+          // Делаем до 3 попыток скачать каждый файл
+          let blob = null;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              const res = await fetch(item.url);
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              blob = await res.blob();
+              break;
+            } catch (e) {
+              if (attempt === 2) throw e; // Если 3-я попытка провалилась, выбрасываем ошибку
+              await new Promise(r => setTimeout(r, 500));
+            }
+          }
+
+          if (item.type === 'Текстуры') {
+            window.GameAssets[item.id] = URL.createObjectURL(blob);
+          } else if (window.SoundsEngine) {
+            await window.SoundsEngine.loadSound(item.id, blob);
+          }
+        } catch (e) {
+          console.warn(`[Ошибка файла] ${item.url}`, e);
+          success = false;
+          break; // Прерываем цикл, если файл не скачался после 3 попыток
+        }
+        
+        loaded++;
+        progress.style.width = `${Math.round((loaded / queue.length) * 100)}%`;
+      }
+
+      if (!success) {
+        throw new Error('Не удалось загрузить некоторые файлы. Требуется перезагрузка.');
+      }
+
+      // Сохраняем в кэш, что всё скачано
+      localStorage.setItem(CACHE_KEY, 'true');
+      status.textContent = 'Ресурсы готовы!';
     }
 
     startApp();

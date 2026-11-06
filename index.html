@@ -127,7 +127,6 @@
     }
     @keyframes spin-record { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-    /* Волновой текст загрузки */
     .loader-title {
       display: flex; gap: 3px; font-size: clamp(20px, 4vh, 36px); letter-spacing: 2px; text-shadow: 0 0 12px #f00;
     }
@@ -159,7 +158,7 @@
 </head>
 <body>
 
-  <!-- 1. ЭКРАН УСТАНОВКИ (Только мобильный браузер вне PWA) -->
+  <!-- 1. ЭКРАН УСТАНОВКИ -->
   <section id="install-screen" class="screen">
     <div class="install-content">
       <img src="./Текстуры/Меню/name1.png" alt="Woland's Mansion" onerror="this.hidden=true">
@@ -255,7 +254,6 @@
       btn.addEventListener('click', () => setLanguage(btn.dataset.lang));
     });
 
-    // Расширенная проверка PWA для всех типов мобильных контейнеров
     function isPWA() {
       return window.matchMedia('(display-mode: standalone)').matches || 
              window.matchMedia('(display-mode: fullscreen)').matches || 
@@ -313,8 +311,19 @@
 
         await loadAssets();
 
-        const menuModule = await import('./Блоки/menu.js');
-        await menuModule.Menu.start('title');
+        // Безопасный динамический импорт меню (если файла вдруг нет, игра не упадет)
+        try {
+          const menuModule = await import('./Блоки/menu.js');
+          if (menuModule && menuModule.Menu && typeof menuModule.Menu.start === 'function') {
+            await menuModule.Menu.start('title');
+          } else {
+            console.warn('Метод Menu.start не найден в module.');
+          }
+        } catch (menuErr) {
+          console.error('Не удалось загрузить модуль menu.js:', menuErr);
+          $('loading-status').textContent = 'Ошибка модуля menu.js';
+          return;
+        }
 
         fade.style.opacity = '1';
         await new Promise(r => setTimeout(r, 1000));

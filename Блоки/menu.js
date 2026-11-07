@@ -52,11 +52,16 @@ export const Menu = {
     }
 
     // --- ПЕРВИЧНАЯ ОТРИСОВКА ---
+    // Используем два слоя для молний (левый и правый)
     container.innerHTML = `
       <section class="woland-menu ${isMenu ? 'menu-mode dark-shade' : ''}" aria-label="Главное меню">
         <div class="woland-menu__bg-wrapper ${isMenu ? 'normal-scale' : 'zoom-in'}">
           <div class="woland-menu__bg" style="background-image: url('${bg}')"></div>
-          <div class="woland-menu__lightning" style="background-image: url('${lightning}')"></div>
+          
+          <!-- Молния слева -->
+          <div class="woland-menu__lightning-left" style="background-image: url('${lightning}')"></div>
+          <!-- Молния справа -->
+          <div class="woland-menu__lightning-right" style="background-image: url('${lightning}')"></div>
         </div>
         
         <div class="woland-menu__shade"></div>
@@ -75,7 +80,6 @@ export const Menu = {
         </div>
 
         <div class="woland-menu__logo-container">
-          <!-- Без свечения -->
           <img class="woland-menu__logo" src="${logo}" alt="Woland's Mansion" onerror="this.style.display='none';">
         </div>
 
@@ -96,10 +100,21 @@ export const Menu = {
         }
         .woland-menu__bg-wrapper.normal-scale { transform: scale(1.00); }
 
-        .woland-menu__bg, .woland-menu__lightning {
+        .woland-menu__bg {
           position: absolute; inset: 0; background-size: cover; background-position: center;
         }
-        .woland-menu__lightning { opacity: 0; pointer-events: none; mix-blend-mode: screen; }
+
+        /* Разделенные слои молний */
+        .woland-menu__lightning-left, .woland-menu__lightning-right {
+          position: absolute; inset: 0; background-size: cover; background-position: center;
+          opacity: 0; pointer-events: none; mix-blend-mode: screen;
+        }
+        .woland-menu__lightning-left {
+          clip-path: polygon(0 0, 50% 0, 50% 100%, 0 100%);
+        }
+        .woland-menu__lightning-right {
+          clip-path: polygon(50% 0, 100% 0, 100% 100%, 50% 100%);
+        }
 
         .woland-menu__shade {
           position: absolute; inset: 0; z-index: 1;
@@ -107,7 +122,7 @@ export const Menu = {
         }
         .woland-menu.dark-shade .woland-menu__shade { background: rgba(0, 0, 0, 0.7); }
 
-        /* ЛОГОТИП (без свечения, с плавным переездом) */
+        /* ЛОГОТИП */
         .woland-menu__logo-container {
           position: absolute; top: 10vh; left: 50%; transform: translateX(-50%);
           z-index: 9999; display: flex; justify-content: center; pointer-events: none;
@@ -117,17 +132,17 @@ export const Menu = {
         
         .woland-menu__logo {
           width: min(75vw, 520px); max-height: 32vh; object-fit: contain;
+          /* Начальное состояние для анимации раздвига */
           opacity: 0; transform: scaleY(0); transform-origin: bottom center;
-          /* Разгон и торможение за 1 секунду */
           transition: transform 1s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 1s ease;
         }
         
+        /* Класс, который запускает анимацию */
         .woland-menu__logo.animate-in { 
           opacity: 1; 
           transform: scaleY(1); 
         }
 
-        /* При переходе в меню логотип сжимается и едет вверх */
         .woland-menu.menu-mode .woland-menu__logo-container { top: 2vh; }
         .woland-menu.menu-mode .woland-menu__logo {
           transform: scale(0.68) scaleY(1);
@@ -217,12 +232,11 @@ export const Menu = {
     const titleScreen = container.querySelector('.woland-menu__title-screen');
     const backBtn = container.querySelector('#btn-back');
 
-    // Первичное появление логотипа (только если стартуем с титульного)
-    if (!isMenu) {
-      setTimeout(() => { logoEl.classList.add('animate-in'); }, 100);
-    } else {
-      logoEl.classList.add('animate-in');
-    }
+    // --- ЗАПУСК АНИМАЦИИ ЛОГОТИПА ---
+    // Запускается в любом случае (title или menu), но с задержкой для рефлоу
+    setTimeout(() => { 
+      logoEl.classList.add('animate-in'); 
+    }, 100);
 
     requestAnimationFrame(() => {
       menuEl.classList.add('active');
@@ -246,49 +260,40 @@ export const Menu = {
       }
     }
 
-    // --- СТЕРЕО-МОЛНИИ С РАЗНООБРАЗИЕМ ---
-    const playThunder = () => {
+    // --- РЕАЛИСТИЧНЫЕ МОЛНИИ ---
+    const playThunder = (pan) => {
       if (!window.SoundsEngine) return;
-
-      const playOneStrike = (delay = 0) => {
-        setTimeout(() => {
-          const pan = Math.random() * 2 - 1; 
-          const vol = Math.random() * 0.6 + 0.4;
-
-          window.SoundsEngine.play('thunder', { 
-            type: 'effects', 
-            pan: pan, 
-            volume: vol, 
-            reverb: true 
-          });
-        }, delay);
-      };
-
-      playOneStrike(0);
-
-      if (Math.random() > 0.5) {
-        playOneStrike(Math.random() * 500 + 300);
-      }
+      window.SoundsEngine.play('thunder', { 
+        type: 'effects', 
+        pan: pan, // Звук точно совпадает со стороной вспышки
+        volume: Math.random() * 0.5 + 0.5, 
+        reverb: true 
+      });
     };
 
     const triggerLightning = () => {
-      const lightningEl = container.querySelector('.woland-menu__lightning');
-      if (!lightningEl) return;
-      
+      const leftEl = container.querySelector('.woland-menu__lightning-left');
+      const rightEl = container.querySelector('.woland-menu__lightning-right');
+      if (!leftEl || !rightEl) return;
+
+      const isLeft = Math.random() > 0.5;
+      const targetEl = isLeft ? leftEl : rightEl;
+      const pan = isLeft ? -0.8 : 0.8;
+
       const flashSteps = [
         { opacity: 0.95, duration: 50 }, { opacity: 0.15, duration: 70 },
         { opacity: 0.80, duration: 40 }, { opacity: 0.30, duration: 100 },
         { opacity: 1.00, duration: 60 }, { opacity: 0.00, duration: 500 }
       ];
 
-      playThunder();
+      playThunder(pan);
 
       let currentStep = 0;
       const runFlash = () => {
-        if (currentStep >= flashSteps.length) { lightningEl.style.opacity = '0'; return; }
+        if (currentStep >= flashSteps.length) { targetEl.style.opacity = '0'; return; }
         const stepData = flashSteps[currentStep];
-        lightningEl.style.transition = `opacity ${stepData.duration / 1000}s ease`;
-        lightningEl.style.opacity = stepData.opacity;
+        targetEl.style.transition = `opacity ${stepData.duration / 1000}s ease`;
+        targetEl.style.opacity = stepData.opacity;
         currentStep++;
         setTimeout(runFlash, stepData.duration);
       };
@@ -297,7 +302,10 @@ export const Menu = {
 
     const scheduleLightning = () => {
       const delay = Math.random() * 8000 + 7000; 
-      this.lightningTimeout = setTimeout(() => { triggerLightning(); scheduleLightning(); }, delay);
+      this.lightningTimeout = setTimeout(() => { 
+        triggerLightning(); 
+        scheduleLightning(); 
+      }, delay);
     };
     scheduleLightning();
 
@@ -353,6 +361,7 @@ export const Menu = {
           this.isTransitioning = true;
           playSfx('btn_click');
 
+          // 1. Плавное затухание музыки и эффектов за 0.5 секунды (500мс)
           if (window.SoundsEngine) {
             let vol = window.SoundsEngine.volumes.music || 0.8;
             const step = vol / 10;
@@ -360,20 +369,25 @@ export const Menu = {
               vol -= step;
               if (vol <= 0) { vol = 0; clearInterval(musicFadeOut); }
               window.SoundsEngine.setMasterVolume('music', vol);
+              window.SoundsEngine.setMasterVolume('effects', vol); // Затухание грозы
             }, 50);
           }
 
+          // 2. Затемнение экрана за 1.5 секунды (1500мс)
           menuEl.style.transition = 'opacity 1.5s ease';
           menuEl.style.opacity = '0';
 
           setTimeout(async () => {
+            // 3. Полная остановка старых звуков перед переходом
+            if (window.SoundsEngine) window.SoundsEngine.stopAll();
+            
             try {
               await moduleImportCallback();
             } catch (e) {
               this.isTransitioning = false;
               menuEl.style.opacity = '1';
             }
-          }, 1500);
+          }, 1500); 
         };
       }
     };

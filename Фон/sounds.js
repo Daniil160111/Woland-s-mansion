@@ -1,3 +1,18 @@
+// js/sounds.js
+
+// Защита от копирования и выделений
+(function() {
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('dragstart', e => e.preventDefault());
+    document.addEventListener('selectstart', e => e.preventDefault());
+    document.addEventListener('copy', e => e.preventDefault());
+    document.addEventListener('cut', e => e.preventDefault());
+    document.addEventListener('keydown', e => {
+        if ((e.ctrlKey && ['c','s','u'].includes(e.key.toLowerCase())) || e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I')) e.preventDefault();
+    });
+    document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+})();
+
 class SoundEngine {
     constructor() {
         this.ctx = null;
@@ -13,9 +28,7 @@ class SoundEngine {
 
     init() {
         if (this.ctx) {
-            if (this.ctx.state === 'suspended') {
-                this.ctx.resume();
-            }
+            if (this.ctx.state === 'suspended') this.ctx.resume();
             return;
         }
         
@@ -59,6 +72,7 @@ class SoundEngine {
             type = 'effects', 
             volume = 1.0, 
             position = null,
+            pan = 0,       // НОВОЕ: стерео панорама (-1 лево, 1 право)
             reverb = false 
         } = options;
 
@@ -73,7 +87,7 @@ class SoundEngine {
 
         let lastNode = source;
 
-        // --- ПРОСТРАНСТВЕННЫЙ ЗВУК И СТЕРЕО ПАНОРАМА ---
+        // --- ПРОСТРАНСТВЕННЫЙ ЗВУК (Позиция) ---
         if (position && this.audioMode !== 'mono' && this.ctx.createPanner) {
             const panner = this.ctx.createPanner();
             panner.panningModel = 'equalpower';
@@ -83,25 +97,30 @@ class SoundEngine {
             
             lastNode.connect(panner);
             lastNode = panner;
+        } 
+        // --- СТЕРЕО ПАНОРАМА (если задан pan) ---
+        else if (pan !== 0 && this.ctx.createStereoPanner) {
+            const stereoPanner = this.ctx.createStereoPanner();
+            stereoPanner.pan.value = Math.max(-1, Math.min(1, pan));
+            lastNode.connect(stereoPanner);
+            lastNode = stereoPanner;
         }
 
-        // --- ЭФФЕКТ РЕВЕРБЕРАЦИИ (ЭХО ДЛЯ ГРОМА) ---
+        // --- ЭФФЕКТ РЕВЕРБЕРАЦИИ (ЭХО) ---
         if (reverb && type === 'effects') {
             const delayNode = this.ctx.createDelay();
-            delayNode.delayTime.value = 0.28; // задержка эха
+            delayNode.delayTime.value = 0.28;
 
             const feedbackGain = this.ctx.createGain();
-            feedbackGain.gain.value = 0.35; // сила затухания эха
+            feedbackGain.gain.value = 0.35;
 
             const filterNode = this.ctx.createBiquadFilter();
             filterNode.type = 'lowpass';
-            filterNode.frequency.value = 1200; // приглушение высоких частот для реалистичности
+            filterNode.frequency.value = 1200;
 
-            // Цепь реверберации
             lastNode.connect(gainNode);
             gainNode.connect(targetBus);
 
-            // Параллельный контур эха
             gainNode.connect(delayNode);
             delayNode.connect(filterNode);
             filterNode.connect(feedbackGain);

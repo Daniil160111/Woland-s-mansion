@@ -58,7 +58,7 @@
   "textures": {
     "menu_bg": "./Текстуры/Меню/Фон.jpg",
     "menu_bg_lightning": "./Текстуры/Меню/Фон-молния.jpg",
-    "menu_logo": "./Текстуры/Меню/name1.png",
+    "menu_logo": "./Текстуры/Меню/Название.jpg",
     "menu_disclaimer": "./Текстуры/Меню/Дисклеймер.jpg",
 
     "game_bg": "./Текстуры/Игра/Фон.png",

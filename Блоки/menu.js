@@ -40,28 +40,32 @@ export const Menu = {
         bgWrapper.classList.add('normal-scale');
         logoEl.classList.add('animate-in');
         
-        // Анимация появления кнопок каскадом
+        // Появление с пружиной (сверху вниз)
         buttons.forEach((btn, index) => {
           btn.style.animation = 'none'; // Сброс
+          btn.style.opacity = '0';
           void btn.offsetWidth; // Триггер рефлоу
           btn.style.animation = `drop-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.1}s forwards`;
         });
 
-        // Кнопка "Назад" появляется позже
+        // Кнопка "Назад" появляется позже (плавное проявление)
+        backBtn.style.animation = 'none';
         backBtn.style.opacity = '0';
         backBtn.style.pointerEvents = 'none';
         setTimeout(() => {
           backBtn.style.transition = 'opacity 1s ease';
           backBtn.style.opacity = '1';
           backBtn.style.pointerEvents = 'auto';
-        }, 1500 + (buttons.length * 100)); // Ждем появления всех кнопок
+        }, 1500 + (buttons.length * 100)); 
 
       } else {
         menuEl.classList.remove('menu-mode', 'dark-shade');
         bgWrapper.classList.remove('normal-scale');
+        logoEl.classList.remove('animate-in'); 
+        
+        // Скрываем кнопку "Назад"
         backBtn.style.opacity = '0';
         backBtn.style.pointerEvents = 'none';
-        logoEl.classList.remove('animate-in'); 
       }
       return;
     }
@@ -181,7 +185,7 @@ export const Menu = {
           text-align: center; box-shadow: 0 6px 20px rgba(0,0,0,0.8), inset 0 1px 3px rgba(255,100,100,0.2);
           letter-spacing: 2px;
           clip-path: polygon(12px 0%, 100% 0%, calc(100% - 12px) 100%, 0% 100%);
-          opacity: 0; /* Изначально скрыты для анимации */
+          opacity: 0; 
         }
         .btn-folder::before {
           content: ''; position: absolute; top: -8px; left: 14px;
@@ -197,12 +201,18 @@ export const Menu = {
         }
         .btn-folder:active { transform: translateY(1px) scale(0.98); }
 
-        /* Анимация "пружины" */
+        /* Анимация появления (падает сверху с пружиной) */
         @keyframes drop-in {
           0% { opacity: 0; transform: translateY(-40px); }
-          60% { opacity: 1; transform: translateY(6px); } /* Отскок вниз */
-          80% { transform: translateY(-2px); } /* Отскок вверх */
+          60% { opacity: 1; transform: translateY(6px); }
+          80% { transform: translateY(-2px); }
           100% { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Анимация исчезновения (ускоряясь падает вниз) */
+        @keyframes fall-down {
+          0% { opacity: 1; transform: translateY(0); }
+          100% { opacity: 0; transform: translateY(150px); }
         }
 
         .btn-link {
@@ -210,7 +220,7 @@ export const Menu = {
           font-size: clamp(11px, 1.6vh, 13px); cursor: pointer;
           text-decoration: underline; text-underline-offset: 5px;
           margin-top: 8px; transition: color 0.3s, opacity 1s ease; letter-spacing: 1px;
-          opacity: 0; /* Управляется через JS */
+          opacity: 0;
         }
         .btn-link:hover { color: #ff4d4d; }
 
@@ -231,12 +241,10 @@ export const Menu = {
       menuEl.classList.add('active');
     });
 
-    // Анимация логотипа (снизу вверх)
     setTimeout(() => {
       logoEl.classList.add('animate-in');
     }, 50);
 
-    // Музыка
     if (window.SoundsEngine) {
       window.SoundsEngine.init();
       if (window.SoundsEngine.currentMusicTrack !== 'menu_theme') {
@@ -294,7 +302,6 @@ export const Menu = {
       if (this.isTransitioning || this.currentState === 'menu') return;
       this.isTransitioning = true;
       
-      // Показываем кнопки каскадом
       buttons.forEach((btn, index) => {
         btn.style.animation = `drop-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.1}s forwards`;
       });
@@ -302,7 +309,6 @@ export const Menu = {
       menuEl.classList.add('menu-mode', 'dark-shade');
       if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' });
 
-      // Появление кнопки "Назад" после всех кнопок
       setTimeout(() => {
         backBtn.style.transition = 'opacity 1s ease';
         backBtn.style.opacity = '1';
@@ -323,9 +329,19 @@ export const Menu = {
         
         backBtn.style.opacity = '0';
         backBtn.style.pointerEvents = 'none';
-        buttons.forEach(btn => btn.style.opacity = '0'); // Скрываем кнопки
+
+        // Кнопки падают вниз (ускоряясь)
+        buttons.forEach((btn, index) => {
+          btn.style.animation = 'none'; // Сброс
+          void btn.offsetWidth;
+          // Задержка обратная (снизу вверх) для красоты, или прямая. 
+          // Используем ease-in для эффекта ускорения (гравитации).
+          const delay = (buttons.length - 1 - index) * 0.05; 
+          btn.style.animation = `fall-down 0.5s cubic-bezier(0.6, 0.04, 0.98, 0.335) ${delay}s forwards`;
+        });
 
         menuEl.classList.remove('menu-mode', 'dark-shade');
+        
         setTimeout(() => { this.isTransitioning = false; }, 1000);
       };
     }
@@ -363,15 +379,14 @@ export const Menu = {
       }
     };
 
-    // Настройка кнопок
     setupSubmenuButton('#btn-single', async () => {
       const mod = await import('./select.js').catch(() => null);
-      if (mod && mod.Select) mod.Select.start('one'); // Передаем тип 'one'
+      if (mod && mod.Select) mod.Select.start('one');
     });
     
     setupSubmenuButton('#btn-multi', async () => {
       const mod = await import('./select.js').catch(() => null);
-      if (mod && mod.Select) mod.Select.start('two'); // Передаем тип 'two'
+      if (mod && mod.Select) mod.Select.start('two');
     });
     
     setupSubmenuButton('#btn-settings', async () => {

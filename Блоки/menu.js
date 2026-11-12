@@ -55,7 +55,6 @@ export const Menu = {
 
     const isMenu = mode === 'menu';
 
-    // Если меню уже создано
     if (this.isMounted && container.querySelector('.woland-menu')) {
       const menuEl = container.querySelector('.woland-menu');
       const bgWrapper = container.querySelector('.woland-menu__bg-wrapper');
@@ -99,13 +98,11 @@ export const Menu = {
         <div class="woland-menu__shade"></div>
 
         <div class="woland-menu__title-screen">
-          <div class="woland-menu__press-to-continue">Нажмите, чтобы продолжить</div>
+          <div class="woland-menu__press-to-continue" style="opacity: 0;">Нажмите, чтобы продолжить</div>
         </div>
 
         <div class="woland-menu__buttons-screen">
-          <div class="woland-menu__content" id="menu-buttons-container">
-            <!-- Кнопки рендерятся динамически -->
-          </div>
+          <div class="woland-menu__content" id="menu-buttons-container"></div>
         </div>
 
         <div class="woland-menu__logo-container">
@@ -114,15 +111,16 @@ export const Menu = {
 
         <div class="woland-menu__bottom">
           <button class="btn-link" id="btn-title-screen" type="button" style="opacity: 0; pointer-events: none;">Титульный экран</button>
-          <div class="woland-menu__footer">HTML Gaming 2026</div>
-          <div class="woland-menu__version" id="version-display">v0.0.0</div>
+          <div class="woland-menu__footer" style="opacity: 0;">HTML Gaming 2026</div>
+          <div class="woland-menu__version" id="version-display" style="opacity: 0;">v0.0.0</div>
         </div>
       </section>
       
       <style>
         .woland-menu {
           position: absolute; inset: 0; overflow: hidden; background: #000;
-          opacity: 0; transition: opacity 1.5s ease;
+          /* Плавное появление всего меню (1с) */
+          opacity: 0; transition: opacity 1s ease;
         }
         .woland-menu.active { opacity: 1; }
 
@@ -172,8 +170,10 @@ export const Menu = {
 
         .woland-menu__press-to-continue {
           font-size: clamp(16px, 2.8vh, 24px); color: #dcdcdc; letter-spacing: 2px;
-          text-shadow: 0 0 12px rgba(255,0,0,0.6); animation: pulse-text 3s infinite ease-in-out;
+          text-shadow: 0 0 12px rgba(255,0,0,0.6); 
+          transition: opacity 0.5s ease;
         }
+        .woland-menu__press-to-continue.show { animation: pulse-text 3s infinite ease-in-out; }
         @keyframes pulse-text {
           0% { opacity: 0; } 50% { opacity: 1; } 100% { opacity: 0; }
         }
@@ -194,6 +194,7 @@ export const Menu = {
           position: relative;
         }
 
+        /* ★ УЛУЧШЕННЫЕ КНОПКИ С ПЛАВНЫМ ХОВЕРОМ ★ */
         .btn-folder {
           position: relative;
           background: linear-gradient(180deg, #4a1a20 0%, #2a0c10 40%, #110406 100%);
@@ -201,12 +202,14 @@ export const Menu = {
           color: #ffdddd; font-size: clamp(14px, 2.1vh, 18px);
           padding: clamp(10px, 1.5vh, 14px) 20px;
           cursor: pointer; 
-          transition: background 0.2s, border 0.2s, box-shadow 0.2s, transform 0.1s;
+          /* Плавные переходы для всех свойств */
+          transition: background 0.4s, border 0.4s, box-shadow 0.4s, transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s;
           text-align: center; 
           box-shadow: 0 6px 20px rgba(0,0,0,0.9), inset 0 2px 4px rgba(255,150,150,0.3), inset 0 -2px 4px rgba(0,0,0,0.8);
           letter-spacing: 2px;
           text-shadow: 0 1px 3px #000;
           clip-path: polygon(15px 0%, 100% 0%, calc(100% - 15px) 100%, 0% 100%);
+          transform: scale(1); /* Базовый масштаб */
         }
         
         .btn-folder::before {
@@ -215,6 +218,7 @@ export const Menu = {
           background: #4a1a20; border: 2px solid #b33333; border-bottom: none;
           clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
           box-shadow: inset 0 2px 2px rgba(255,150,150,0.3);
+          transition: background 0.4s, border 0.4s;
         }
 
         .btn-folder::after {
@@ -224,28 +228,34 @@ export const Menu = {
           pointer-events: none;
         }
 
-        .btn-folder:hover {
+        /* Наведение (или палец над кнопкой) */
+        .btn-folder:hover, .btn-folder.hovered {
           background: linear-gradient(180deg, #70252e 0%, #421218 40%, #1a0609 100%);
           border-color: #ff5555; color: #ffffff;
           box-shadow: 0 0 30px rgba(255,30,30,0.6), inset 0 2px 6px rgba(255,200,200,0.4);
-          transform: translateY(-2px);
+          transform: scale(1.05); /* Увеличение на 5% */
+        }
+        .btn-folder:hover::before, .btn-folder.hovered::before {
+          background: #70252e; border-color: #ff5555;
         }
         
         .btn-folder:active { 
-          transform: translateY(2px) scale(0.98); 
+          transform: scale(0.98); 
           box-shadow: 0 2px 10px rgba(0,0,0,0.8), inset 0 2px 5px rgba(0,0,0,0.5);
         }
 
+        /* ★ ПЛАВНАЯ АНИМАЦИЯ ПОЯВЛЕНИЯ (БЕЗ РЕЗКИХ СКАЧКОВ) ★ */
         @keyframes drop-in {
-          0% { opacity: 0; transform: translateY(-100vh); }
-          70% { opacity: 1; transform: translateY(6px); }
-          85% { transform: translateY(-2px); }
+          0% { opacity: 0; transform: translateY(-100px); }
+          60% { opacity: 1; transform: translateY(5px); }
+          80% { transform: translateY(-2px); }
           100% { opacity: 1; transform: translateY(0); }
         }
 
+        /* ★ ПЛАВНАЯ АНИМАЦИЯ ИСЧЕЗНОВЕНИЯ ★ */
         @keyframes fall-down {
           0% { opacity: 1; transform: translateY(0); }
-          100% { opacity: 0; transform: translateY(100vh); }
+          100% { opacity: 0; transform: translateY(100px); }
         }
 
         .woland-menu__bottom {
@@ -265,10 +275,12 @@ export const Menu = {
 
         .woland-menu__footer {
           color: #666; font-size: 11px; letter-spacing: 1px; 
+          transition: opacity 1s ease;
         }
 
         .woland-menu__version {
           color: #444; font-size: 6px; font-family: monospace; letter-spacing: 0px;
+          transition: opacity 1s ease;
         }
       </style>
     `;
@@ -277,21 +289,23 @@ export const Menu = {
     const menuEl = container.querySelector('.woland-menu');
     const logoEl = container.querySelector('.woland-menu__logo');
     const backBtn = container.querySelector('#btn-title-screen');
+    const pressText = container.querySelector('.woland-menu__press-to-continue');
+    const footerEl = container.querySelector('.woland-menu__footer');
+    const versionEl = container.querySelector('#version-display');
 
-    requestAnimationFrame(() => {
-      menuEl.classList.add('active');
-    });
-
+    // ★ ПОСЛЕДОВАТЕЛЬНОСТЬ ЗАПУСКА (ТАЙМИНГИ) ★
+    
+    // 0.1с черный экран
     setTimeout(() => {
-      logoEl.classList.add('animate-in');
-    }, 50);
+      menuEl.classList.add('active'); // Фон плавно появляется (1с)
+      footerEl.style.opacity = '1';   // HTML Gaming появляется (1с)
+      versionEl.style.opacity = '1';  // Версия появляется (1с)
+    }, 100);
 
-    // ★ ИСПРАВЛЕННЫЙ ЗАПУСК МУЗЫКИ (С ОЖИДАНИЕМ) ★
-    if (window.SoundsEngine) {
-      window.SoundsEngine.init();
-      
-      const playMenuMusic = () => {
-        // Проверяем, загружен ли трек
+    // Через 1.1с (0.1 черный + 1с фон) — включаем музыку и логотип
+    setTimeout(() => {
+      if (window.SoundsEngine) {
+        window.SoundsEngine.init();
         if (window.SoundsEngine.loadedBuffers && window.SoundsEngine.loadedBuffers['menu_theme']) {
           if (window.SoundsEngine.currentMusicTrack !== 'menu_theme') {
             window.SoundsEngine.setMasterVolume('music', 0);
@@ -308,13 +322,28 @@ export const Menu = {
             }, 50);
           }
         } else {
-          // Если трек еще грузится, ждем 100мс и пробуем снова
-          setTimeout(playMenuMusic, 100);
+           // Если музыка еще грузится, ждем
+           let checkMusic = setInterval(() => {
+             if (window.SoundsEngine.loadedBuffers && window.SoundsEngine.loadedBuffers['menu_theme']) {
+               clearInterval(checkMusic);
+               window.SoundsEngine.play('menu_theme', { loop: true, type: 'music' });
+               window.SoundsEngine.currentMusicTrack = 'menu_theme';
+               window.SoundsEngine.setMasterVolume('music', window.SoundsEngine.volumes.music || 0.8);
+             }
+           }, 100);
         }
-      };
+      }
       
-      playMenuMusic();
-    }
+      // Логотип появляется (1с)
+      logoEl.classList.add('animate-in');
+    }, 1100);
+
+    // Через 2.1с (1.1с + 1с логотип) — появляется текст и активируется клик
+    setTimeout(() => {
+      pressText.style.opacity = '1';
+      pressText.classList.add('show');
+      container.querySelector('.woland-menu__title-screen').style.pointerEvents = 'auto';
+    }, 2100);
 
     // Гроза
     const playThunder = () => {
@@ -363,15 +392,13 @@ export const Menu = {
     fetch('./version.json')
       .then(res => res.json())
       .then(data => {
-        const versionEl = container.querySelector('#version-display');
         if (versionEl && data.version) versionEl.textContent = data.version;
       })
       .catch(() => {
-        const versionEl = container.querySelector('#version-display');
         if (versionEl) versionEl.textContent = 'Версия неизвестна';
       });
 
-    // Переключение экранов
+    // ★ РЕНДЕР КНОПОК С ПЛАВНОЙ АНИМАЦИЕЙ И ЭФФЕКТОМ НАВЕДЕНИЯ ★
     this.renderScreen = (screenName, containerEl, animateIn = true) => {
       const config = this.buttonsConfig[screenName];
       const btnContainer = containerEl.querySelector('#menu-buttons-container');
@@ -380,13 +407,17 @@ export const Menu = {
       const hideOld = () => {
         return new Promise(resolve => {
           if (oldButtons.length === 0) return resolve();
+          
           oldButtons.forEach((btn, index) => {
             btn.style.animation = 'none'; 
             void btn.offsetWidth;
+            // Плавное падение (0.4с) с задержкой
             const delay = (oldButtons.length - 1 - index) * 0.05; 
-            btn.style.animation = `fall-down 0.5s cubic-bezier(0.6, 0.04, 0.98, 0.335) ${delay}s forwards`;
+            btn.style.animation = `fall-down 0.4s cubic-bezier(0.4, 0, 1, 1) ${delay}s forwards`;
           });
-          setTimeout(resolve, 600);
+
+          // Ждем полного завершения анимации + задержка, чтобы не было мигания
+          setTimeout(resolve, 400 + (oldButtons.length * 50) + 50); 
         });
       };
 
@@ -397,11 +428,21 @@ export const Menu = {
           btn.className = 'btn-folder';
           btn.id = btnInfo.id;
           btn.innerHTML = `<span>${btnInfo.text}</span>`;
+          
+          // Обработчики для эффекта hover (наведение/касание)
+          btn.addEventListener('pointerenter', () => btn.classList.add('hovered'));
+          btn.addEventListener('pointerleave', () => btn.classList.remove('hovered'));
+          btn.addEventListener('pointerdown', () => btn.classList.add('hovered'));
+          btn.addEventListener('pointerup', () => btn.classList.remove('hovered'));
+          // Для мобильных (если палец ушел)
+          btn.addEventListener('touchcancel', () => btn.classList.remove('hovered'));
+
           btnContainer.appendChild(btn);
 
           if (animateIn) {
             btn.style.opacity = '0';
-            btn.style.animation = `drop-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) ${index * 0.1}s forwards`;
+            // Плавное появление (0.5с) с задержкой
+            btn.style.animation = `drop-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) ${index * 0.1}s forwards`;
           } else {
             btn.style.opacity = '1';
           }
@@ -478,12 +519,13 @@ export const Menu = {
         btnContainer.innerHTML = ''; 
 
         menuEl.classList.remove('menu-mode', 'dark-shade');
+        
+        // Возвращаем текст "Нажмите, чтобы продолжить"
+        pressText.style.opacity = '1';
+        pressText.classList.add('show');
+        
         setTimeout(() => { this.isTransitioning = false; }, 1000);
       };
     }
-
-    setTimeout(() => {
-      this.renderScreen('main', container, isMenu);
-    }, 100);
   }
 };

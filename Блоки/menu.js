@@ -27,7 +27,7 @@ export const Menu = {
 
     const isMenu = mode === 'menu';
 
-    // Если меню уже создано, просто переключаем состояние
+    // Если меню уже создано, переключаем состояние
     if (this.isMounted && container.querySelector('.woland-menu')) {
       const menuEl = container.querySelector('.woland-menu');
       const bgWrapper = container.querySelector('.woland-menu__bg-wrapper');
@@ -40,15 +40,15 @@ export const Menu = {
         bgWrapper.classList.add('normal-scale');
         logoEl.classList.add('animate-in');
         
-        // Появление с пружиной (сверху вниз)
+        // Кнопки падают сверху
         buttons.forEach((btn, index) => {
-          btn.style.animation = 'none'; // Сброс
+          btn.style.animation = 'none'; 
           btn.style.opacity = '0';
-          void btn.offsetWidth; // Триггер рефлоу
+          void btn.offsetWidth; 
           btn.style.animation = `drop-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.1}s forwards`;
         });
 
-        // Кнопка "Назад" появляется позже (плавное проявление)
+        // Кнопка "Назад" появляется позже
         backBtn.style.animation = 'none';
         backBtn.style.opacity = '0';
         backBtn.style.pointerEvents = 'none';
@@ -62,8 +62,6 @@ export const Menu = {
         menuEl.classList.remove('menu-mode', 'dark-shade');
         bgWrapper.classList.remove('normal-scale');
         logoEl.classList.remove('animate-in'); 
-        
-        // Скрываем кнопку "Назад"
         backBtn.style.opacity = '0';
         backBtn.style.pointerEvents = 'none';
       }
@@ -88,6 +86,7 @@ export const Menu = {
           <div class="woland-menu__content">
             <button class="btn-folder" id="btn-single" type="button"><span>Одиночная игра</span></button>
             <button class="btn-folder" id="btn-multi" type="button"><span>Мультиплеер</span></button>
+            <button class="btn-folder" id="btn-shop" type="button"><span>Магазин П. У. Галкина</span></button>
             <button class="btn-folder" id="btn-settings" type="button"><span>Настройки</span></button>
             <button class="btn-folder" id="btn-about" type="button"><span>Об игре</span></button>
             <button class="btn-link" id="btn-back" type="button" style="opacity: 0; pointer-events: none;">Обратно на титульный</button>
@@ -172,47 +171,74 @@ export const Menu = {
 
         .woland-menu__content {
           display: flex; flex-direction: column; gap: clamp(10px, 2vh, 16px);
-          width: 100%; max-width: 330px; margin-top: 18vh;
+          width: 100%; max-width: 350px; margin-top: 20vh; /* Чуть ниже, чтобы не наезжать на лого */
         }
 
+        /* ★ УЛУЧШЕННЫЙ ВИЗУАЛ КНОПОК ★ */
         .btn-folder {
           position: relative;
-          background: linear-gradient(135deg, #351216 0%, #1a080a 100%);
-          border: 2px solid #9e2a2a;
-          color: #f0f0f0; font-size: clamp(14px, 2.1vh, 18px);
+          /* Текстурированный градиент (имитация старого дерева/металла) */
+          background: linear-gradient(180deg, #4a1a20 0%, #2a0c10 40%, #110406 100%);
+          border: 2px solid #b33333;
+          color: #ffdddd; font-size: clamp(14px, 2.1vh, 18px);
           padding: clamp(10px, 1.5vh, 14px) 20px;
-          cursor: pointer; transition: background 0.3s, border 0.3s, box-shadow 0.3s, transform 0.15s;
-          text-align: center; box-shadow: 0 6px 20px rgba(0,0,0,0.8), inset 0 1px 3px rgba(255,100,100,0.2);
+          cursor: pointer; 
+          transition: background 0.2s, border 0.2s, box-shadow 0.2s, transform 0.1s;
+          text-align: center; 
+          /* Тройная тень для объема */
+          box-shadow: 
+            0 6px 20px rgba(0,0,0,0.9), 
+            inset 0 2px 4px rgba(255,150,150,0.3),
+            inset 0 -2px 4px rgba(0,0,0,0.8);
           letter-spacing: 2px;
-          clip-path: polygon(12px 0%, 100% 0%, calc(100% - 12px) 100%, 0% 100%);
+          text-shadow: 0 1px 3px #000;
+          clip-path: polygon(15px 0%, 100% 0%, calc(100% - 15px) 100%, 0% 100%);
           opacity: 0; 
         }
+        
+        /* Язычок папки */
         .btn-folder::before {
-          content: ''; position: absolute; top: -8px; left: 14px;
-          width: 35%; height: 8px;
-          background: #351216; border: 2px solid #9e2a2a; border-bottom: none;
-          clip-path: polygon(5px 0%, 100% 0%, calc(100% - 5px) 100%, 0% 100%);
+          content: ''; position: absolute; top: -10px; left: 18px;
+          width: 40%; height: 10px;
+          background: #4a1a20; border: 2px solid #b33333; border-bottom: none;
+          clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+          box-shadow: inset 0 2px 2px rgba(255,150,150,0.3);
         }
+
+        /* Внутренняя обводка для "дорогого" вида */
+        .btn-folder::after {
+          content: ''; position: absolute; inset: 2px;
+          border: 1px solid rgba(255, 100, 100, 0.2);
+          clip-path: polygon(13px 0%, 100% 0%, calc(100% - 13px) 100%, 0% 100%);
+          pointer-events: none;
+        }
+
         .btn-folder:hover {
-          background: linear-gradient(135deg, #5c1e24 0%, #2b0d10 100%);
-          border-color: #ff3b3b; color: #ffffff;
-          box-shadow: 0 0 25px rgba(255,30,30,0.5), inset 0 2px 5px rgba(255,255,255,0.3);
+          background: linear-gradient(180deg, #70252e 0%, #421218 40%, #1a0609 100%);
+          border-color: #ff5555; color: #ffffff;
+          box-shadow: 
+            0 0 30px rgba(255,30,30,0.6), 
+            inset 0 2px 6px rgba(255,200,200,0.4);
           transform: translateY(-2px);
         }
-        .btn-folder:active { transform: translateY(1px) scale(0.98); }
+        
+        .btn-folder:active { 
+          transform: translateY(2px) scale(0.98); 
+          box-shadow: 0 2px 10px rgba(0,0,0,0.8), inset 0 2px 5px rgba(0,0,0,0.5);
+        }
 
-        /* Анимация появления (падает сверху с пружиной) */
+        /* Анимация появления (падает из-за верхнего края) */
         @keyframes drop-in {
-          0% { opacity: 0; transform: translateY(-40px); }
-          60% { opacity: 1; transform: translateY(6px); }
-          80% { transform: translateY(-2px); }
+          0% { opacity: 0; transform: translateY(-150vh); }
+          60% { opacity: 1; transform: translateY(15px); }
+          80% { transform: translateY(-5px); }
           100% { opacity: 1; transform: translateY(0); }
         }
 
-        /* Анимация исчезновения (ускоряясь падает вниз) */
+        /* Анимация исчезновения (ускоряясь падает за нижний край) */
         @keyframes fall-down {
           0% { opacity: 1; transform: translateY(0); }
-          100% { opacity: 0; transform: translateY(150px); }
+          100% { opacity: 0; transform: translateY(150vh); }
         }
 
         .btn-link {
@@ -303,7 +329,7 @@ export const Menu = {
       this.isTransitioning = true;
       
       buttons.forEach((btn, index) => {
-        btn.style.animation = `drop-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.1}s forwards`;
+        btn.style.animation = `drop-in 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.1}s forwards`;
       });
 
       menuEl.classList.add('menu-mode', 'dark-shade');
@@ -319,25 +345,24 @@ export const Menu = {
 
     container.querySelector('.woland-menu__title-screen').onclick = () => goToMenu();
 
-    const playSfx = (name) => { if (window.SoundsEngine) window.SoundsEngine.play(name, { type: 'effects' }); };
+    // Все кнопки теперь издают звук "transition"
+    const playSfx = () => { if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' }); };
 
     if (backBtn) {
       backBtn.onclick = () => {
         if (this.isTransitioning) return;
         this.isTransitioning = true;
-        playSfx('btn_back');
+        playSfx();
         
         backBtn.style.opacity = '0';
         backBtn.style.pointerEvents = 'none';
 
-        // Кнопки падают вниз (ускоряясь)
+        // Кнопки падают вниз с ускорением
         buttons.forEach((btn, index) => {
-          btn.style.animation = 'none'; // Сброс
+          btn.style.animation = 'none'; 
           void btn.offsetWidth;
-          // Задержка обратная (снизу вверх) для красоты, или прямая. 
-          // Используем ease-in для эффекта ускорения (гравитации).
           const delay = (buttons.length - 1 - index) * 0.05; 
-          btn.style.animation = `fall-down 0.5s cubic-bezier(0.6, 0.04, 0.98, 0.335) ${delay}s forwards`;
+          btn.style.animation = `fall-down 0.6s cubic-bezier(0.6, 0.04, 0.98, 0.335) ${delay}s forwards`;
         });
 
         menuEl.classList.remove('menu-mode', 'dark-shade');
@@ -352,7 +377,7 @@ export const Menu = {
         btn.onclick = () => {
           if (this.isTransitioning) return;
           this.isTransitioning = true;
-          playSfx('btn_click');
+          playSfx();
 
           if (window.SoundsEngine) {
             let vol = window.SoundsEngine.volumes.music || 0.8;
@@ -387,6 +412,11 @@ export const Menu = {
     setupSubmenuButton('#btn-multi', async () => {
       const mod = await import('./select.js').catch(() => null);
       if (mod && mod.Select) mod.Select.start('two');
+    });
+
+    setupSubmenuButton('#btn-shop', async () => {
+      const mod = await import('./shop.js').catch(() => null);
+      if (mod && mod.Shop) mod.Shop.start();
     });
     
     setupSubmenuButton('#btn-settings', async () => {

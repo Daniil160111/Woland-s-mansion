@@ -15,11 +15,9 @@ export const Menu = {
   currentState: 'title',
   isTransitioning: false,
   
-  // Отслеживание текущего экрана меню
   currentScreen: 'main', 
-  gameMode: null, // 'one' или 'two'
+  gameMode: null, 
   
-  // Конфигурация кнопок для каждого экрана
   buttonsConfig: {
     main: [
       { id: 'btn-play', text: 'Играть', action: 'goto-mode' },
@@ -44,7 +42,7 @@ export const Menu = {
     if (mode === false || !mode) mode = 'title';
     this.currentState = mode;
     this.isTransitioning = false;
-    this.currentScreen = 'main'; // Сброс при запуске
+    this.currentScreen = 'main';
 
     const container = document.getElementById('game-container');
     if (!container) throw new Error('game-container was not found');
@@ -57,7 +55,7 @@ export const Menu = {
 
     const isMenu = mode === 'menu';
 
-    // Если меню уже создано
+    // Если меню уже создано, просто переключаем состояние
     if (this.isMounted && container.querySelector('.woland-menu')) {
       const menuEl = container.querySelector('.woland-menu');
       const bgWrapper = container.querySelector('.woland-menu__bg-wrapper');
@@ -69,7 +67,7 @@ export const Menu = {
         bgWrapper.classList.add('normal-scale');
         logoEl.classList.add('animate-in');
         
-        this.renderScreen('main', container, true); // true = анимация появления
+        this.renderScreen('main', container, true);
 
         backBtn.style.animation = 'none';
         backBtn.style.opacity = '0';
@@ -212,7 +210,6 @@ export const Menu = {
           letter-spacing: 2px;
           text-shadow: 0 1px 3px #000;
           clip-path: polygon(15px 0%, 100% 0%, calc(100% - 15px) 100%, 0% 100%);
-          /* opacity: 0; Устанавливается через JS */
         }
         
         .btn-folder::before {
@@ -244,19 +241,19 @@ export const Menu = {
           box-shadow: 0 2px 10px rgba(0,0,0,0.8), inset 0 2px 5px rgba(0,0,0,0.5);
         }
 
+        /* Пружина с уменьшенной амплитудой */
         @keyframes drop-in {
-          0% { opacity: 0; transform: translateY(-150vh); }
-          60% { opacity: 1; transform: translateY(15px); }
-          80% { transform: translateY(-5px); }
+          0% { opacity: 0; transform: translateY(-100vh); }
+          70% { opacity: 1; transform: translateY(6px); }
+          85% { transform: translateY(-2px); }
           100% { opacity: 1; transform: translateY(0); }
         }
 
         @keyframes fall-down {
           0% { opacity: 1; transform: translateY(0); }
-          100% { opacity: 0; transform: translateY(150vh); }
+          100% { opacity: 0; transform: translateY(100vh); }
         }
 
-        /* ★ НИЖНИЙ БЛОК: Кнопка, Копирайт, Версия ★ */
         .woland-menu__bottom {
           position: absolute; bottom: 10px; left: 0; width: 100%;
           display: flex; flex-direction: column; align-items: center; gap: 5px;
@@ -277,8 +274,7 @@ export const Menu = {
         }
 
         .woland-menu__version {
-          color: #444; font-size: 6px; /* В 2 раза тоньше */
-          font-family: monospace; letter-spacing: 0px;
+          color: #444; font-size: 6px; font-family: monospace; letter-spacing: 0px;
         }
       </style>
     `;
@@ -287,7 +283,6 @@ export const Menu = {
     const menuEl = container.querySelector('.woland-menu');
     const logoEl = container.querySelector('.woland-menu__logo');
     const backBtn = container.querySelector('#btn-title-screen');
-    const buttonsContainer = container.querySelector('#menu-buttons-container');
 
     requestAnimationFrame(() => {
       menuEl.classList.add('active');
@@ -314,7 +309,6 @@ export const Menu = {
       }
     }
 
-    // Гроза
     const playThunder = () => {
       if (!window.SoundsEngine) return;
       const mainSound = THUNDER_SOUNDS[Math.floor(Math.random() * THUNDER_SOUNDS.length)];
@@ -357,7 +351,6 @@ export const Menu = {
     };
     scheduleLightning();
 
-    // Загрузка версии из version.json
     fetch('./version.json')
       .then(res => res.json())
       .then(data => {
@@ -369,13 +362,11 @@ export const Menu = {
         if (versionEl) versionEl.textContent = 'Версия неизвестна';
       });
 
-    // ★ ЛОГИКА ПЕРЕКЛЮЧЕНИЯ ЭКРАНОВ (С АНИМАЦИЯМИ)
     this.renderScreen = (screenName, containerEl, animateIn = true) => {
       const config = this.buttonsConfig[screenName];
-      const container = containerEl.querySelector('#menu-buttons-container');
-      const oldButtons = container.querySelectorAll('.btn-folder');
+      const btnContainer = containerEl.querySelector('#menu-buttons-container');
+      const oldButtons = btnContainer.querySelectorAll('.btn-folder');
 
-      // 1. Анимация исчезновения старых кнопок
       const hideOld = () => {
         return new Promise(resolve => {
           if (oldButtons.length === 0) return resolve();
@@ -385,85 +376,62 @@ export const Menu = {
             const delay = (oldButtons.length - 1 - index) * 0.05; 
             btn.style.animation = `fall-down 0.5s cubic-bezier(0.6, 0.04, 0.98, 0.335) ${delay}s forwards`;
           });
-          setTimeout(resolve, 600); // Ждем падения
+          setTimeout(resolve, 600);
         });
       };
 
-      // 2. Рендер новых кнопок
       const renderNew = () => {
-        container.innerHTML = ''; // Очищаем
+        btnContainer.innerHTML = ''; 
         config.forEach((btnInfo, index) => {
           const btn = document.createElement('button');
           btn.className = 'btn-folder';
           btn.id = btnInfo.id;
           btn.innerHTML = `<span>${btnInfo.text}</span>`;
-          container.appendChild(btn);
+          btnContainer.appendChild(btn);
 
-          // Анимация появления (если нужно)
           if (animateIn) {
             btn.style.opacity = '0';
-            btn.style.animation = `drop-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.1}s forwards`;
+            btn.style.animation = `drop-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) ${index * 0.1}s forwards`;
           } else {
             btn.style.opacity = '1';
           }
 
-          // Обработчик
           btn.onclick = () => {
             if (this.isTransitioning) return;
-            this.handleButtonClick(btnInfo);
+            this.handleButtonClick(btnInfo, containerEl);
           };
         });
       };
 
-      // Запускаем процесс
       hideOld().then(() => {
         renderNew();
         this.currentScreen = screenName;
       });
     };
 
-    // ★ ОБРАБОТЧИК КЛИКОВ
-    this.handleButtonClick = (btnInfo) => {
+    this.handleButtonClick = (btnInfo, containerEl) => {
       const playSfx = () => { if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' }); };
       playSfx();
 
       switch (btnInfo.action) {
         case 'goto-mode':
-          this.renderScreen('mode', container);
+          this.renderScreen('mode', containerEl);
           break;
         case 'goto-type':
           this.gameMode = btnInfo.mode;
-          this.renderScreen('type', container);
+          this.renderScreen('type', containerEl);
           break;
         case 'back-main':
-          this.renderScreen('main', container);
+          this.renderScreen('main', containerEl);
           break;
         case 'back-mode':
-          this.renderScreen('mode', container);
+          this.renderScreen('mode', containerEl);
           break;
-        case 'goto-shop':
-        case 'goto-settings':
-        case 'goto-about':
         case 'start-game':
-          // Временная заглушка (тут будет вызов соответствующих модулей)
-          console.log(`Нажата кнопка: ${btnInfo.action}`, btnInfo);
-          // Пример для игры:
-          /*
-          if (btnInfo.action === 'start-game') {
-            this.isTransitioning = true;
-            menuEl.style.opacity = '0';
-            setTimeout(async () => {
-               const mod = await import('./game.js');
-               if (mod.Game) mod.Game.start(btnInfo.type, this.gameMode);
-            }, 1500);
-          }
-          */
+          console.log('START GAME:', btnInfo.type, this.gameMode);
           break;
       }
     };
-
-    // Запуск начального экрана
-    this.renderScreen('main', container, true);
 
     const goToMenu = () => {
       if (this.isTransitioning || this.currentState === 'menu') return;
@@ -471,6 +439,10 @@ export const Menu = {
       
       menuEl.classList.add('menu-mode', 'dark-shade');
       if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' });
+
+      setTimeout(() => {
+        this.renderScreen('main', container, true);
+      }, 100);
 
       setTimeout(() => {
         backBtn.style.transition = 'opacity 1s ease';
@@ -482,7 +454,6 @@ export const Menu = {
 
     container.querySelector('.woland-menu__title-screen').onclick = () => goToMenu();
 
-    // Кнопка "Титульный экран"
     if (backBtn) {
       backBtn.onclick = () => {
         if (this.isTransitioning) return;
@@ -492,13 +463,17 @@ export const Menu = {
         backBtn.style.opacity = '0';
         backBtn.style.pointerEvents = 'none';
         
-        // Сбрасываем меню на главный экран
         this.currentScreen = 'main';
-        this.renderScreen('main', container, false); // false = без анимации, просто мгновенно исчезают
+        const btnContainer = container.querySelector('#menu-buttons-container');
+        btnContainer.innerHTML = ''; 
 
         menuEl.classList.remove('menu-mode', 'dark-shade');
         setTimeout(() => { this.isTransitioning = false; }, 1000);
       };
     }
+
+    setTimeout(() => {
+      this.renderScreen('main', container, isMenu);
+    }, 100);
   }
 };

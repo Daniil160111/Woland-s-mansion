@@ -82,32 +82,79 @@
     /* --- ЭКРАН ЗАГРУЗКИ --- */
     #loading-screen { background: #050407; z-index: 90; padding: 0; overflow: hidden; }
     
+    /* Центральный блок */
+    .loading-center {
+      display: flex; flex-direction: column; align-items: center; gap: clamp(10px, 2vh, 20px);
+      width: 90%; max-width: 600px; margin-top: -10vh; /* Чуть выше центра */
+    }
+
     #loading-logo {
-      position: absolute; top: 8%; left: 50%; transform: translateX(-50%);
-      width: min(85vw, 600px); max-height: 30vh; object-fit: contain;
+      width: min(80vw, 500px); max-height: 25vh; object-fit: contain;
     }
 
-    /* Блок в правом нижнем углу */
-    .loading-corner {
-      position: absolute; 
-      bottom: max(25px, env(safe-area-inset-bottom)); 
-      right: max(25px, env(safe-area-inset-right));
-      display: flex; flex-direction: column; align-items: flex-end; gap: clamp(8px, 1.5vh, 15px);
-      text-align: right;
+    /* Текст с волной */
+    .loader-title {
+      display: flex; gap: 3px; font-size: clamp(20px, 4vh, 32px); letter-spacing: 2px; text-shadow: 0 0 10px #f00;
+    }
+    .loader-title span {
+      display: inline-block; animation: wave-sequence 1.5s infinite linear;
+    }
+    @keyframes wave-sequence {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+      20% { transform: translateY(-10px); opacity: 1; color: #f00; }
     }
 
-    /* Воланд (без вращения) */
-    #loading-face {
-      width: clamp(100px, 25vh, 200px); height: clamp(100px, 25vh, 200px);
-      object-fit: contain; /* Чтобы текстура не обрезалась */
-      filter: drop-shadow(0 0 15px #a00);
-      /* Вращение убрано */
+    /* Лавовая лампа (прогресс-бар) */
+    .progress {
+      width: 80%; max-width: 400px; height: clamp(8px, 1.2vh, 12px);
+      background: #222; border-radius: 10px; overflow: hidden;
+      position: relative;
+      box-shadow: inset 0 2px 5px rgba(0,0,0,0.8);
     }
-
-    #loading-status { font-size: clamp(12px, 1.8vh, 16px); color: #aaa; min-height: 20px; max-width: 60vw; }
+    /* Свечение и пузыри */
+    #progress-fill {
+      height: 100%; width: 0%; 
+      background: linear-gradient(90deg, #ff0000, #ff5500, #ffaa00, #ff5500, #ff0000);
+      background-size: 200% 100%;
+      animation: lava-flow 2s linear infinite;
+      transition: width 0.4s ease;
+      border-radius: 10px;
+      box-shadow: 0 0 15px rgba(255, 50, 0, 0.8);
+      position: relative;
+      overflow: hidden;
+    }
     
-    .progress { width: min(60vw, 300px); height: clamp(6px, 1vh, 10px); overflow: hidden; background: #222; border-radius: 5px; direction: ltr; }
-    #progress-fill { width: 0%; height: 100%; background: #a00; transition: width 0.3s ease; box-shadow: 0 0 10px #f00; float: left; }
+    /* Пузыри внутри лавы (эффект лавовой лампы) */
+    #progress-fill::after {
+      content: '';
+      position: absolute; inset: 0;
+      background-image: 
+        radial-gradient(circle at 20% 50%, rgba(255,255,255,0.6) 2px, transparent 3px),
+        radial-gradient(circle at 60% 30%, rgba(255,255,255,0.4) 3px, transparent 4px),
+        radial-gradient(circle at 80% 70%, rgba(255,255,255,0.5) 2px, transparent 3px);
+      background-size: 50px 50px;
+      animation: bubbles-move 3s linear infinite;
+    }
+
+    @keyframes lava-flow {
+      0% { background-position: 100% 0; }
+      100% { background-position: -100% 0; }
+    }
+    @keyframes bubbles-move {
+      0% { background-position: 0 0; }
+      100% { background-position: 100px 0; }
+    }
+
+    /* Текст размеров под полоской */
+    #loading-size {
+      font-size: clamp(12px, 1.6vh, 16px); color: #aaa; margin-top: 5px;
+    }
+
+    /* Статус в правом нижнем углу (только первая папка) */
+    #loading-status {
+      position: absolute; bottom: max(25px, env(safe-area-inset-bottom)); right: max(25px, env(safe-area-inset-right));
+      font-size: clamp(12px, 1.6vh, 16px); color: #666; text-align: right;
+    }
 
     #game-container { position: fixed; inset: 0; z-index: 10; display: none; }
     #game-container.active { display: block; }
@@ -155,14 +202,20 @@
 
   <!-- 3. ЗАГРУЗКА -->
   <section id="loading-screen" class="screen">
-    <img id="loading-logo" src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" onerror="this.hidden=true">
     
-    <!-- Блок в правом нижнем углу -->
-    <div class="loading-corner">
-      <img id="loading-face" src="./Текстуры/Воланд/Воланд_глаза_открыты.png" alt="" onerror="this.hidden=true;">
-      <div id="loading-status">Подготовка...</div>
+    <div class="loading-center">
+      <img id="loading-logo" src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" onerror="this.hidden=true">
+      
+      <div class="loader-title" id="loader-title"></div>
+      
       <div class="progress"><div id="progress-fill"></div></div>
+      
+      <div id="loading-size">0.0 МБ / 0.0 МБ</div>
     </div>
+
+    <!-- Статус только первой папки в правом нижнем углу -->
+    <div id="loading-status">Подготовка...</div>
+    
   </section>
 
   <!-- 4. КОНТЕЙНЕР ДЛЯ ИГРЫ -->
@@ -187,6 +240,16 @@
     }
 
     const $ = id => document.getElementById(id);
+
+    // Генерация текста "Загрузка..."
+    const textContainer = $('loader-title');
+    const loadingText = "Загрузка...";
+    [...loadingText].forEach((char, index) => {
+      const span = document.createElement('span');
+      span.textContent = char;
+      span.style.animationDelay = `${index * 0.1}s`;
+      textContainer.appendChild(span);
+    });
 
     // ★ ПЕРЕВОДЫ
     const translations = {
@@ -309,10 +372,11 @@
       }
     }, { once: true });
 
-    // ★ ЗАГРУЗЧИК (Кэш через Service Worker)
+    // ★ ЗАГРУЗЧИК
     async function loadAssets() {
       const status = $('loading-status');
       const progress = $('progress-fill');
+      const sizeText = $('loading-size');
       
       try {
         const resp = await fetch('./load.json');
@@ -340,7 +404,9 @@
         }
 
         for (const item of queue) {
-          status.textContent = `Загрузка: ${item.type} [${loaded + 1}/${total}] (${(loadedBytes / 1024 / 1024).toFixed(1)} / ${(totalBytes / 1024 / 1024).toFixed(1)} МБ)`;
+          // В правом нижнем углу показываем ТОЛЬКО первую папку (Звуки или Текстуры)
+          // Но так как мы идем по списку, просто показываем тип текущего файла
+          status.textContent = `${item.type}: ${loaded + 1}/${total}`;
           
           try {
             const res = await fetch(item.url);
@@ -358,13 +424,17 @@
           }
           
           loaded++;
+          
+          // Обновляем полоску и текст МБ
           const percent = totalBytes > 0 ? Math.round((loadedBytes / totalBytes) * 100) : Math.round((loaded / total) * 100);
           progress.style.width = `${percent}%`;
+          sizeText.textContent = `${(loadedBytes / 1024 / 1024).toFixed(1)} МБ / ${(totalBytes / 1024 / 1024).toFixed(1)} МБ`;
         }
-        status.textContent = 'Ресурсы готовы!';
+        status.textContent = 'Готово';
       } catch (e) {
         console.warn('Ошибка манифеста:', e);
-        status.textContent = 'Пропуск ассетов...';
+        status.textContent = 'Ошибка';
+        sizeText.textContent = '0.0 МБ / 0.0 МБ';
         progress.style.width = '100%';
       }
     }

@@ -87,21 +87,26 @@
       width: min(85vw, 600px); max-height: 30vh; object-fit: contain;
     }
 
-    .loading-center {
-      display: flex; flex-direction: column; align-items: center; gap: clamp(10px, 2vh, 20px);
-      width: 90%; max-width: 500px;
+    /* Блок в правом нижнем углу */
+    .loading-corner {
+      position: absolute; 
+      bottom: max(25px, env(safe-area-inset-bottom)); 
+      right: max(25px, env(safe-area-inset-right));
+      display: flex; flex-direction: column; align-items: flex-end; gap: clamp(8px, 1.5vh, 15px);
+      text-align: right;
     }
 
+    /* Воланд (без вращения) */
     #loading-face {
       width: clamp(100px, 25vh, 200px); height: clamp(100px, 25vh, 200px);
-      object-fit: cover; border-radius: 50%; filter: drop-shadow(0 0 20px #a00);
-      animation: spin-record 4s linear infinite;
+      object-fit: contain; /* Чтобы текстура не обрезалась */
+      filter: drop-shadow(0 0 15px #a00);
+      /* Вращение убрано */
     }
-    @keyframes spin-record { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-    #loading-status { font-size: clamp(12px, 1.8vh, 16px); color: #aaa; min-height: 20px; text-align: center; }
+    #loading-status { font-size: clamp(12px, 1.8vh, 16px); color: #aaa; min-height: 20px; max-width: 60vw; }
     
-    .progress { width: 100%; height: clamp(6px, 1vh, 10px); overflow: hidden; background: #222; border-radius: 5px; direction: ltr; }
+    .progress { width: min(60vw, 300px); height: clamp(6px, 1vh, 10px); overflow: hidden; background: #222; border-radius: 5px; direction: ltr; }
     #progress-fill { width: 0%; height: 100%; background: #a00; transition: width 0.3s ease; box-shadow: 0 0 10px #f00; float: left; }
 
     #game-container { position: fixed; inset: 0; z-index: 10; display: none; }
@@ -152,8 +157,8 @@
   <section id="loading-screen" class="screen">
     <img id="loading-logo" src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" onerror="this.hidden=true">
     
-    <div class="loading-center">
-      <!-- Вращающийся Воланд -->
+    <!-- Блок в правом нижнем углу -->
+    <div class="loading-corner">
       <img id="loading-face" src="./Текстуры/Воланд/Воланд_глаза_открыты.png" alt="" onerror="this.hidden=true;">
       <div id="loading-status">Подготовка...</div>
       <div class="progress"><div id="progress-fill"></div></div>

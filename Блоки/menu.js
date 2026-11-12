@@ -27,30 +27,40 @@ export const Menu = {
 
     const isMenu = mode === 'menu';
 
+    // Если меню уже создано, просто переключаем состояние
     if (this.isMounted && container.querySelector('.woland-menu')) {
       const menuEl = container.querySelector('.woland-menu');
       const bgWrapper = container.querySelector('.woland-menu__bg-wrapper');
       const backBtn = container.querySelector('#btn-back');
       const logoEl = container.querySelector('.woland-menu__logo');
+      const buttons = container.querySelectorAll('.woland-menu__content .btn-folder');
 
       if (isMenu) {
         menuEl.classList.add('menu-mode', 'dark-shade');
         bgWrapper.classList.add('normal-scale');
-        logoEl.classList.add('animate-in'); // На случай если вернулись из подменю
+        logoEl.classList.add('animate-in');
         
+        // Анимация появления кнопок каскадом
+        buttons.forEach((btn, index) => {
+          btn.style.animation = 'none'; // Сброс
+          void btn.offsetWidth; // Триггер рефлоу
+          btn.style.animation = `drop-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.1}s forwards`;
+        });
+
+        // Кнопка "Назад" появляется позже
         backBtn.style.opacity = '0';
         backBtn.style.pointerEvents = 'none';
         setTimeout(() => {
+          backBtn.style.transition = 'opacity 1s ease';
           backBtn.style.opacity = '1';
           backBtn.style.pointerEvents = 'auto';
-        }, 1500);
+        }, 1500 + (buttons.length * 100)); // Ждем появления всех кнопок
+
       } else {
         menuEl.classList.remove('menu-mode', 'dark-shade');
         bgWrapper.classList.remove('normal-scale');
         backBtn.style.opacity = '0';
         backBtn.style.pointerEvents = 'none';
-        
-        // Для плавного "съезда" вниз без перезапуска анимации
         logoEl.classList.remove('animate-in'); 
       }
       return;
@@ -72,14 +82,14 @@ export const Menu = {
 
         <div class="woland-menu__buttons-screen">
           <div class="woland-menu__content">
-            <button class="btn-folder" id="btn-play" type="button"><span>Играть</span></button>
+            <button class="btn-folder" id="btn-single" type="button"><span>Одиночная игра</span></button>
+            <button class="btn-folder" id="btn-multi" type="button"><span>Мультиплеер</span></button>
             <button class="btn-folder" id="btn-settings" type="button"><span>Настройки</span></button>
             <button class="btn-folder" id="btn-about" type="button"><span>Об игре</span></button>
             <button class="btn-link" id="btn-back" type="button" style="opacity: 0; pointer-events: none;">Обратно на титульный</button>
           </div>
         </div>
 
-        <!-- Логотип -->
         <div class="woland-menu__logo-container">
           <img class="woland-menu__logo" src="${logo}" alt="Woland's Mansion" onerror="this.style.display='none';">
         </div>
@@ -99,10 +109,7 @@ export const Menu = {
           transform: scale(1.50);
           transition: transform 1.8s cubic-bezier(0.25, 1, 0.5, 1);
         }
-        /* В меню фон отдаляется */
-        .woland-menu.menu-mode .woland-menu__bg-wrapper {
-          transform: scale(1.00);
-        }
+        .woland-menu.menu-mode .woland-menu__bg-wrapper { transform: scale(1.00); }
 
         .woland-menu__bg, .woland-menu__lightning {
           position: absolute; inset: 0; background-size: cover; background-position: center;
@@ -115,37 +122,21 @@ export const Menu = {
         }
         .woland-menu.dark-shade .woland-menu__shade { background: rgba(0, 0, 0, 0.7); }
 
-        /* --- АНИМАЦИЯ ЛОГОТИПА (СНИЗУ ВВЕРХ ЗА 1 СЕК) --- */
         .woland-menu__logo-container {
           position: absolute; top: 10vh; left: 50%; transform: translateX(-50%);
           z-index: 9999; display: flex; justify-content: center; pointer-events: none;
-          width: 100%;
-          transition: top 1.5s cubic-bezier(0.25, 1, 0.5, 1);
+          width: 100%; transition: top 1.5s cubic-bezier(0.25, 1, 0.5, 1);
         }
         
         .woland-menu__logo {
           width: min(75vw, 520px); max-height: 32vh; object-fit: contain;
-          
-          /* Начальное состояние */
-          opacity: 0; 
-          transform: scaleY(0); 
-          transform-origin: bottom center;
-          
-          /* Плавность: разгон и торможение */
+          opacity: 0; transform: scaleY(0); transform-origin: bottom center;
           transition: transform 1s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 1s ease;
         }
-        
-        /* Конечное состояние (анимация "раскрытия") */
-        .woland-menu__logo.animate-in { 
-          opacity: 1; 
-          transform: scaleY(1); 
-        }
-
-        /* Позиция в меню */
+        .woland-menu__logo.animate-in { opacity: 1; transform: scaleY(1); }
         .woland-menu.menu-mode .woland-menu__logo-container { top: 2vh; }
         .woland-menu.menu-mode .woland-menu__logo {
-          transform: scale(0.68) scaleY(1);
-          transform-origin: top center;
+          transform: scale(0.68) scaleY(1); transform-origin: top center;
         }
 
         .woland-menu__title-screen {
@@ -159,13 +150,10 @@ export const Menu = {
 
         .woland-menu__press-to-continue {
           font-size: clamp(16px, 2.8vh, 24px); color: #dcdcdc; letter-spacing: 2px;
-          text-shadow: 0 0 12px rgba(255,0,0,0.6); 
-          animation: pulse-text 3s infinite ease-in-out;
+          text-shadow: 0 0 12px rgba(255,0,0,0.6); animation: pulse-text 3s infinite ease-in-out;
         }
         @keyframes pulse-text {
-          0% { opacity: 0; }
-          50% { opacity: 1; }
-          100% { opacity: 0; }
+          0% { opacity: 0; } 50% { opacity: 1; } 100% { opacity: 0; }
         }
 
         .woland-menu__buttons-screen {
@@ -189,10 +177,11 @@ export const Menu = {
           border: 2px solid #9e2a2a;
           color: #f0f0f0; font-size: clamp(14px, 2.1vh, 18px);
           padding: clamp(10px, 1.5vh, 14px) 20px;
-          cursor: pointer; transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+          cursor: pointer; transition: background 0.3s, border 0.3s, box-shadow 0.3s, transform 0.15s;
           text-align: center; box-shadow: 0 6px 20px rgba(0,0,0,0.8), inset 0 1px 3px rgba(255,100,100,0.2);
           letter-spacing: 2px;
           clip-path: polygon(12px 0%, 100% 0%, calc(100% - 12px) 100%, 0% 100%);
+          opacity: 0; /* Изначально скрыты для анимации */
         }
         .btn-folder::before {
           content: ''; position: absolute; top: -8px; left: 14px;
@@ -206,20 +195,28 @@ export const Menu = {
           box-shadow: 0 0 25px rgba(255,30,30,0.5), inset 0 2px 5px rgba(255,255,255,0.3);
           transform: translateY(-2px);
         }
-        .btn-folder:active { transform: translateY(1px); }
+        .btn-folder:active { transform: translateY(1px) scale(0.98); }
+
+        /* Анимация "пружины" */
+        @keyframes drop-in {
+          0% { opacity: 0; transform: translateY(-40px); }
+          60% { opacity: 1; transform: translateY(6px); } /* Отскок вниз */
+          80% { transform: translateY(-2px); } /* Отскок вверх */
+          100% { opacity: 1; transform: translateY(0); }
+        }
 
         .btn-link {
           background: transparent; border: none; color: #999;
           font-size: clamp(11px, 1.6vh, 13px); cursor: pointer;
           text-decoration: underline; text-underline-offset: 5px;
           margin-top: 8px; transition: color 0.3s, opacity 1s ease; letter-spacing: 1px;
+          opacity: 0; /* Управляется через JS */
         }
         .btn-link:hover { color: #ff4d4d; }
 
         .woland-menu__footer {
           position: absolute; bottom: 10px; width: 100%; text-align: center;
-          color: #666; font-size: 11px; letter-spacing: 1px; z-index: 5;
-          opacity: 0.8;
+          color: #666; font-size: 11px; letter-spacing: 1px; z-index: 5; opacity: 0.8;
         }
       </style>
     `;
@@ -227,14 +224,14 @@ export const Menu = {
 
     const menuEl = container.querySelector('.woland-menu');
     const logoEl = container.querySelector('.woland-menu__logo');
+    const buttons = container.querySelectorAll('.woland-menu__content .btn-folder');
+    const backBtn = container.querySelector('#btn-back');
 
-    // Фон появляется всегда
     requestAnimationFrame(() => {
       menuEl.classList.add('active');
     });
 
-    // ★ КРИТИЧЕСКИЙ МОМЕНТ ДЛЯ АНИМАЦИИ ЛОГОТИПА
-    // Даем браузеру 50мс, чтобы отрисовать начальное состояние (scaleY(0))
+    // Анимация логотипа (снизу вверх)
     setTimeout(() => {
       logoEl.classList.add('animate-in');
     }, 50);
@@ -257,12 +254,10 @@ export const Menu = {
       }
     }
 
-    // --- МОЛНИИ (ЦЕЛЬНЫЙ ФОН) ---
+    // --- МОЛНИИ ---
     const playThunder = (pan) => {
       if (!window.SoundsEngine) return;
-      window.SoundsEngine.play('thunder', { 
-        type: 'effects', pan: pan, volume: Math.random() * 0.5 + 0.5, reverb: true 
-      });
+      window.SoundsEngine.play('thunder', { type: 'effects', pan: pan, volume: Math.random() * 0.5 + 0.5, reverb: true });
     };
 
     const triggerLightning = () => {
@@ -275,7 +270,6 @@ export const Menu = {
         { opacity: 1.00, duration: 60 }, { opacity: 0.00, duration: 500 }
       ];
 
-      // Звук берем случайный, но так как фон цельный, просто рандомим панораму
       playThunder(Math.random() * 2 - 1);
 
       let currentStep = 0;
@@ -299,21 +293,38 @@ export const Menu = {
     const goToMenu = () => {
       if (this.isTransitioning || this.currentState === 'menu') return;
       this.isTransitioning = true;
+      
+      // Показываем кнопки каскадом
+      buttons.forEach((btn, index) => {
+        btn.style.animation = `drop-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.1}s forwards`;
+      });
+
       menuEl.classList.add('menu-mode', 'dark-shade');
       if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' });
-      setTimeout(() => { this.isTransitioning = false; }, 1000);
+
+      // Появление кнопки "Назад" после всех кнопок
+      setTimeout(() => {
+        backBtn.style.transition = 'opacity 1s ease';
+        backBtn.style.opacity = '1';
+        backBtn.style.pointerEvents = 'auto';
+        this.isTransitioning = false;
+      }, 1500 + (buttons.length * 100));
     };
 
     container.querySelector('.woland-menu__title-screen').onclick = () => goToMenu();
 
     const playSfx = (name) => { if (window.SoundsEngine) window.SoundsEngine.play(name, { type: 'effects' }); };
 
-    const backBtn = container.querySelector('#btn-back');
     if (backBtn) {
       backBtn.onclick = () => {
         if (this.isTransitioning) return;
         this.isTransitioning = true;
         playSfx('btn_back');
+        
+        backBtn.style.opacity = '0';
+        backBtn.style.pointerEvents = 'none';
+        buttons.forEach(btn => btn.style.opacity = '0'); // Скрываем кнопки
+
         menuEl.classList.remove('menu-mode', 'dark-shade');
         setTimeout(() => { this.isTransitioning = false; }, 1000);
       };
@@ -352,14 +363,22 @@ export const Menu = {
       }
     };
 
-    setupSubmenuButton('#btn-play', async () => {
-      const mod = await import('./game.js').catch(() => null);
-      if (mod && mod.Game) mod.Game.start();
+    // Настройка кнопок
+    setupSubmenuButton('#btn-single', async () => {
+      const mod = await import('./select.js').catch(() => null);
+      if (mod && mod.Select) mod.Select.start('one'); // Передаем тип 'one'
     });
+    
+    setupSubmenuButton('#btn-multi', async () => {
+      const mod = await import('./select.js').catch(() => null);
+      if (mod && mod.Select) mod.Select.start('two'); // Передаем тип 'two'
+    });
+    
     setupSubmenuButton('#btn-settings', async () => {
       const mod = await import('./settings.js').catch(() => null);
       if (mod && mod.Settings) mod.Settings.start();
     });
+    
     setupSubmenuButton('#btn-about', async () => {
       const mod = await import('./about.js').catch(() => null);
       if (mod && mod.About) mod.About.start();

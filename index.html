@@ -62,7 +62,7 @@
     @keyframes wave-sequence { 0%, 60%, 100% { transform: translateY(0); opacity: 0.5; } 20% { transform: translateY(-10px); opacity: 1; color: #f00; } }
 
     .progress { width: 80%; max-width: 400px; height: 10px; background: #222; border-radius: 10px; overflow: hidden; position: relative; box-shadow: inset 0 2px 5px rgba(0,0,0,0.8); display: none; }
-    #progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ff0000, #ff5500, #ffaa00, #ff5500, #ff0000); background-size: 200% 100%; animation: lava-flow 2s linear infinite; transition: width 0.4s ease; border-radius: 10px; box-shadow: 0 0 15px rgba(255, 50, 0, 0.8); position: relative; overflow: hidden; }
+    #progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ff0000, #ff5500, #ffaa00, #ff5500, #ff0000); background-size: 200% 100%; animation: lava-flow 2s linear infinite; transition: width 0.2s ease; border-radius: 10px; box-shadow: 0 0 15px rgba(255, 50, 0, 0.8); position: relative; overflow: hidden; }
     #progress-fill::after { content: ''; position: absolute; inset: 0; background-image: radial-gradient(circle at 20% 50%, rgba(255,255,255,0.6) 2px, transparent 3px), radial-gradient(circle at 60% 30%, rgba(255,255,255,0.4) 3px, transparent 4px); background-size: 50px 50px; animation: bubbles-move 3s linear infinite; }
     @keyframes lava-flow { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
     @keyframes bubbles-move { 0% { background-position: 0 0; } 100% { background-position: 100px 0; } }
@@ -76,15 +76,9 @@
 </head>
 <body>
 
-  <!-- 0. ЭКРАНЫ L1 И L2 -->
-  <section id="screen-l1" class="screen">
-    <img id="img-l1" class="l-image" src="./Текстуры/Меню/L1.jpg" alt="L1" onerror="this.style.display='none';">
-  </section>
-  <section id="screen-l2" class="screen">
-    <img id="img-l2" class="l-image" src="./Текстуры/Меню/l2.jpg" alt="L2" onerror="this.style.display='none';">
-  </section>
+  <section id="screen-l1" class="screen"><img id="img-l1" class="l-image" src="./Текстуры/Меню/L1.jpg" alt="L1" onerror="this.style.display='none';"></section>
+  <section id="screen-l2" class="screen"><img id="img-l2" class="l-image" src="./Текстуры/Меню/l2.jpg" alt="L2" onerror="this.style.display='none';"></section>
 
-  <!-- 1. ЭКРАН УСТАНОВКИ -->
   <section id="install-screen" class="screen">
     <div class="install-content">
       <img src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" onerror="this.hidden=true">
@@ -99,12 +93,10 @@
     <div id="footer-credit">HTML Gaming 2026</div>
   </section>
 
-  <!-- 2. ДИСКЛЕЙМЕР -->
   <section id="disclaimer-screen" class="screen">
     <img id="disclaimer-img" src="./Текстуры/Меню/Дисклеймер.jpg" alt="Disclaimer" onerror="this.style.display='none';">
   </section>
 
-  <!-- 3. ЗАГРУЗКА -->
   <section id="loading-screen" class="screen">
     <div class="loading-center">
       <img id="loading-logo" src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" onerror="this.hidden=true">
@@ -211,15 +203,12 @@
       fade.style.opacity = '0';
 
       try {
-        // Инициализация звука
         await import('./Фон/settings-manager.js').then(m => m.Settings.init()).catch(() => {});
         await import('./Фон/sounds.js').catch(() => {});
         if (window.SoundsEngine) window.SoundsEngine.init();
 
-        // Загрузка ресурсов
         await loadAssets();
 
-        // Запуск меню
         const menuModule = await import('./Блоки/menu.js');
         if (menuModule && menuModule.Menu) {
           await menuModule.Menu.start('title');
@@ -238,7 +227,43 @@
       }
     }, { once: true });
 
-    // ★ УМНАЯ СИСТЕМА КЭШИРОВАНИЯ ★
+    // ★ СИСТЕМА КЭШИРОВАНИЯ (IndexedDB) ★
+    const DB_NAME = 'woland_db';
+    const STORE_NAME = 'assets';
+    let db = null;
+
+    function initDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = (e) => {
+          const d = e.target.result;
+          if (!d.objectStoreNames.contains(STORE_NAME)) d.createObjectStore(STORE_NAME);
+        };
+        req.onsuccess = () => { db = req.result; resolve(); };
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    function getAsset(key) {
+      return new Promise((resolve) => {
+        if (!db) return resolve(null);
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const req = tx.objectStore(STORE_NAME).get(key);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      });
+    }
+
+    function putAsset(key, blob) {
+      return new Promise((resolve) => {
+        if (!db) return resolve();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).put(blob, key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      });
+    }
+
     async function loadAssets() {
       const status = $('loading-status');
       const progressBar = $('progress-bar');
@@ -247,113 +272,84 @@
       
       try {
         status.textContent = 'Проверка файлов...';
-        
+        await initDB();
+
         const resp = await fetch('./load.json');
         if (!resp.ok) throw new Error('load.json не найден');
         const manifest = await resp.json();
 
         const queue = [
-          ...Object.entries(manifest.sounds || {}).map(([id, url]) => ({ id, url, type: 'Звуки' })),
-          ...Object.entries(manifest.textures || {}).map(([id, url]) => ({ id, url, type: 'Текстуры' }))
+          ...Object.entries(manifest.sounds || {}).map(([id, data]) => ({ id, url: data.url, size: data.size, type: 'Звуки' })),
+          ...Object.entries(manifest.textures || {}).map(([id, data]) => ({ id, url: data.url, size: data.size, type: 'Текстуры' }))
         ];
 
-        const total = queue.length;
         window.GameAssets = window.GameAssets || {};
+        let totalBytes = queue.reduce((sum, item) => sum + (item.size || 0), 0);
+        let missingFiles = [];
+        
+        // Проверяем, что уже скачано
+        for (const item of queue) {
+          const cachedBlob = await getAsset(item.url);
+          if (cachedBlob) {
+            if (item.type === 'Текстуры') {
+              window.GameAssets[item.id] = URL.createObjectURL(cachedBlob);
+            } else if (window.SoundsEngine) {
+              await window.SoundsEngine.loadSound(item.id, cachedBlob);
+            }
+          } else {
+            missingFiles.push(item);
+          }
+        }
 
-        // Читаем сохраненный список
-        let cachedList = [];
-        try { cachedList = JSON.parse(localStorage.getItem('woland_cache_list')) || []; } catch(e) {}
-
-        // Проверяем, есть ли все файлы в кэше
-        const missingFiles = queue.filter(item => !cachedList.includes(item.url));
-
+        // Если всё в кэше — пропускаем загрузку
         if (missingFiles.length === 0) {
-          // Всё скачано! Мгновенно пропускаем загрузку.
           status.textContent = 'Все файлы в кэше';
           progressBar.style.display = 'none';
           sizeText.style.display = 'none';
-          
-          // Восстанавливаем звуки и текстуры из кэша браузера
-          for (const item of queue) {
-            try {
-              const res = await fetch(item.url);
-              const blob = await res.blob();
-              if (item.type === 'Текстуры') {
-                window.GameAssets[item.id] = URL.createObjectURL(blob);
-              } else if (window.SoundsEngine) {
-                await window.SoundsEngine.loadSound(item.id, blob);
-              }
-            } catch(e) {}
-          }
           return;
         }
 
-        // Если есть недостающие файлы — начинаем загрузку
+        // Качаем недостающее
         status.textContent = 'Загрузка...';
         progressBar.style.display = 'block';
         sizeText.style.display = 'block';
-        sizeText.textContent = '0.0 МБ / 0.0 МБ';
+        
+        let loadedBytes = totalBytes;
+        missingFiles.forEach(f => loadedBytes -= (f.size || 0));
 
-        let loaded = 0;
-        let totalBytes = 0;
-        let loadedBytes = 0;
+        sizeText.textContent = `${(loadedBytes / 1024 / 1024).toFixed(1)} МБ / ${(totalBytes / 1024 / 1024).toFixed(1)} МБ`;
 
-        // Считаем общий вес ТОЛЬКО недостающих файлов
-        for (const item of missingFiles) {
-          try {
-            const head = await fetch(item.url, { method: 'HEAD' });
-            const size = parseInt(head.headers.get('Content-Length') || '0', 10);
-            totalBytes += size;
-          } catch (e) {}
-        }
-
-        sizeText.textContent = `0.0 МБ / ${(totalBytes / 1024 / 1024).toFixed(1)} МБ`;
-
-        for (const item of queue) {
-          if (cachedList.includes(item.url)) {
-            // Уже есть в кэше, просто загружаем в память
-            try {
-              const res = await fetch(item.url);
-              const blob = await res.blob();
-              if (item.type === 'Текстуры') window.GameAssets[item.id] = URL.createObjectURL(blob);
-              else if (window.SoundsEngine) await window.SoundsEngine.loadSound(item.id, blob);
-            } catch(e) {}
-            continue; 
-          }
-
-          // Качаем недостающее
-          status.textContent = `Загрузка: ${item.type} [${loaded + 1}/${missingFiles.length}]`;
+        for (let i = 0; i < missingFiles.length; i++) {
+          const item = missingFiles[i];
+          status.textContent = `Загрузка: ${item.type} [${i + 1}/${missingFiles.length}]`;
+          
           try {
             const res = await fetch(item.url);
             if (!res.ok) throw new Error('404');
             const blob = await res.blob();
             
-            loadedBytes += blob.size;
-            loaded++;
+            await putAsset(item.url, blob);
+            loadedBytes += (item.size || blob.size);
             
             if (item.type === 'Текстуры') {
               window.GameAssets[item.id] = URL.createObjectURL(blob);
             } else if (window.SoundsEngine) {
               await window.SoundsEngine.loadSound(item.id, blob);
             }
-
-            cachedList.push(item.url);
           } catch (e) {
             console.warn(`[Пропуск] ${item.url}`);
           }
           
-          const percent = Math.round((loadedBytes / totalBytes) * 100) || Math.round((loaded / missingFiles.length) * 100);
+          const percent = Math.min(100, Math.round((loadedBytes / totalBytes) * 100));
           progress.style.width = `${percent}%`;
           sizeText.textContent = `${(loadedBytes / 1024 / 1024).toFixed(1)} МБ / ${(totalBytes / 1024 / 1024).toFixed(1)} МБ`;
         }
 
-        // Сохраняем обновленный список
-        localStorage.setItem('woland_cache_list', JSON.stringify(cachedList));
-        status.textContent = 'Готово';
+        status.textContent = 'Готово!';
         progress.style.width = '100%';
         
       } catch (e) {
-        console.warn('Ошибка манифеста:', e);
+        console.warn('Ошибка загрузки:', e);
         status.textContent = 'Ошибка';
       }
     }

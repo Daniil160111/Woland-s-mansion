@@ -4,6 +4,19 @@ const MENU_BG = './Текстуры/Меню/Фон.jpg';
 const MENU_LIGHTNING = './Текстуры/Меню/Фон-молния.jpg';
 const MENU_LOGO = './Текстуры/Меню/Название.jpg';
 
+// Список всех 9 звуков грозы (гром, гроза 1-4, ветер и т.д.)
+const THUNDER_SOUNDS = [
+  'thunder',        // Гром.wav
+  'storm_1',        // Гроза1.mp3
+  'storm_2',        // Гроза2.mp3
+  'storm_3',        // Гроза3.mp3
+  'storm_4',        // Гроза4.mp3
+  'wind_hall_1',    // Ветер холл1.wav
+  'wind_hall_2',    // Ветер холл2.wav
+  'wind_hall_3',    // Ветер холл3.wav
+  'wind_hall_4'     // Ветер холл4.wav
+];
+
 export const Menu = {
   isMounted: false,
   lightningTimeout: null,
@@ -27,7 +40,6 @@ export const Menu = {
 
     const isMenu = mode === 'menu';
 
-    // Если меню уже создано, переключаем состояние
     if (this.isMounted && container.querySelector('.woland-menu')) {
       const menuEl = container.querySelector('.woland-menu');
       const bgWrapper = container.querySelector('.woland-menu__bg-wrapper');
@@ -40,7 +52,6 @@ export const Menu = {
         bgWrapper.classList.add('normal-scale');
         logoEl.classList.add('animate-in');
         
-        // Кнопки падают сверху
         buttons.forEach((btn, index) => {
           btn.style.animation = 'none'; 
           btn.style.opacity = '0';
@@ -48,7 +59,6 @@ export const Menu = {
           btn.style.animation = `drop-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.1}s forwards`;
         });
 
-        // Кнопка "Назад" появляется позже
         backBtn.style.animation = 'none';
         backBtn.style.opacity = '0';
         backBtn.style.pointerEvents = 'none';
@@ -68,7 +78,6 @@ export const Menu = {
       return;
     }
 
-    // --- ПЕРВИЧНАЯ ОТРИСОВКА ---
     container.innerHTML = `
       <section class="woland-menu ${isMenu ? 'menu-mode dark-shade' : ''}" aria-label="Главное меню">
         <div class="woland-menu__bg-wrapper">
@@ -84,8 +93,7 @@ export const Menu = {
 
         <div class="woland-menu__buttons-screen">
           <div class="woland-menu__content">
-            <button class="btn-folder" id="btn-single" type="button"><span>Одиночная игра</span></button>
-            <button class="btn-folder" id="btn-multi" type="button"><span>Мультиплеер</span></button>
+            <button class="btn-folder" id="btn-play" type="button"><span>Играть</span></button>
             <button class="btn-folder" id="btn-shop" type="button"><span>Магазин П. У. Галкина</span></button>
             <button class="btn-folder" id="btn-settings" type="button"><span>Настройки</span></button>
             <button class="btn-folder" id="btn-about" type="button"><span>Об игре</span></button>
@@ -171,13 +179,11 @@ export const Menu = {
 
         .woland-menu__content {
           display: flex; flex-direction: column; gap: clamp(10px, 2vh, 16px);
-          width: 100%; max-width: 350px; margin-top: 20vh; /* Чуть ниже, чтобы не наезжать на лого */
+          width: 100%; max-width: 350px; margin-top: 20vh;
         }
 
-        /* ★ УЛУЧШЕННЫЙ ВИЗУАЛ КНОПОК ★ */
         .btn-folder {
           position: relative;
-          /* Текстурированный градиент (имитация старого дерева/металла) */
           background: linear-gradient(180deg, #4a1a20 0%, #2a0c10 40%, #110406 100%);
           border: 2px solid #b33333;
           color: #ffdddd; font-size: clamp(14px, 2.1vh, 18px);
@@ -185,7 +191,6 @@ export const Menu = {
           cursor: pointer; 
           transition: background 0.2s, border 0.2s, box-shadow 0.2s, transform 0.1s;
           text-align: center; 
-          /* Тройная тень для объема */
           box-shadow: 
             0 6px 20px rgba(0,0,0,0.9), 
             inset 0 2px 4px rgba(255,150,150,0.3),
@@ -196,7 +201,6 @@ export const Menu = {
           opacity: 0; 
         }
         
-        /* Язычок папки */
         .btn-folder::before {
           content: ''; position: absolute; top: -10px; left: 18px;
           width: 40%; height: 10px;
@@ -205,7 +209,6 @@ export const Menu = {
           box-shadow: inset 0 2px 2px rgba(255,150,150,0.3);
         }
 
-        /* Внутренняя обводка для "дорогого" вида */
         .btn-folder::after {
           content: ''; position: absolute; inset: 2px;
           border: 1px solid rgba(255, 100, 100, 0.2);
@@ -227,7 +230,6 @@ export const Menu = {
           box-shadow: 0 2px 10px rgba(0,0,0,0.8), inset 0 2px 5px rgba(0,0,0,0.5);
         }
 
-        /* Анимация появления (падает из-за верхнего края) */
         @keyframes drop-in {
           0% { opacity: 0; transform: translateY(-150vh); }
           60% { opacity: 1; transform: translateY(15px); }
@@ -235,7 +237,6 @@ export const Menu = {
           100% { opacity: 1; transform: translateY(0); }
         }
 
-        /* Анимация исчезновения (ускоряясь падает за нижний край) */
         @keyframes fall-down {
           0% { opacity: 1; transform: translateY(0); }
           100% { opacity: 0; transform: translateY(150vh); }
@@ -288,10 +289,42 @@ export const Menu = {
       }
     }
 
-    // --- МОЛНИИ ---
-    const playThunder = (pan) => {
+    // ★ УЛУЧШЕННАЯ СИСТЕМА ГРОЗЫ (9 звуков + случайная задержка + панорама) ★
+    const playThunder = () => {
       if (!window.SoundsEngine) return;
-      window.SoundsEngine.play('thunder', { type: 'effects', pan: pan, volume: Math.random() * 0.5 + 0.5, reverb: true });
+      
+      // Выбираем случайный звук из 9 доступных
+      const soundId = THUNDER_SOUNDS[Math.floor(Math.random() * THUNDER_SOUNDS.length)];
+      
+      // Случайная панорама (от -1 до 1)
+      const pan = Math.random() * 2 - 1;
+      
+      // Случайная громкость (от 0.4 до 1.0)
+      const volume = Math.random() * 0.6 + 0.4;
+      
+      // Играем основной звук с реверберацией
+      window.SoundsEngine.play(soundId, { 
+        type: 'effects', 
+        pan: pan, 
+        volume: volume, 
+        reverb: true 
+      });
+
+      // С вероятностью 40% добавляем "эхо" (отдалённый гром) через 0.3 - 1 секунду
+      if (Math.random() > 0.6) {
+        const echoDelay = Math.random() * 700 + 300; // 300-1000мс
+        const echoSound = THUNDER_SOUNDS[Math.floor(Math.random() * THUNDER_SOUNDS.length)];
+        const echoPan = pan > 0 ? -0.8 : 0.8; // Эхо с противоположной стороны
+        
+        setTimeout(() => {
+          window.SoundsEngine.play(echoSound, { 
+            type: 'effects', 
+            pan: echoPan, 
+            volume: volume * 0.5, // Эхо тише
+            reverb: true 
+          });
+        }, echoDelay);
+      }
     };
 
     const triggerLightning = () => {
@@ -304,7 +337,7 @@ export const Menu = {
         { opacity: 1.00, duration: 60 }, { opacity: 0.00, duration: 500 }
       ];
 
-      playThunder(Math.random() * 2 - 1);
+      playThunder();
 
       let currentStep = 0;
       const runFlash = () => {
@@ -319,6 +352,7 @@ export const Menu = {
     };
 
     const scheduleLightning = () => {
+      // Интервал между вспышками: от 7 до 15 секунд
       const delay = Math.random() * 8000 + 7000; 
       this.lightningTimeout = setTimeout(() => { triggerLightning(); scheduleLightning(); }, delay);
     };
@@ -345,7 +379,6 @@ export const Menu = {
 
     container.querySelector('.woland-menu__title-screen').onclick = () => goToMenu();
 
-    // Все кнопки теперь издают звук "transition"
     const playSfx = () => { if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' }); };
 
     if (backBtn) {
@@ -357,7 +390,6 @@ export const Menu = {
         backBtn.style.opacity = '0';
         backBtn.style.pointerEvents = 'none';
 
-        // Кнопки падают вниз с ускорением
         buttons.forEach((btn, index) => {
           btn.style.animation = 'none'; 
           void btn.offsetWidth;
@@ -404,16 +436,12 @@ export const Menu = {
       }
     };
 
-    setupSubmenuButton('#btn-single', async () => {
-      const mod = await import('./select.js').catch(() => null);
-      if (mod && mod.Select) mod.Select.start('one');
+    // Кнопка "Играть" (вызывает game.js или select.js)
+    setupSubmenuButton('#btn-play', async () => {
+      const mod = await import('./game.js').catch(() => null);
+      if (mod && mod.Game) mod.Game.start();
     });
     
-    setupSubmenuButton('#btn-multi', async () => {
-      const mod = await import('./select.js').catch(() => null);
-      if (mod && mod.Select) mod.Select.start('two');
-    });
-
     setupSubmenuButton('#btn-shop', async () => {
       const mod = await import('./shop.js').catch(() => null);
       if (mod && mod.Shop) mod.Shop.start();

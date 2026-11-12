@@ -4,17 +4,20 @@ const MENU_BG = './Текстуры/Меню/Фон.jpg';
 const MENU_LIGHTNING = './Текстуры/Меню/Фон-молния.jpg';
 const MENU_LOGO = './Текстуры/Меню/Название.jpg';
 
-// Список всех 9 звуков грозы (гром, гроза 1-4, ветер и т.д.)
+// ★ МАКСИМАЛЬНО РЕАЛИСТИЧНЫЙ СПИСОК ГРОЗОВЫХ ЗВУКОВ ★
+// Убрали ветер, оставили только гром, молнию и грозы.
 const THUNDER_SOUNDS = [
   'thunder',        // Гром.wav
+  'lightning_fx',   // Молния.wav
   'storm_1',        // Гроза1.mp3
   'storm_2',        // Гроза2.mp3
   'storm_3',        // Гроза3.mp3
   'storm_4',        // Гроза4.mp3
-  'wind_hall_1',    // Ветер холл1.wav
-  'wind_hall_2',    // Ветер холл2.wav
-  'wind_hall_3',    // Ветер холл3.wav
-  'wind_hall_4'     // Ветер холл4.wav
+  'storm_5',        // Гроза5.mp3 (если есть)
+  'storm_6',        // Гроза6.mp3 (если есть)
+  'storm_7',        // Гроза7.mp3 (если есть)
+  'storm_8',        // Гроза8.mp3 (если есть)
+  'storm_9'         // Гроза9.mp3 (если есть)
 ];
 
 export const Menu = {
@@ -289,41 +292,45 @@ export const Menu = {
       }
     }
 
-    // ★ УЛУЧШЕННАЯ СИСТЕМА ГРОЗЫ (9 звуков + случайная задержка + панорама) ★
+    // ★ СУПЕР-РЕАЛИСТИЧНАЯ ГРОЗА (11 звуков, наложения, эхо) ★
     const playThunder = () => {
       if (!window.SoundsEngine) return;
       
-      // Выбираем случайный звук из 9 доступных
-      const soundId = THUNDER_SOUNDS[Math.floor(Math.random() * THUNDER_SOUNDS.length)];
+      // 1. Основной удар (первый звук)
+      const mainSound = THUNDER_SOUNDS[Math.floor(Math.random() * THUNDER_SOUNDS.length)];
+      const mainPan = Math.random() * 2 - 1; // -1 до 1
+      const mainVol = Math.random() * 0.5 + 0.5; // 0.5 до 1.0
       
-      // Случайная панорама (от -1 до 1)
-      const pan = Math.random() * 2 - 1;
-      
-      // Случайная громкость (от 0.4 до 1.0)
-      const volume = Math.random() * 0.6 + 0.4;
-      
-      // Играем основной звук с реверберацией
-      window.SoundsEngine.play(soundId, { 
-        type: 'effects', 
-        pan: pan, 
-        volume: volume, 
-        reverb: true 
+      window.SoundsEngine.play(mainSound, { 
+        type: 'effects', pan: mainPan, volume: mainVol, reverb: true 
       });
 
-      // С вероятностью 40% добавляем "эхо" (отдалённый гром) через 0.3 - 1 секунду
-      if (Math.random() > 0.6) {
-        const echoDelay = Math.random() * 700 + 300; // 300-1000мс
+      // 2. Раскат (эхо) — с вероятностью 60% через 0.2-0.8 сек
+      if (Math.random() > 0.4) {
+        const echoDelay = Math.random() * 600 + 200; 
         const echoSound = THUNDER_SOUNDS[Math.floor(Math.random() * THUNDER_SOUNDS.length)];
-        const echoPan = pan > 0 ? -0.8 : 0.8; // Эхо с противоположной стороны
+        const echoPan = mainPan > 0 ? -0.9 : 0.9; // С противоположной стороны
+        const echoVol = mainVol * (Math.random() * 0.4 + 0.3); // Тише основного
         
         setTimeout(() => {
           window.SoundsEngine.play(echoSound, { 
-            type: 'effects', 
-            pan: echoPan, 
-            volume: volume * 0.5, // Эхо тише
-            reverb: true 
+            type: 'effects', pan: echoPan, volume: echoVol, reverb: true 
           });
         }, echoDelay);
+      }
+
+      // 3. Далёкий гром (второй раскат) — с вероятностью 30% через 1-2 сек
+      if (Math.random() > 0.7) {
+        const farDelay = Math.random() * 1000 + 1000; 
+        const farSound = THUNDER_SOUNDS[Math.floor(Math.random() * THUNDER_SOUNDS.length)];
+        const farPan = Math.random() * 2 - 1; 
+        const farVol = mainVol * 0.25; // Очень тихо (далеко)
+        
+        setTimeout(() => {
+          window.SoundsEngine.play(farSound, { 
+            type: 'effects', pan: farPan, volume: farVol, reverb: true 
+          });
+        }, farDelay);
       }
     };
 
@@ -352,8 +359,8 @@ export const Menu = {
     };
 
     const scheduleLightning = () => {
-      // Интервал между вспышками: от 7 до 15 секунд
-      const delay = Math.random() * 8000 + 7000; 
+      // Интервал между вспышками: от 6 до 15 секунд
+      const delay = Math.random() * 9000 + 6000; 
       this.lightningTimeout = setTimeout(() => { triggerLightning(); scheduleLightning(); }, delay);
     };
     scheduleLightning();
@@ -436,7 +443,6 @@ export const Menu = {
       }
     };
 
-    // Кнопка "Играть" (вызывает game.js или select.js)
     setupSubmenuButton('#btn-play', async () => {
       const mod = await import('./game.js').catch(() => null);
       if (mod && mod.Game) mod.Game.start();

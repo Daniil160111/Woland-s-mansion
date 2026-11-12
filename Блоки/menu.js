@@ -17,13 +17,14 @@ export const Menu = {
   
   currentScreen: 'main', 
   gameMode: null, 
+  currentGameType: null,
   
   buttonsConfig: {
     main: [
       { id: 'btn-play', text: 'Играть', action: 'goto-mode' },
-      { id: 'btn-shop', text: 'Магазин П. У. Галкина', action: 'goto-shop' },
-      { id: 'btn-settings', text: 'Настройки', action: 'goto-settings' },
-      { id: 'btn-about', text: 'Об игре', action: 'goto-about' }
+      { id: 'btn-shop', text: 'Магазин П. У. Галкина', action: 'module-shop' },
+      { id: 'btn-settings', text: 'Настройки', action: 'module-settings' },
+      { id: 'btn-about', text: 'Об игре', action: 'module-about' }
     ],
     mode: [
       { id: 'btn-single', text: 'Одиночная игра', action: 'goto-type', mode: 'one' },
@@ -31,8 +32,8 @@ export const Menu = {
       { id: 'btn-back-mode', text: 'Назад', action: 'back-main' }
     ],
     type: [
-      { id: 'btn-story', text: 'Сюжет', action: 'start-game', type: 'story' },
-      { id: 'btn-endless', text: "Woland's Mansion endless", action: 'start-game', type: 'endless' },
+      { id: 'btn-story', text: 'Сюжет', action: 'module-select' },
+      { id: 'btn-endless', text: "Woland's Mansion endless", action: 'module-endless' },
       { id: 'btn-back-type', text: 'Назад', action: 'back-mode' }
     ]
   },
@@ -55,6 +56,7 @@ export const Menu = {
 
     const isMenu = mode === 'menu';
 
+    // Если меню уже создано
     if (this.isMounted && container.querySelector('.woland-menu')) {
       const menuEl = container.querySelector('.woland-menu');
       const bgWrapper = container.querySelector('.woland-menu__bg-wrapper');
@@ -77,12 +79,38 @@ export const Menu = {
           backBtn.style.pointerEvents = 'auto';
         }, 1500); 
 
+        // Усиливаем музыку и молнии обратно до 100%
+        if (window.SoundsEngine) {
+          let vol = window.SoundsEngine.volumes.music || 0.5;
+          const targetVal = 0.8; // Нормальная громкость
+          const step = (targetVal - vol) / 14; // 0.7 сек (14 шагов по 50мс)
+          const fadeIn = setInterval(() => {
+            vol += step;
+            if (vol >= targetVal) { vol = targetVal; clearInterval(fadeIn); }
+            window.SoundsEngine.setMasterVolume('music', vol);
+            window.SoundsEngine.setMasterVolume('effects', vol); // Усиливаем грозу
+          }, 50);
+        }
+
       } else {
         menuEl.classList.remove('menu-mode', 'dark-shade');
         bgWrapper.classList.remove('normal-scale');
         logoEl.classList.remove('animate-in'); 
         backBtn.style.opacity = '0';
         backBtn.style.pointerEvents = 'none';
+        
+        // Ослабляем музыку и молнии до 50%
+        if (window.SoundsEngine) {
+          let vol = window.SoundsEngine.volumes.music || 0.8;
+          const targetVal = 0.4;
+          const step = (targetVal - vol) / 14;
+          const fadeOut = setInterval(() => {
+            vol += step;
+            if (vol <= targetVal) { vol = targetVal; clearInterval(fadeOut); }
+            window.SoundsEngine.setMasterVolume('music', vol);
+            window.SoundsEngine.setMasterVolume('effects', vol); // Ослабляем грозу
+          }, 50);
+        }
       }
       return;
     }
@@ -119,8 +147,7 @@ export const Menu = {
       <style>
         .woland-menu {
           position: absolute; inset: 0; overflow: hidden; background: #000;
-          /* Плавное появление всего меню (1с) */
-          opacity: 0; transition: opacity 1s ease;
+          opacity: 0; transition: opacity 1.5s ease;
         }
         .woland-menu.active { opacity: 1; }
 
@@ -151,7 +178,7 @@ export const Menu = {
         .woland-menu__logo {
           width: min(75vw, 520px); max-height: 32vh; object-fit: contain;
           opacity: 0; transform: scaleY(0); transform-origin: bottom center;
-          transition: transform 1s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 1s ease;
+          transition: transform 1.5s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 1.5s ease;
         }
         .woland-menu__logo.animate-in { opacity: 1; transform: scaleY(1); }
         .woland-menu.menu-mode .woland-menu__logo-container { top: 2vh; }
@@ -171,7 +198,7 @@ export const Menu = {
         .woland-menu__press-to-continue {
           font-size: clamp(16px, 2.8vh, 24px); color: #dcdcdc; letter-spacing: 2px;
           text-shadow: 0 0 12px rgba(255,0,0,0.6); 
-          transition: opacity 0.5s ease;
+          transition: opacity 0.7s ease;
         }
         .woland-menu__press-to-continue.show { animation: pulse-text 3s infinite ease-in-out; }
         @keyframes pulse-text {
@@ -194,7 +221,6 @@ export const Menu = {
           position: relative;
         }
 
-        /* ★ УЛУЧШЕННЫЕ КНОПКИ С ПЛАВНЫМ ХОВЕРОМ ★ */
         .btn-folder {
           position: relative;
           background: linear-gradient(180deg, #4a1a20 0%, #2a0c10 40%, #110406 100%);
@@ -202,14 +228,13 @@ export const Menu = {
           color: #ffdddd; font-size: clamp(14px, 2.1vh, 18px);
           padding: clamp(10px, 1.5vh, 14px) 20px;
           cursor: pointer; 
-          /* Плавные переходы для всех свойств */
           transition: background 0.4s, border 0.4s, box-shadow 0.4s, transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s;
           text-align: center; 
           box-shadow: 0 6px 20px rgba(0,0,0,0.9), inset 0 2px 4px rgba(255,150,150,0.3), inset 0 -2px 4px rgba(0,0,0,0.8);
           letter-spacing: 2px;
           text-shadow: 0 1px 3px #000;
           clip-path: polygon(15px 0%, 100% 0%, calc(100% - 15px) 100%, 0% 100%);
-          transform: scale(1); /* Базовый масштаб */
+          transform: scale(1);
         }
         
         .btn-folder::before {
@@ -228,12 +253,11 @@ export const Menu = {
           pointer-events: none;
         }
 
-        /* Наведение (или палец над кнопкой) */
         .btn-folder:hover, .btn-folder.hovered {
           background: linear-gradient(180deg, #70252e 0%, #421218 40%, #1a0609 100%);
           border-color: #ff5555; color: #ffffff;
           box-shadow: 0 0 30px rgba(255,30,30,0.6), inset 0 2px 6px rgba(255,200,200,0.4);
-          transform: scale(1.05); /* Увеличение на 5% */
+          transform: scale(1.05);
         }
         .btn-folder:hover::before, .btn-folder.hovered::before {
           background: #70252e; border-color: #ff5555;
@@ -244,7 +268,6 @@ export const Menu = {
           box-shadow: 0 2px 10px rgba(0,0,0,0.8), inset 0 2px 5px rgba(0,0,0,0.5);
         }
 
-        /* ★ ПЛАВНАЯ АНИМАЦИЯ ПОЯВЛЕНИЯ (БЕЗ РЕЗКИХ СКАЧКОВ) ★ */
         @keyframes drop-in {
           0% { opacity: 0; transform: translateY(-100px); }
           60% { opacity: 1; transform: translateY(5px); }
@@ -252,7 +275,6 @@ export const Menu = {
           100% { opacity: 1; transform: translateY(0); }
         }
 
-        /* ★ ПЛАВНАЯ АНИМАЦИЯ ИСЧЕЗНОВЕНИЯ ★ */
         @keyframes fall-down {
           0% { opacity: 1; transform: translateY(0); }
           100% { opacity: 0; transform: translateY(100px); }
@@ -275,12 +297,12 @@ export const Menu = {
 
         .woland-menu__footer {
           color: #666; font-size: 11px; letter-spacing: 1px; 
-          transition: opacity 1s ease;
+          transition: opacity 1.5s ease;
         }
 
         .woland-menu__version {
           color: #444; font-size: 6px; font-family: monospace; letter-spacing: 0px;
-          transition: opacity 1s ease;
+          transition: opacity 1.5s ease;
         }
       </style>
     `;
@@ -292,58 +314,57 @@ export const Menu = {
     const pressText = container.querySelector('.woland-menu__press-to-continue');
     const footerEl = container.querySelector('.woland-menu__footer');
     const versionEl = container.querySelector('#version-display');
+    const titleScreen = container.querySelector('.woland-menu__title-screen');
 
-    // ★ ПОСЛЕДОВАТЕЛЬНОСТЬ ЗАПУСКА (ТАЙМИНГИ) ★
+    // ★ ПОСЛЕДОВАТЕЛЬНОСТЬ ЗАПУСКА ★
     
-    // 0.1с черный экран
+    // 0.5с черный экран
     setTimeout(() => {
-      menuEl.classList.add('active'); // Фон плавно появляется (1с)
-      footerEl.style.opacity = '1';   // HTML Gaming появляется (1с)
-      versionEl.style.opacity = '1';  // Версия появляется (1с)
-    }, 100);
+      menuEl.classList.add('active'); // Фон плавно появляется (1.5с)
+      footerEl.style.opacity = '1';   // HTML Gaming появляется (1.5с)
+      versionEl.style.opacity = '1';  // Версия появляется (1.5с)
+    }, 500);
 
-    // Через 1.1с (0.1 черный + 1с фон) — включаем музыку и логотип
+    // Через 2с (0.5 черный + 1.5с фон) — музыка и логотип
     setTimeout(() => {
       if (window.SoundsEngine) {
         window.SoundsEngine.init();
-        if (window.SoundsEngine.loadedBuffers && window.SoundsEngine.loadedBuffers['menu_theme']) {
-          if (window.SoundsEngine.currentMusicTrack !== 'menu_theme') {
-            window.SoundsEngine.setMasterVolume('music', 0);
-            window.SoundsEngine.play('menu_theme', { loop: true, type: 'music' });
-            window.SoundsEngine.currentMusicTrack = 'menu_theme';
-            
-            let vol = 0; 
-            const targetVal = window.SoundsEngine.volumes.music || 0.8;
-            const step = targetVal / 20;
-            const fadeIn = setInterval(() => {
-              vol += step;
-              if (vol >= targetVal) { vol = targetVal; clearInterval(fadeIn); }
-              window.SoundsEngine.setMasterVolume('music', vol);
-            }, 50);
+        
+        const playMenuMusic = () => {
+          if (window.SoundsEngine.loadedBuffers && window.SoundsEngine.loadedBuffers['menu_theme']) {
+            if (window.SoundsEngine.currentMusicTrack !== 'menu_theme') {
+              window.SoundsEngine.setMasterVolume('music', 0);
+              window.SoundsEngine.play('menu_theme', { loop: true, type: 'music' });
+              window.SoundsEngine.currentMusicTrack = 'menu_theme';
+              
+              let vol = 0; 
+              const targetVal = 0.8; // 100%
+              const step = targetVal / 20;
+              const fadeIn = setInterval(() => {
+                vol += step;
+                if (vol >= targetVal) { vol = targetVal; clearInterval(fadeIn); }
+                window.SoundsEngine.setMasterVolume('music', vol);
+              }, 50);
+            } else {
+              // Если уже играет, просто ставим громкость (после возврата)
+              window.SoundsEngine.setMasterVolume('music', 0.8);
+            }
+          } else {
+            setTimeout(playMenuMusic, 100);
           }
-        } else {
-           // Если музыка еще грузится, ждем
-           let checkMusic = setInterval(() => {
-             if (window.SoundsEngine.loadedBuffers && window.SoundsEngine.loadedBuffers['menu_theme']) {
-               clearInterval(checkMusic);
-               window.SoundsEngine.play('menu_theme', { loop: true, type: 'music' });
-               window.SoundsEngine.currentMusicTrack = 'menu_theme';
-               window.SoundsEngine.setMasterVolume('music', window.SoundsEngine.volumes.music || 0.8);
-             }
-           }, 100);
-        }
+        };
+        playMenuMusic();
       }
       
-      // Логотип появляется (1с)
-      logoEl.classList.add('animate-in');
-    }, 1100);
+      logoEl.classList.add('animate-in'); // Логотип появляется (1.5с)
+    }, 2000);
 
-    // Через 2.1с (1.1с + 1с логотип) — появляется текст и активируется клик
+    // Через 3.5с (2с + 1.5с логотип) — текст и сенсор
     setTimeout(() => {
       pressText.style.opacity = '1';
       pressText.classList.add('show');
-      container.querySelector('.woland-menu__title-screen').style.pointerEvents = 'auto';
-    }, 2100);
+      titleScreen.style.pointerEvents = 'auto';
+    }, 3500);
 
     // Гроза
     const playThunder = () => {
@@ -398,7 +419,7 @@ export const Menu = {
         if (versionEl) versionEl.textContent = 'Версия неизвестна';
       });
 
-    // ★ РЕНДЕР КНОПОК С ПЛАВНОЙ АНИМАЦИЕЙ И ЭФФЕКТОМ НАВЕДЕНИЯ ★
+    // Переключение экранов
     this.renderScreen = (screenName, containerEl, animateIn = true) => {
       const config = this.buttonsConfig[screenName];
       const btnContainer = containerEl.querySelector('#menu-buttons-container');
@@ -411,12 +432,10 @@ export const Menu = {
           oldButtons.forEach((btn, index) => {
             btn.style.animation = 'none'; 
             void btn.offsetWidth;
-            // Плавное падение (0.4с) с задержкой
             const delay = (oldButtons.length - 1 - index) * 0.05; 
             btn.style.animation = `fall-down 0.4s cubic-bezier(0.4, 0, 1, 1) ${delay}s forwards`;
           });
 
-          // Ждем полного завершения анимации + задержка, чтобы не было мигания
           setTimeout(resolve, 400 + (oldButtons.length * 50) + 50); 
         });
       };
@@ -429,19 +448,16 @@ export const Menu = {
           btn.id = btnInfo.id;
           btn.innerHTML = `<span>${btnInfo.text}</span>`;
           
-          // Обработчики для эффекта hover (наведение/касание)
           btn.addEventListener('pointerenter', () => btn.classList.add('hovered'));
           btn.addEventListener('pointerleave', () => btn.classList.remove('hovered'));
           btn.addEventListener('pointerdown', () => btn.classList.add('hovered'));
           btn.addEventListener('pointerup', () => btn.classList.remove('hovered'));
-          // Для мобильных (если палец ушел)
           btn.addEventListener('touchcancel', () => btn.classList.remove('hovered'));
 
           btnContainer.appendChild(btn);
 
           if (animateIn) {
             btn.style.opacity = '0';
-            // Плавное появление (0.5с) с задержкой
             btn.style.animation = `drop-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) ${index * 0.1}s forwards`;
           } else {
             btn.style.opacity = '1';
@@ -460,28 +476,84 @@ export const Menu = {
       });
     };
 
+    // ★ ОБРАБОТЧИК КЛИКОВ С ПРАВИЛЬНЫМИ МОДУЛЯМИ ★
     this.handleButtonClick = (btnInfo, containerEl) => {
+      if (this.isTransitioning) return;
+      this.isTransitioning = true;
+
       const playSfx = () => { if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' }); };
       playSfx();
 
-      switch (btnInfo.action) {
-        case 'goto-mode':
-          this.renderScreen('mode', containerEl);
-          break;
-        case 'goto-type':
-          this.gameMode = btnInfo.mode;
-          this.renderScreen('type', containerEl);
-          break;
-        case 'back-main':
-          this.renderScreen('main', containerEl);
-          break;
-        case 'back-mode':
-          this.renderScreen('mode', containerEl);
-          break;
-        case 'start-game':
-          console.log('START GAME:', btnInfo.type, this.gameMode);
-          break;
+      // 1. Плавное затухание музыки и эффектов за 0.7с (14 шагов по 50мс)
+      if (window.SoundsEngine) {
+        let vol = window.SoundsEngine.volumes.music || 0.8;
+        const targetVal = 0;
+        const step = vol / 14;
+        const fadeOut = setInterval(() => {
+          vol -= step;
+          if (vol <= 0) { vol = 0; clearInterval(fadeOut); }
+          window.SoundsEngine.setMasterVolume('music', vol);
+          window.SoundsEngine.setMasterVolume('effects', vol);
+        }, 50);
       }
+
+      // 2. Затемнение экрана за 1.5с и переход
+      const menuEl = containerEl.querySelector('.woland-menu');
+      menuEl.style.transition = 'opacity 1.5s ease';
+      menuEl.style.opacity = '0';
+
+      setTimeout(async () => {
+        if (window.SoundsEngine) window.SoundsEngine.stopAll();
+        
+        try {
+          if (btnInfo.action === 'goto-mode') {
+            this.renderScreen('mode', containerEl);
+            menuEl.style.opacity = '1';
+            this.isTransitioning = false;
+          } 
+          else if (btnInfo.action === 'goto-type') {
+            this.gameMode = btnInfo.mode;
+            this.renderScreen('type', containerEl);
+            menuEl.style.opacity = '1';
+            this.isTransitioning = false;
+          }
+          else if (btnInfo.action === 'back-main') {
+            this.renderScreen('main', containerEl);
+            menuEl.style.opacity = '1';
+            this.isTransitioning = false;
+          }
+          else if (btnInfo.action === 'back-mode') {
+            this.renderScreen('mode', containerEl);
+            menuEl.style.opacity = '1';
+            this.isTransitioning = false;
+          }
+          // Запуск модулей
+          else if (btnInfo.action === 'module-select') {
+            const mod = await import('./select.js');
+            if (mod && mod.Select) mod.Select.start(this.gameMode || 'one');
+          }
+          else if (btnInfo.action === 'module-endless') {
+            const mod = await import('./endless.js');
+            if (mod && mod.Endless) mod.Endless.start(this.gameMode || 'one');
+          }
+          else if (btnInfo.action === 'module-shop') {
+            const mod = await import('./shop.js');
+            if (mod && mod.Shop) mod.Shop.start();
+          }
+          else if (btnInfo.action === 'module-settings') {
+            const mod = await import('./settings.js');
+            if (mod && mod.Settings) mod.Settings.start();
+          }
+          else if (btnInfo.action === 'module-about') {
+            const mod = await import('./about.js');
+            if (mod && mod.About) mod.About.start();
+          }
+        } catch (e) {
+          console.error('Ошибка перехода:', e);
+          menuEl.style.opacity = '1';
+          this.isTransitioning = false;
+        }
+      }, 1500);
     };
 
     const goToMenu = () => {
@@ -490,6 +562,19 @@ export const Menu = {
       
       menuEl.classList.add('menu-mode', 'dark-shade');
       if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' });
+
+      // Музыка затихает до 50% (0.7с)
+      if (window.SoundsEngine) {
+        let vol = window.SoundsEngine.volumes.music || 0.8;
+        const targetVal = 0.4;
+        const step = (vol - targetVal) / 14;
+        const fadeOut = setInterval(() => {
+          vol -= step;
+          if (vol <= targetVal) { vol = targetVal; clearInterval(fadeOut); }
+          window.SoundsEngine.setMasterVolume('music', vol);
+          window.SoundsEngine.setMasterVolume('effects', vol);
+        }, 50);
+      }
 
       setTimeout(() => {
         this.renderScreen('main', container, true);
@@ -520,6 +605,19 @@ export const Menu = {
 
         menuEl.classList.remove('menu-mode', 'dark-shade');
         
+        // Музыка усиливается обратно до 100% (0.7с)
+        if (window.SoundsEngine) {
+          let vol = window.SoundsEngine.volumes.music || 0.4;
+          const targetVal = 0.8;
+          const step = (targetVal - vol) / 14;
+          const fadeIn = setInterval(() => {
+            vol += step;
+            if (vol >= targetVal) { vol = targetVal; clearInterval(fadeIn); }
+            window.SoundsEngine.setMasterVolume('music', vol);
+            window.SoundsEngine.setMasterVolume('effects', vol);
+          }, 50);
+        }
+
         // Возвращаем текст "Нажмите, чтобы продолжить"
         pressText.style.opacity = '1';
         pressText.classList.add('show');

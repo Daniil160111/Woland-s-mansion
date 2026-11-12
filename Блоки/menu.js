@@ -55,7 +55,7 @@ export const Menu = {
 
     const isMenu = mode === 'menu';
 
-    // Если меню уже создано, просто переключаем состояние
+    // Если меню уже создано
     if (this.isMounted && container.querySelector('.woland-menu')) {
       const menuEl = container.querySelector('.woland-menu');
       const bgWrapper = container.querySelector('.woland-menu__bg-wrapper');
@@ -203,10 +203,7 @@ export const Menu = {
           cursor: pointer; 
           transition: background 0.2s, border 0.2s, box-shadow 0.2s, transform 0.1s;
           text-align: center; 
-          box-shadow: 
-            0 6px 20px rgba(0,0,0,0.9), 
-            inset 0 2px 4px rgba(255,150,150,0.3),
-            inset 0 -2px 4px rgba(0,0,0,0.8);
+          box-shadow: 0 6px 20px rgba(0,0,0,0.9), inset 0 2px 4px rgba(255,150,150,0.3), inset 0 -2px 4px rgba(0,0,0,0.8);
           letter-spacing: 2px;
           text-shadow: 0 1px 3px #000;
           clip-path: polygon(15px 0%, 100% 0%, calc(100% - 15px) 100%, 0% 100%);
@@ -230,9 +227,7 @@ export const Menu = {
         .btn-folder:hover {
           background: linear-gradient(180deg, #70252e 0%, #421218 40%, #1a0609 100%);
           border-color: #ff5555; color: #ffffff;
-          box-shadow: 
-            0 0 30px rgba(255,30,30,0.6), 
-            inset 0 2px 6px rgba(255,200,200,0.4);
+          box-shadow: 0 0 30px rgba(255,30,30,0.6), inset 0 2px 6px rgba(255,200,200,0.4);
           transform: translateY(-2px);
         }
         
@@ -241,7 +236,6 @@ export const Menu = {
           box-shadow: 0 2px 10px rgba(0,0,0,0.8), inset 0 2px 5px rgba(0,0,0,0.5);
         }
 
-        /* Пружина с уменьшенной амплитудой */
         @keyframes drop-in {
           0% { opacity: 0; transform: translateY(-100vh); }
           70% { opacity: 1; transform: translateY(6px); }
@@ -292,23 +286,37 @@ export const Menu = {
       logoEl.classList.add('animate-in');
     }, 50);
 
+    // ★ ИСПРАВЛЕННЫЙ ЗАПУСК МУЗЫКИ (С ОЖИДАНИЕМ) ★
     if (window.SoundsEngine) {
       window.SoundsEngine.init();
-      if (window.SoundsEngine.currentMusicTrack !== 'menu_theme') {
-        window.SoundsEngine.setMasterVolume('music', 0);
-        window.SoundsEngine.play('menu_theme', { loop: true, type: 'music' });
-        window.SoundsEngine.currentMusicTrack = 'menu_theme';
-        let vol = 0; 
-        const targetVal = window.SoundsEngine.volumes.music || 0.8;
-        const step = targetVal / 20;
-        const fadeIn = setInterval(() => {
-          vol += step;
-          if (vol >= targetVal) { vol = targetVal; clearInterval(fadeIn); }
-          window.SoundsEngine.setMasterVolume('music', vol);
-        }, 50);
-      }
+      
+      const playMenuMusic = () => {
+        // Проверяем, загружен ли трек
+        if (window.SoundsEngine.loadedBuffers && window.SoundsEngine.loadedBuffers['menu_theme']) {
+          if (window.SoundsEngine.currentMusicTrack !== 'menu_theme') {
+            window.SoundsEngine.setMasterVolume('music', 0);
+            window.SoundsEngine.play('menu_theme', { loop: true, type: 'music' });
+            window.SoundsEngine.currentMusicTrack = 'menu_theme';
+            
+            let vol = 0; 
+            const targetVal = window.SoundsEngine.volumes.music || 0.8;
+            const step = targetVal / 20;
+            const fadeIn = setInterval(() => {
+              vol += step;
+              if (vol >= targetVal) { vol = targetVal; clearInterval(fadeIn); }
+              window.SoundsEngine.setMasterVolume('music', vol);
+            }, 50);
+          }
+        } else {
+          // Если трек еще грузится, ждем 100мс и пробуем снова
+          setTimeout(playMenuMusic, 100);
+        }
+      };
+      
+      playMenuMusic();
     }
 
+    // Гроза
     const playThunder = () => {
       if (!window.SoundsEngine) return;
       const mainSound = THUNDER_SOUNDS[Math.floor(Math.random() * THUNDER_SOUNDS.length)];
@@ -351,6 +359,7 @@ export const Menu = {
     };
     scheduleLightning();
 
+    // Версия
     fetch('./version.json')
       .then(res => res.json())
       .then(data => {
@@ -362,6 +371,7 @@ export const Menu = {
         if (versionEl) versionEl.textContent = 'Версия неизвестна';
       });
 
+    // Переключение экранов
     this.renderScreen = (screenName, containerEl, animateIn = true) => {
       const config = this.buttonsConfig[screenName];
       const btnContainer = containerEl.querySelector('#menu-buttons-container');

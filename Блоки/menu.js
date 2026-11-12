@@ -4,19 +4,9 @@ const MENU_BG = './Текстуры/Меню/Фон.jpg';
 const MENU_LIGHTNING = './Текстуры/Меню/Фон-молния.jpg';
 const MENU_LOGO = './Текстуры/Меню/Название.jpg';
 
-// ★ МАКСИМАЛЬНО РЕАЛИСТИЧНЫЙ СПИСОК ГРОЗОВЫХ ЗВУКОВ ★
 const THUNDER_SOUNDS = [
-  'thunder',        // Гром.wav
-  'lightning_fx',   // Молния.wav
-  'storm_1',        // Гроза1.mp3
-  'storm_2',        // Гроза2.mp3
-  'storm_3',        // Гроза3.mp3
-  'storm_4',        // Гроза4.mp3
-  'storm_5',        // Гроза5.mp3
-  'storm_6',        // Гроза6.mp3
-  'storm_7',        // Гроза7.mp3
-  'storm_8',        // Гроза8.mp3
-  'storm_9'         // Гроза9.mp3
+  'thunder', 'lightning_fx', 'storm_1', 'storm_2', 'storm_3', 
+  'storm_4', 'storm_5', 'storm_6', 'storm_7', 'storm_8', 'storm_9'
 ];
 
 export const Menu = {
@@ -24,12 +14,37 @@ export const Menu = {
   lightningTimeout: null,
   currentState: 'title',
   isTransitioning: false,
+  
+  // Отслеживание текущего экрана меню
+  currentScreen: 'main', 
+  gameMode: null, // 'one' или 'two'
+  
+  // Конфигурация кнопок для каждого экрана
+  buttonsConfig: {
+    main: [
+      { id: 'btn-play', text: 'Играть', action: 'goto-mode' },
+      { id: 'btn-shop', text: 'Магазин П. У. Галкина', action: 'goto-shop' },
+      { id: 'btn-settings', text: 'Настройки', action: 'goto-settings' },
+      { id: 'btn-about', text: 'Об игре', action: 'goto-about' }
+    ],
+    mode: [
+      { id: 'btn-single', text: 'Одиночная игра', action: 'goto-type', mode: 'one' },
+      { id: 'btn-multi', text: 'Мультиплеер', action: 'goto-type', mode: 'two' },
+      { id: 'btn-back-mode', text: 'Назад', action: 'back-main' }
+    ],
+    type: [
+      { id: 'btn-story', text: 'Сюжет', action: 'start-game', type: 'story' },
+      { id: 'btn-endless', text: "Woland's Mansion endless", action: 'start-game', type: 'endless' },
+      { id: 'btn-back-type', text: 'Назад', action: 'back-mode' }
+    ]
+  },
 
   start(mode = 'title') {
     if (mode === true) mode = 'menu';
     if (mode === false || !mode) mode = 'title';
     this.currentState = mode;
     this.isTransitioning = false;
+    this.currentScreen = 'main'; // Сброс при запуске
 
     const container = document.getElementById('game-container');
     if (!container) throw new Error('game-container was not found');
@@ -42,24 +57,19 @@ export const Menu = {
 
     const isMenu = mode === 'menu';
 
+    // Если меню уже создано
     if (this.isMounted && container.querySelector('.woland-menu')) {
       const menuEl = container.querySelector('.woland-menu');
       const bgWrapper = container.querySelector('.woland-menu__bg-wrapper');
-      const backBtn = container.querySelector('#btn-back');
+      const backBtn = container.querySelector('#btn-title-screen');
       const logoEl = container.querySelector('.woland-menu__logo');
-      const buttons = container.querySelectorAll('.woland-menu__content .btn-folder');
-
+      
       if (isMenu) {
         menuEl.classList.add('menu-mode', 'dark-shade');
         bgWrapper.classList.add('normal-scale');
         logoEl.classList.add('animate-in');
         
-        buttons.forEach((btn, index) => {
-          btn.style.animation = 'none'; 
-          btn.style.opacity = '0';
-          void btn.offsetWidth; 
-          btn.style.animation = `drop-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.1}s forwards`;
-        });
+        this.renderScreen('main', container, true); // true = анимация появления
 
         backBtn.style.animation = 'none';
         backBtn.style.opacity = '0';
@@ -68,7 +78,7 @@ export const Menu = {
           backBtn.style.transition = 'opacity 1s ease';
           backBtn.style.opacity = '1';
           backBtn.style.pointerEvents = 'auto';
-        }, 1500 + (buttons.length * 100)); 
+        }, 1500); 
 
       } else {
         menuEl.classList.remove('menu-mode', 'dark-shade');
@@ -80,6 +90,7 @@ export const Menu = {
       return;
     }
 
+    // --- ПЕРВИЧНАЯ ОТРИСОВКА ---
     container.innerHTML = `
       <section class="woland-menu ${isMenu ? 'menu-mode dark-shade' : ''}" aria-label="Главное меню">
         <div class="woland-menu__bg-wrapper">
@@ -94,12 +105,8 @@ export const Menu = {
         </div>
 
         <div class="woland-menu__buttons-screen">
-          <div class="woland-menu__content">
-            <button class="btn-folder" id="btn-play" type="button"><span>Играть</span></button>
-            <button class="btn-folder" id="btn-shop" type="button"><span>Магазин П. У. Галкина</span></button>
-            <button class="btn-folder" id="btn-settings" type="button"><span>Настройки</span></button>
-            <button class="btn-folder" id="btn-about" type="button"><span>Об игре</span></button>
-            <button class="btn-link" id="btn-back" type="button" style="opacity: 0; pointer-events: none;">Обратно на титульный</button>
+          <div class="woland-menu__content" id="menu-buttons-container">
+            <!-- Кнопки рендерятся динамически -->
           </div>
         </div>
 
@@ -107,7 +114,11 @@ export const Menu = {
           <img class="woland-menu__logo" src="${logo}" alt="Woland's Mansion" onerror="this.style.display='none';">
         </div>
 
-        <div class="woland-menu__footer">HTML Gaming 2026</div>
+        <div class="woland-menu__bottom">
+          <button class="btn-link" id="btn-title-screen" type="button" style="opacity: 0; pointer-events: none;">Титульный экран</button>
+          <div class="woland-menu__footer">HTML Gaming 2026</div>
+          <div class="woland-menu__version" id="version-display">v0.0.0</div>
+        </div>
       </section>
       
       <style>
@@ -182,6 +193,7 @@ export const Menu = {
         .woland-menu__content {
           display: flex; flex-direction: column; gap: clamp(10px, 2vh, 16px);
           width: 100%; max-width: 350px; margin-top: 20vh;
+          position: relative;
         }
 
         .btn-folder {
@@ -200,7 +212,7 @@ export const Menu = {
           letter-spacing: 2px;
           text-shadow: 0 1px 3px #000;
           clip-path: polygon(15px 0%, 100% 0%, calc(100% - 15px) 100%, 0% 100%);
-          opacity: 0; 
+          /* opacity: 0; Устанавливается через JS */
         }
         
         .btn-folder::before {
@@ -244,18 +256,29 @@ export const Menu = {
           100% { opacity: 0; transform: translateY(150vh); }
         }
 
+        /* ★ НИЖНИЙ БЛОК: Кнопка, Копирайт, Версия ★ */
+        .woland-menu__bottom {
+          position: absolute; bottom: 10px; left: 0; width: 100%;
+          display: flex; flex-direction: column; align-items: center; gap: 5px;
+          z-index: 10;
+        }
+
         .btn-link {
           background: transparent; border: none; color: #999;
           font-size: clamp(11px, 1.6vh, 13px); cursor: pointer;
           text-decoration: underline; text-underline-offset: 5px;
-          margin-top: 8px; transition: color 0.3s, opacity 1s ease; letter-spacing: 1px;
+          margin-bottom: 5px; transition: color 0.3s, opacity 1s ease; letter-spacing: 1px;
           opacity: 0;
         }
         .btn-link:hover { color: #ff4d4d; }
 
         .woland-menu__footer {
-          position: absolute; bottom: 10px; width: 100%; text-align: center;
-          color: #666; font-size: 11px; letter-spacing: 1px; z-index: 5; opacity: 0.8;
+          color: #666; font-size: 11px; letter-spacing: 1px; 
+        }
+
+        .woland-menu__version {
+          color: #444; font-size: 6px; /* В 2 раза тоньше */
+          font-family: monospace; letter-spacing: 0px;
         }
       </style>
     `;
@@ -263,8 +286,8 @@ export const Menu = {
 
     const menuEl = container.querySelector('.woland-menu');
     const logoEl = container.querySelector('.woland-menu__logo');
-    const buttons = container.querySelectorAll('.woland-menu__content .btn-folder');
-    const backBtn = container.querySelector('#btn-back');
+    const backBtn = container.querySelector('#btn-title-screen');
+    const buttonsContainer = container.querySelector('#menu-buttons-container');
 
     requestAnimationFrame(() => {
       menuEl.classList.add('active');
@@ -294,31 +317,16 @@ export const Menu = {
     // Гроза
     const playThunder = () => {
       if (!window.SoundsEngine) return;
-      
       const mainSound = THUNDER_SOUNDS[Math.floor(Math.random() * THUNDER_SOUNDS.length)];
       const mainPan = Math.random() * 2 - 1;
       const mainVol = Math.random() * 0.5 + 0.5;
-      
       window.SoundsEngine.play(mainSound, { type: 'effects', pan: mainPan, volume: mainVol, reverb: true });
-
+      
       if (Math.random() > 0.4) {
-        const echoDelay = Math.random() * 600 + 200; 
-        const echoSound = THUNDER_SOUNDS[Math.floor(Math.random() * THUNDER_SOUNDS.length)];
-        const echoPan = mainPan > 0 ? -0.9 : 0.9; 
-        const echoVol = mainVol * (Math.random() * 0.4 + 0.3); 
         setTimeout(() => {
-          window.SoundsEngine.play(echoSound, { type: 'effects', pan: echoPan, volume: echoVol, reverb: true });
-        }, echoDelay);
-      }
-
-      if (Math.random() > 0.7) {
-        const farDelay = Math.random() * 1000 + 1000; 
-        const farSound = THUNDER_SOUNDS[Math.floor(Math.random() * THUNDER_SOUNDS.length)];
-        const farPan = Math.random() * 2 - 1; 
-        const farVol = mainVol * 0.25; 
-        setTimeout(() => {
-          window.SoundsEngine.play(farSound, { type: 'effects', pan: farPan, volume: farVol, reverb: true });
-        }, farDelay);
+          const echoSound = THUNDER_SOUNDS[Math.floor(Math.random() * THUNDER_SOUNDS.length)];
+          window.SoundsEngine.play(echoSound, { type: 'effects', pan: mainPan > 0 ? -0.9 : 0.9, volume: mainVol * 0.4, reverb: true });
+        }, Math.random() * 600 + 200);
       }
     };
 
@@ -349,96 +357,148 @@ export const Menu = {
     };
     scheduleLightning();
 
+    // Загрузка версии из version.json
+    fetch('./version.json')
+      .then(res => res.json())
+      .then(data => {
+        const versionEl = container.querySelector('#version-display');
+        if (versionEl && data.version) versionEl.textContent = data.version;
+      })
+      .catch(() => {
+        const versionEl = container.querySelector('#version-display');
+        if (versionEl) versionEl.textContent = 'Версия неизвестна';
+      });
+
+    // ★ ЛОГИКА ПЕРЕКЛЮЧЕНИЯ ЭКРАНОВ (С АНИМАЦИЯМИ)
+    this.renderScreen = (screenName, containerEl, animateIn = true) => {
+      const config = this.buttonsConfig[screenName];
+      const container = containerEl.querySelector('#menu-buttons-container');
+      const oldButtons = container.querySelectorAll('.btn-folder');
+
+      // 1. Анимация исчезновения старых кнопок
+      const hideOld = () => {
+        return new Promise(resolve => {
+          if (oldButtons.length === 0) return resolve();
+          oldButtons.forEach((btn, index) => {
+            btn.style.animation = 'none'; 
+            void btn.offsetWidth;
+            const delay = (oldButtons.length - 1 - index) * 0.05; 
+            btn.style.animation = `fall-down 0.5s cubic-bezier(0.6, 0.04, 0.98, 0.335) ${delay}s forwards`;
+          });
+          setTimeout(resolve, 600); // Ждем падения
+        });
+      };
+
+      // 2. Рендер новых кнопок
+      const renderNew = () => {
+        container.innerHTML = ''; // Очищаем
+        config.forEach((btnInfo, index) => {
+          const btn = document.createElement('button');
+          btn.className = 'btn-folder';
+          btn.id = btnInfo.id;
+          btn.innerHTML = `<span>${btnInfo.text}</span>`;
+          container.appendChild(btn);
+
+          // Анимация появления (если нужно)
+          if (animateIn) {
+            btn.style.opacity = '0';
+            btn.style.animation = `drop-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.1}s forwards`;
+          } else {
+            btn.style.opacity = '1';
+          }
+
+          // Обработчик
+          btn.onclick = () => {
+            if (this.isTransitioning) return;
+            this.handleButtonClick(btnInfo);
+          };
+        });
+      };
+
+      // Запускаем процесс
+      hideOld().then(() => {
+        renderNew();
+        this.currentScreen = screenName;
+      });
+    };
+
+    // ★ ОБРАБОТЧИК КЛИКОВ
+    this.handleButtonClick = (btnInfo) => {
+      const playSfx = () => { if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' }); };
+      playSfx();
+
+      switch (btnInfo.action) {
+        case 'goto-mode':
+          this.renderScreen('mode', container);
+          break;
+        case 'goto-type':
+          this.gameMode = btnInfo.mode;
+          this.renderScreen('type', container);
+          break;
+        case 'back-main':
+          this.renderScreen('main', container);
+          break;
+        case 'back-mode':
+          this.renderScreen('mode', container);
+          break;
+        case 'goto-shop':
+        case 'goto-settings':
+        case 'goto-about':
+        case 'start-game':
+          // Временная заглушка (тут будет вызов соответствующих модулей)
+          console.log(`Нажата кнопка: ${btnInfo.action}`, btnInfo);
+          // Пример для игры:
+          /*
+          if (btnInfo.action === 'start-game') {
+            this.isTransitioning = true;
+            menuEl.style.opacity = '0';
+            setTimeout(async () => {
+               const mod = await import('./game.js');
+               if (mod.Game) mod.Game.start(btnInfo.type, this.gameMode);
+            }, 1500);
+          }
+          */
+          break;
+      }
+    };
+
+    // Запуск начального экрана
+    this.renderScreen('main', container, true);
+
     const goToMenu = () => {
       if (this.isTransitioning || this.currentState === 'menu') return;
       this.isTransitioning = true;
-      buttons.forEach((btn, index) => {
-        btn.style.animation = `drop-in 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) ${index * 0.1}s forwards`;
-      });
+      
       menuEl.classList.add('menu-mode', 'dark-shade');
       if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' });
+
       setTimeout(() => {
         backBtn.style.transition = 'opacity 1s ease';
         backBtn.style.opacity = '1';
         backBtn.style.pointerEvents = 'auto';
         this.isTransitioning = false;
-      }, 1500 + (buttons.length * 100));
+      }, 1500);
     };
 
     container.querySelector('.woland-menu__title-screen').onclick = () => goToMenu();
 
-    const playSfx = () => { if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' }); };
-
+    // Кнопка "Титульный экран"
     if (backBtn) {
       backBtn.onclick = () => {
         if (this.isTransitioning) return;
         this.isTransitioning = true;
-        playSfx();
+        if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' });
+        
         backBtn.style.opacity = '0';
         backBtn.style.pointerEvents = 'none';
-        buttons.forEach((btn, index) => {
-          btn.style.animation = 'none'; 
-          void btn.offsetWidth;
-          const delay = (buttons.length - 1 - index) * 0.05; 
-          btn.style.animation = `fall-down 0.6s cubic-bezier(0.6, 0.04, 0.98, 0.335) ${delay}s forwards`;
-        });
+        
+        // Сбрасываем меню на главный экран
+        this.currentScreen = 'main';
+        this.renderScreen('main', container, false); // false = без анимации, просто мгновенно исчезают
+
         menuEl.classList.remove('menu-mode', 'dark-shade');
         setTimeout(() => { this.isTransitioning = false; }, 1000);
       };
     }
-
-    const setupSubmenuButton = (btnId, moduleImportCallback) => {
-      const btn = container.querySelector(btnId);
-      if (btn) {
-        btn.onclick = () => {
-          if (this.isTransitioning) return;
-          this.isTransitioning = true;
-          playSfx();
-
-          if (window.SoundsEngine) {
-            let vol = window.SoundsEngine.volumes.music || 0.8;
-            const step = vol / 10;
-            const musicFadeOut = setInterval(() => {
-              vol -= step;
-              if (vol <= 0) { vol = 0; clearInterval(musicFadeOut); }
-              window.SoundsEngine.setMasterVolume('music', vol);
-              window.SoundsEngine.setMasterVolume('effects', vol);
-            }, 50);
-          }
-
-          menuEl.style.transition = 'opacity 1.5s ease';
-          menuEl.style.opacity = '0';
-
-          setTimeout(async () => {
-            if (window.SoundsEngine) window.SoundsEngine.stopAll();
-            try { await moduleImportCallback(); } catch (e) {
-              this.isTransitioning = false;
-              menuEl.style.opacity = '1';
-            }
-          }, 1500);
-        };
-      }
-    };
-
-    // ★ ИСПРАВЛЕНО: Кнопка "Играть" вызывает select.js ★
-    setupSubmenuButton('#btn-play', async () => {
-      const mod = await import('./select.js').catch(() => null);
-      if (mod && mod.Select) mod.Select.start('one'); // Передаем режим 'one'
-    });
-    
-    setupSubmenuButton('#btn-shop', async () => {
-      const mod = await import('./shop.js').catch(() => null);
-      if (mod && mod.Shop) mod.Shop.start();
-    });
-    
-    setupSubmenuButton('#btn-settings', async () => {
-      const mod = await import('./settings.js').catch(() => null);
-      if (mod && mod.Settings) mod.Settings.start();
-    });
-    
-    setupSubmenuButton('#btn-about', async () => {
-      const mod = await import('./about.js').catch(() => null);
-      if (mod && mod.About) mod.About.start();
-    });
   }
 };

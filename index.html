@@ -82,10 +82,9 @@
     /* --- ЭКРАН ЗАГРУЗКИ --- */
     #loading-screen { background: #050407; z-index: 90; padding: 0; overflow: hidden; }
     
-    /* Центральный блок */
     .loading-center {
       display: flex; flex-direction: column; align-items: center; gap: clamp(10px, 2vh, 20px);
-      width: 90%; max-width: 600px; margin-top: -10vh; /* Чуть выше центра */
+      width: 90%; max-width: 600px; margin-top: -10vh;
     }
 
     #loading-logo {
@@ -111,7 +110,6 @@
       position: relative;
       box-shadow: inset 0 2px 5px rgba(0,0,0,0.8);
     }
-    /* Свечение и пузыри */
     #progress-fill {
       height: 100%; width: 0%; 
       background: linear-gradient(90deg, #ff0000, #ff5500, #ffaa00, #ff5500, #ff0000);
@@ -123,8 +121,6 @@
       position: relative;
       overflow: hidden;
     }
-    
-    /* Пузыри внутри лавы (эффект лавовой лампы) */
     #progress-fill::after {
       content: '';
       position: absolute; inset: 0;
@@ -135,7 +131,6 @@
       background-size: 50px 50px;
       animation: bubbles-move 3s linear infinite;
     }
-
     @keyframes lava-flow {
       0% { background-position: 100% 0; }
       100% { background-position: -100% 0; }
@@ -145,12 +140,10 @@
       100% { background-position: 100px 0; }
     }
 
-    /* Текст размеров под полоской */
     #loading-size {
       font-size: clamp(12px, 1.6vh, 16px); color: #aaa; margin-top: 5px;
     }
 
-    /* Статус в правом нижнем углу (только первая папка) */
     #loading-status {
       position: absolute; bottom: max(25px, env(safe-area-inset-bottom)); right: max(25px, env(safe-area-inset-right));
       font-size: clamp(12px, 1.6vh, 16px); color: #666; text-align: right;
@@ -213,7 +206,6 @@
       <div id="loading-size">0.0 МБ / 0.0 МБ</div>
     </div>
 
-    <!-- Статус только первой папки в правом нижнем углу -->
     <div id="loading-status">Подготовка...</div>
     
   </section>
@@ -298,7 +290,7 @@
       if (id) $(id).classList.add('active');
     };
 
-    // ★ НОВЫЙ ЗАПУСК: L1 -> L2 -> Дисклеймер
+    // ★ НОВЫЙ ЗАПУСК (Быстрый)
     async function startApp() {
       if (isMobile() && !isPWA()) {
         activateScreen('install-screen');
@@ -317,7 +309,6 @@
 
       await new Promise(r => setTimeout(r, 5000)); // 5 секунд
 
-      // Затемнение 1.5с
       fade.style.transition = 'opacity 1.5s ease';
       fade.style.opacity = '1';
       await new Promise(r => setTimeout(r, 1500));
@@ -329,7 +320,6 @@
       
       await new Promise(r => setTimeout(r, 2500));
 
-      // L2 исчезает 1.5с
       if (imgL2) { imgL2.classList.remove('visible'); }
       await new Promise(r => setTimeout(r, 1500));
 
@@ -368,11 +358,11 @@
 
       } catch (err) {
         console.error('Критическая ошибка:', err);
-        $('loading-status').textContent = 'Ошибка загрузки. Проверьте консоль.';
+        $('loading-status').textContent = 'Ошибка загрузки';
       }
     }, { once: true });
 
-    // ★ ЗАГРУЗЧИК
+    // ★ МОМЕНТАЛЬНЫЙ ЗАГРУЗЧИК С ПРОВЕРКОЙ КЭША
     async function loadAssets() {
       const status = $('loading-status');
       const progress = $('progress-fill');
@@ -390,51 +380,64 @@
 
         const total = queue.length;
         let loaded = 0;
-        let totalBytes = 0;
         let loadedBytes = 0;
         window.GameAssets = window.GameAssets || {};
 
-        // Считаем общий вес
-        for (const item of queue) {
-          try {
-            const head = await fetch(item.url, { method: 'HEAD' });
-            const size = parseInt(head.headers.get('Content-Length') || '0', 10);
-            totalBytes += size;
-          } catch (e) {}
+        // 1. МОМЕНТАЛЬНАЯ ПРОВЕРКА (Читаем список скачанного из localStorage)
+        let cachedList = [];
+        try { cachedList = JSON.parse(localStorage.getItem('woland_cache_list')) || []; } catch(e) {}
+
+        // 2. Если всё уже скачано — пропускаем загрузку
+        if (cachedList.length >= total) {
+          status.textContent = 'Все файлы в кэше';
+          progress.style.width = '100%';
+          sizeText.textContent = 'Готово';
+          console.log('Все файлы уже в кэше, загрузка не требуется.');
+          return;
         }
 
+        // 3. Скачиваем только недостающие
         for (const item of queue) {
-          // В правом нижнем углу показываем ТОЛЬКО первую папку (Звуки или Текстуры)
-          // Но так как мы идем по списку, просто показываем тип текущего файла
-          status.textContent = `${item.type}: ${loaded + 1}/${total}`;
-          
-          try {
-            const res = await fetch(item.url);
-            if (!res.ok) throw new Error('404');
-            const blob = await res.blob();
-            loadedBytes += blob.size;
+          if (cachedList.includes(item.url)) {
+            // Файл уже есть, пропускаем
+            loaded++;
+            loadedBytes += 1024 * 100; // Приблизительный вес для прогресса
+          } else {
+            // Файла нет — качаем
+            status.textContent = `Загрузка: ${item.type} [${loaded + 1}/${total}]`;
+            try {
+              const res = await fetch(item.url);
+              if (!res.ok) throw new Error('404');
+              const blob = await res.blob();
+              loadedBytes += blob.size;
 
-            if (item.type === 'Текстуры') {
-              window.GameAssets[item.id] = URL.createObjectURL(blob);
-            } else if (window.SoundsEngine) {
-              await window.SoundsEngine.loadSound(item.id, blob);
+              if (item.type === 'Текстуры') {
+                window.GameAssets[item.id] = URL.createObjectURL(blob);
+              } else if (window.SoundsEngine) {
+                await window.SoundsEngine.loadSound(item.id, blob);
+              }
+
+              // Добавляем в кэш-лист
+              cachedList.push(item.url);
+            } catch (e) {
+              console.warn(`[Пропуск] ${item.url}`);
             }
-          } catch (e) {
-            console.warn(`[Пропуск] ${item.url}`);
+            loaded++;
           }
           
-          loaded++;
-          
-          // Обновляем полоску и текст МБ
-          const percent = totalBytes > 0 ? Math.round((loadedBytes / totalBytes) * 100) : Math.round((loaded / total) * 100);
+          const percent = Math.round((loaded / total) * 100);
           progress.style.width = `${percent}%`;
-          sizeText.textContent = `${(loadedBytes / 1024 / 1024).toFixed(1)} МБ / ${(totalBytes / 1024 / 1024).toFixed(1)} МБ`;
+          sizeText.textContent = `${(loadedBytes / 1024 / 1024).toFixed(1)} МБ / ~${(total * 0.1).toFixed(1)} МБ`;
         }
-        status.textContent = 'Готово';
+
+        // 4. Сохраняем обновленный список
+        localStorage.setItem('woland_cache_list', JSON.stringify(cachedList));
+        status.textContent = 'Ресурсы готовы!';
+        
       } catch (e) {
         console.warn('Ошибка манифеста:', e);
         status.textContent = 'Ошибка';
-        sizeText.textContent = '0.0 МБ / 0.0 МБ';
+        sizeText.textContent = '0.0 МБ';
         progress.style.width = '100%';
       }
     }

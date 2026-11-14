@@ -16,7 +16,7 @@ export const Menu = {
   isTransitioning: false,
   
   currentScreen: 'main', 
-  gameMode: null, // 'one' или 'two'
+  gameMode: null, 
   
   buttonsConfig: {
     main: [
@@ -30,7 +30,7 @@ export const Menu = {
       { id: 'btn-back-mode', text: 'Назад', action: 'back-main', sound: 'btn_back' }
     ],
     type: [
-      { id: 'btn-story', text: 'Сюжет', action: 'start-story', sound: 'btn_click' },
+      { id: 'btn-story', text: 'Сюжет', action: 'start-story', sound: 'transition' },
       { id: 'btn-endless', text: "Woland's Mansion endless", action: 'start-endless', sound: 'transition' },
       { id: 'btn-back-type', text: 'Назад', action: 'back-mode', sound: 'btn_back' }
     ]
@@ -54,6 +54,7 @@ export const Menu = {
 
     const isMenu = mode === 'menu';
 
+    // Если меню уже создано
     if (this.isMounted && container.querySelector('.woland-menu')) {
       const menuEl = container.querySelector('.woland-menu');
       const bgWrapper = container.querySelector('.woland-menu__bg-wrapper');
@@ -65,6 +66,7 @@ export const Menu = {
         bgWrapper.classList.add('normal-scale');
         logoEl.classList.add('animate-in');
         
+        // Просто меняем кнопки на главное меню, БЕЗ выключения экрана
         this.renderScreen('main', container, true);
 
         backBtn.style.animation = 'none';
@@ -76,8 +78,9 @@ export const Menu = {
           backBtn.style.pointerEvents = 'auto';
         }, 1500); 
 
+        // Восстанавливаем музыку (если она была приглушена)
         if (window.SoundsEngine) {
-          let vol = window.SoundsEngine.volumes.music || 0.5;
+          let vol = window.SoundsEngine.volumes.music || 0.4;
           const targetVal = 0.8; 
           const step = (targetVal - vol) / 14; 
           const fadeIn = setInterval(() => {
@@ -94,22 +97,11 @@ export const Menu = {
         logoEl.classList.remove('animate-in'); 
         backBtn.style.opacity = '0';
         backBtn.style.pointerEvents = 'none';
-        
-        if (window.SoundsEngine) {
-          let vol = window.SoundsEngine.volumes.music || 0.8;
-          const targetVal = 0.4;
-          const step = (targetVal - vol) / 14;
-          const fadeOut = setInterval(() => {
-            vol += step;
-            if (vol <= targetVal) { vol = targetVal; clearInterval(fadeOut); }
-            window.SoundsEngine.setMasterVolume('music', vol);
-            window.SoundsEngine.setMasterVolume('effects', vol);
-          }, 50);
-        }
       }
       return;
     }
 
+    // --- ПЕРВИЧНАЯ ОТРИСОВКА ---
     container.innerHTML = `
       <section class="woland-menu ${isMenu ? 'menu-mode dark-shade' : ''}" aria-label="Главное меню">
         <div class="woland-menu__bg-wrapper">
@@ -342,80 +334,80 @@ export const Menu = {
         window.SoundsEngine.play(btnInfo.sound, { type: 'effects' });
       }
 
-      if (window.SoundsEngine) {
-        let vol = window.SoundsEngine.volumes.music || 0.8;
-        const targetVal = 0;
-        const step = vol / 14;
-        const fadeOut = setInterval(() => {
-          vol -= step;
-          if (vol <= 0) { vol = 0; clearInterval(fadeOut); }
-          window.SoundsEngine.setMasterVolume('music', vol);
-          window.SoundsEngine.setMasterVolume('effects', vol);
-        }, 50);
+      // ВНУТРИ МЕНЮ: Просто меняем экраны, БЕЗ затемнения и выключения музыки
+      if (btnInfo.action === 'goto-mode') {
+        this.renderScreen('mode', containerEl);
+        this.isTransitioning = false;
+      } 
+      else if (btnInfo.action === 'goto-type') {
+        this.gameMode = btnInfo.mode;
+        this.renderScreen('type', containerEl);
+        this.isTransitioning = false;
       }
-
-      const menuEl = containerEl.querySelector('.woland-menu');
-      menuEl.style.transition = 'opacity 1.5s ease';
-      menuEl.style.opacity = '0';
-
-      setTimeout(async () => {
-        if (window.SoundsEngine) window.SoundsEngine.stopAll();
-        
-        try {
-          if (btnInfo.action === 'goto-mode') {
-            this.renderScreen('mode', containerEl);
-            menuEl.style.opacity = '1';
-            this.isTransitioning = false;
-          } 
-          else if (btnInfo.action === 'goto-type') {
-            this.gameMode = btnInfo.mode;
-            this.renderScreen('type', containerEl);
-            menuEl.style.opacity = '1';
-            this.isTransitioning = false;
-          }
-          else if (btnInfo.action === 'back-main') {
-            this.renderScreen('main', containerEl);
-            menuEl.style.opacity = '1';
-            this.isTransitioning = false;
-          }
-          else if (btnInfo.action === 'back-mode') {
-            this.renderScreen('mode', containerEl);
-            menuEl.style.opacity = '1';
-            this.isTransitioning = false;
-          }
-          
-          // ★ 4 ТИПА ВЫЗОВА ★
-          else if (btnInfo.action === 'start-story') {
-            const mod = await import('./select.js');
-            if (this.gameMode === 'two') {
-              if (mod && mod.Select) mod.Select.start('two_players');
-            } else {
-              if (mod && mod.Select) mod.Select.start('one_player');
-            }
-          }
-          else if (btnInfo.action === 'start-endless') {
-            const mod = await import('./endless.js');
-            if (this.gameMode === 'two') {
-              if (mod && mod.Endless) mod.Endless.start('two_players_endless');
-            } else {
-              if (mod && mod.Endless) mod.Endless.start('one_player_endless');
-            }
-          }
-          
-          else if (btnInfo.action === 'module-settings') {
-            const mod = await import('./settings.js');
-            if (mod && mod.Settings) mod.Settings.start();
-          }
-          else if (btnInfo.action === 'module-about') {
-            const mod = await import('./about.js');
-            if (mod && mod.About) mod.About.start();
-          }
-        } catch (e) {
-          console.error('Ошибка перехода:', e);
-          menuEl.style.opacity = '1';
-          this.isTransitioning = false;
+      else if (btnInfo.action === 'back-main') {
+        this.renderScreen('main', containerEl);
+        this.isTransitioning = false;
+      }
+      else if (btnInfo.action === 'back-mode') {
+        this.renderScreen('mode', containerEl);
+        this.isTransitioning = false;
+      }
+      
+      // ПЕРЕХОД В ДРУГИЕ БЛОКИ: Затухание и затемнение
+      else {
+        // 1. Затухание звука за 0.7с
+        if (window.SoundsEngine) {
+          let vol = window.SoundsEngine.volumes.music || 0.8;
+          const targetVal = 0;
+          const step = vol / 14;
+          const fadeOut = setInterval(() => {
+            vol -= step;
+            if (vol <= 0) { vol = 0; clearInterval(fadeOut); }
+            window.SoundsEngine.setMasterVolume('music', vol);
+            window.SoundsEngine.setMasterVolume('effects', vol);
+          }, 50);
         }
-      }, 1500);
+
+        // 2. Затемнение экрана за 1.5с
+        const menuEl = containerEl.querySelector('.woland-menu');
+        menuEl.style.transition = 'opacity 1.5s ease';
+        menuEl.style.opacity = '0';
+
+        setTimeout(async () => {
+          if (window.SoundsEngine) window.SoundsEngine.stopAll();
+          
+          try {
+            if (btnInfo.action === 'start-story') {
+              const mod = await import('./select.js');
+              if (this.gameMode === 'two') {
+                if (mod && mod.Select) mod.Select.start('two_players');
+              } else {
+                if (mod && mod.Select) mod.Select.start('one_player');
+              }
+            }
+            else if (btnInfo.action === 'start-endless') {
+              const mod = await import('./endless.js');
+              if (this.gameMode === 'two') {
+                if (mod && mod.Endless) mod.Endless.start('two_players_endless');
+              } else {
+                if (mod && mod.Endless) mod.Endless.start('one_player_endless');
+              }
+            }
+            else if (btnInfo.action === 'module-settings') {
+              const mod = await import('./settings.js');
+              if (mod && mod.Settings) mod.Settings.start();
+            }
+            else if (btnInfo.action === 'module-about') {
+              const mod = await import('./about.js');
+              if (mod && mod.About) mod.About.start();
+            }
+          } catch (e) {
+            console.error('Ошибка перехода:', e);
+            menuEl.style.opacity = '1';
+            this.isTransitioning = false;
+          }
+        }, 1500);
+      }
     };
 
     const goToMenu = () => {

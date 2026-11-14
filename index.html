@@ -1,488 +1,360 @@
-// Блоки/menu.js
-
-const MENU_BG = './Текстуры/Меню/Фон.jpg';
-const MENU_LIGHTNING = './Текстуры/Меню/Фон-молния.jpg';
-const MENU_LOGO = './Текстуры/Меню/Название.jpg';
-
-const THUNDER_SOUNDS = [
-  'thunder', 'lightning_fx', 'storm_1', 'storm_2', 'storm_3', 
-  'storm_4', 'storm_5', 'storm_6', 'storm_7', 'storm_8', 'storm_9'
-];
-
-export const Menu = {
-  isMounted: false,
-  lightningTimeout: null,
-  currentState: 'title',
-  isTransitioning: false,
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0616">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Woland's Mansion</title>
   
-  currentScreen: 'main', 
-  gameMode: null, // 'one' или 'two'
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icon/icon.jpg" type="image/jpeg">
+  <link rel="apple-touch-icon" href="./icon/icon.jpg">
   
-  buttonsConfig: {
-    main: [
-      { id: 'btn-play', text: 'Играть', action: 'goto-mode', sound: 'transition' },
-      { id: 'btn-settings', text: 'Настройки', action: 'module-settings', sound: 'transition' },
-      { id: 'btn-about', text: 'Об игре', action: 'module-about', sound: 'transition' }
-    ],
-    mode: [
-      { id: 'btn-single', text: 'Одиночная игра', action: 'goto-type', mode: 'one', sound: 'transition' },
-      { id: 'btn-multi', text: 'Мультиплеер', action: 'goto-type', mode: 'two', sound: 'transition' },
-      { id: 'btn-back-mode', text: 'Назад', action: 'back-main', sound: 'btn_back' }
-    ],
-    type: [
-      { id: 'btn-story', text: 'Сюжет', action: 'start-story', sound: 'btn_click' },
-      { id: 'btn-endless', text: "Woland's Mansion endless", action: 'start-endless', sound: 'transition' },
-      { id: 'btn-back-type', text: 'Назад', action: 'back-mode', sound: 'btn_back' }
-    ]
-  },
-
-  start(mode = 'title') {
-    if (mode === true) mode = 'menu';
-    if (mode === false || !mode) mode = 'title';
-    this.currentState = mode;
-    this.isTransitioning = false;
-    this.currentScreen = 'main';
-
-    const container = document.getElementById('game-container');
-    if (!container) throw new Error('game-container was not found');
-
-    if (this.lightningTimeout) clearTimeout(this.lightningTimeout);
-
-    const bg = (window.GameAssets && window.GameAssets.menu_bg) || MENU_BG;
-    const lightning = (window.GameAssets && window.GameAssets.menu_lightning) || MENU_LIGHTNING;
-    const logo = (window.GameAssets && window.GameAssets.menu_logo) || MENU_LOGO;
-
-    const isMenu = mode === 'menu';
-
-    if (this.isMounted && container.querySelector('.woland-menu')) {
-      const menuEl = container.querySelector('.woland-menu');
-      const bgWrapper = container.querySelector('.woland-menu__bg-wrapper');
-      const backBtn = container.querySelector('#btn-title-screen');
-      const logoEl = container.querySelector('.woland-menu__logo');
-      
-      if (isMenu) {
-        menuEl.classList.add('menu-mode', 'dark-shade');
-        bgWrapper.classList.add('normal-scale');
-        logoEl.classList.add('animate-in');
-        
-        this.renderScreen('main', container, true);
-
-        backBtn.style.animation = 'none';
-        backBtn.style.opacity = '0';
-        backBtn.style.pointerEvents = 'none';
-        setTimeout(() => {
-          backBtn.style.transition = 'opacity 1s ease';
-          backBtn.style.opacity = '1';
-          backBtn.style.pointerEvents = 'auto';
-        }, 1500); 
-
-        if (window.SoundsEngine) {
-          let vol = window.SoundsEngine.volumes.music || 0.5;
-          const targetVal = 0.8; 
-          const step = (targetVal - vol) / 14; 
-          const fadeIn = setInterval(() => {
-            vol += step;
-            if (vol >= targetVal) { vol = targetVal; clearInterval(fadeIn); }
-            window.SoundsEngine.setMasterVolume('music', vol);
-            window.SoundsEngine.setMasterVolume('effects', vol);
-          }, 50);
-        }
-
-      } else {
-        menuEl.classList.remove('menu-mode', 'dark-shade');
-        bgWrapper.classList.remove('normal-scale');
-        logoEl.classList.remove('animate-in'); 
-        backBtn.style.opacity = '0';
-        backBtn.style.pointerEvents = 'none';
-        
-        if (window.SoundsEngine) {
-          let vol = window.SoundsEngine.volumes.music || 0.8;
-          const targetVal = 0.4;
-          const step = (targetVal - vol) / 14;
-          const fadeOut = setInterval(() => {
-            vol += step;
-            if (vol <= targetVal) { vol = targetVal; clearInterval(fadeOut); }
-            window.SoundsEngine.setMasterVolume('music', vol);
-            window.SoundsEngine.setMasterVolume('effects', vol);
-          }, 50);
-        }
-      }
-      return;
+  <style>
+    @font-face {
+      font-family: 'WolandFont';
+      src: url('./supermario286rusbylyajka.otf') format('opentype');
+      font-display: swap;
     }
 
-    container.innerHTML = `
-      <section class="woland-menu ${isMenu ? 'menu-mode dark-shade' : ''}" aria-label="Главное меню">
-        <div class="woland-menu__bg-wrapper">
-          <div class="woland-menu__bg" style="background-image: url('${bg}')"></div>
-          <div class="woland-menu__lightning" style="background-image: url('${lightning}')"></div>
-        </div>
-        
-        <div class="woland-menu__shade"></div>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'WolandFont', 'Courier New', monospace; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #050407; color: #fff; touch-action: none; }
+    img, canvas, video { pointer-events: none; -webkit-user-drag: none; }
 
-        <div class="woland-menu__title-screen">
-          <div class="woland-menu__press-to-continue" style="opacity: 0;">Нажмите, чтобы продолжить</div>
-        </div>
+    .screen { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.5s, visibility 0.5s; padding: 20px; text-align: center; }
+    .screen.active { opacity: 1; visibility: visible; pointer-events: auto; }
 
-        <div class="woland-menu__buttons-screen">
-          <div class="woland-menu__content" id="menu-buttons-container"></div>
-        </div>
+    /* L1 / L2 */
+    #screen-l1, #screen-l2 { background: #000; padding: 0; z-index: 200; }
+    .l-image { width: 80vw; max-width: 800px; max-height: 80vh; object-fit: contain; opacity: 0; transition: opacity 1.5s ease; }
+    .l-image.visible { opacity: 1; }
 
-        <div class="woland-menu__logo-container">
-          <img class="woland-menu__logo" src="${logo}" alt="Woland's Mansion" onerror="this.style.display='none';">
-        </div>
+    /* Установка */
+    #install-screen { background: radial-gradient(ellipse at center, #201020, #050407 75%); overflow-y: auto; justify-content: flex-start; padding-top: 5vh; z-index: 110; }
+    .install-content { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; max-width: 600px; margin: auto 0; gap: 15px; }
+    #install-screen > .install-content > img { width: min(80vw, 400px); max-height: 20vh; object-fit: contain; filter: drop-shadow(0 0 15px rgba(255,0,0,0.5)); }
+    #install-screen p { color: #aaa; font-size: clamp(12px, 1.8vh, 16px); line-height: 1.5; }
+    .install-card { width: 100%; padding: 15px; border: 1px solid #562323; border-radius: 8px; background: rgba(255,255,255,0.05); font-size: clamp(11px, 1.6vh, 14px); text-align: left; }
+    .install-card strong { color: #ff7777; display: block; margin-bottom: 4px; }
+    .lang-switch { display: flex; gap: 10px; margin-top: 20px; justify-content: center; flex-wrap: wrap; }
+    .lang-btn { background: transparent; color: #888; border: 1px solid #333; padding: 5px 10px; cursor: pointer; border-radius: 5px; transition: all 0.4s ease; }
+    .lang-btn.active { color: #fff; border-color: #f00; background: rgba(255,0,0,0.2); }
+    .btn { padding: 12px 30px; font-size: 16px; background: linear-gradient(135deg, #800000, #400000); color: #fff; border: 2px solid #f00; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(255,0,0,0.4); width: 100%; max-width: 300px; }
+    #footer-credit { position: absolute; bottom: 15px; width: 100%; text-align: center; font-size: 12px; color: #555; }
+    #install-btn { display: none; }
 
-        <div class="woland-menu__bottom">
-          <button class="btn-link" id="btn-title-screen" type="button" style="opacity: 0; pointer-events: none;">Титульный экран</button>
-          <div class="woland-menu__footer" style="opacity: 0;">HTML Gaming 2026</div>
-          <div class="woland-menu__version" id="version-display" style="opacity: 0;">v0.0.0</div>
-        </div>
-      </section>
+    /* Дисклеймер */
+    #disclaimer-screen { background: #000; cursor: pointer; z-index: 100; padding: 0; }
+    #disclaimer-img { width: 100vw; height: 100vh; object-fit: cover; display: block; }
+
+    /* Затемнение */
+    #fade-overlay { position: fixed; inset: 0; background: #000; z-index: 50; pointer-events: none; opacity: 0; transition: opacity 1.5s ease-in-out; }
+
+    /* Загрузка */
+    #loading-screen { background: #050407; z-index: 90; padding: 0; overflow: hidden; }
+    .loading-center { display: flex; flex-direction: column; align-items: center; gap: 15px; width: 90%; max-width: 600px; margin-top: -10vh; }
+    #loading-logo { width: min(80vw, 500px); max-height: 25vh; object-fit: contain; }
+    
+    .loader-title { display: flex; gap: 3px; font-size: clamp(20px, 4vh, 32px); text-shadow: 0 0 10px #f00; }
+    .loader-title span { display: inline-block; animation: wave-sequence 1.5s infinite linear; }
+    @keyframes wave-sequence { 0%, 60%, 100% { transform: translateY(0); opacity: 0.5; } 20% { transform: translateY(-10px); opacity: 1; color: #f00; } }
+
+    .progress { width: 80%; max-width: 400px; height: 10px; background: #222; border-radius: 10px; overflow: hidden; position: relative; box-shadow: inset 0 2px 5px rgba(0,0,0,0.8); display: none; }
+    #progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ff0000, #ff5500, #ffaa00, #ff5500, #ff0000); background-size: 200% 100%; animation: lava-flow 2s linear infinite; transition: width 0.2s ease; border-radius: 10px; box-shadow: 0 0 15px rgba(255, 50, 0, 0.8); position: relative; overflow: hidden; }
+    #progress-fill::after { content: ''; position: absolute; inset: 0; background-image: radial-gradient(circle at 20% 50%, rgba(255,255,255,0.6) 2px, transparent 3px), radial-gradient(circle at 60% 30%, rgba(255,255,255,0.4) 3px, transparent 4px); background-size: 50px 50px; animation: bubbles-move 3s linear infinite; }
+    @keyframes lava-flow { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+    @keyframes bubbles-move { 0% { background-position: 0 0; } 100% { background-position: 100px 0; } }
+
+    #loading-size { font-size: 14px; color: #aaa; display: none; }
+    #loading-status { position: absolute; bottom: 25px; right: 25px; font-size: 14px; color: #666; text-align: right; }
+
+    #game-container { position: fixed; inset: 0; z-index: 10; display: none; }
+    #game-container.active { display: block; }
+  </style>
+</head>
+<body>
+
+  <section id="screen-l1" class="screen"><img id="img-l1" class="l-image" src="./Текстуры/Меню/L1.jpg" alt="L1" onerror="this.style.display='none';"></section>
+  <section id="screen-l2" class="screen"><img id="img-l2" class="l-image" src="./Текстуры/Меню/l2.jpg" alt="L2" onerror="this.style.display='none';"></section>
+
+  <section id="install-screen" class="screen">
+    <div class="install-content">
+      <img src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" onerror="this.hidden=true">
+      <p data-i18n="install_hint">Для комфортной игры на телефоне установите приложение.</p>
+      <div class="install-card"><strong>iPhone / iPad (Safari)</strong><span data-i18n="ios_text">Поделиться → На экран "Домой"</span></div>
+      <div class="install-card"><strong>Android (Chrome / Samsung)</strong><span data-i18n="android_text">Меню (⋮) → Установить приложение</span></div>
+      <button id="install-btn" class="btn" data-i18n="install_btn">Установить приложение</button>
+      <div class="lang-switch">
+        <button class="lang-btn active" data-lang="ru">RU</button><button class="lang-btn" data-lang="en">EN</button><button class="lang-btn" data-lang="fr">FR</button><button class="lang-btn" data-lang="es">ES</button><button class="lang-btn" data-lang="it">IT</button>
+      </div>
+    </div>
+    <div id="footer-credit">HTML Gaming 2026</div>
+  </section>
+
+  <section id="disclaimer-screen" class="screen">
+    <img id="disclaimer-img" src="./Текстуры/Меню/Дисклеймер.jpg" alt="Disclaimer" onerror="this.style.display='none';">
+  </section>
+
+  <section id="loading-screen" class="screen">
+    <div class="loading-center">
+      <img id="loading-logo" src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" onerror="this.hidden=true">
+      <div class="loader-title" id="loader-title"></div>
+      <div class="progress" id="progress-bar"><div id="progress-fill"></div></div>
+      <div id="loading-size">0.0 МБ / 0.0 МБ</div>
+    </div>
+    <div id="loading-status">Подготовка...</div>
+  </section>
+
+  <div id="game-container"></div>
+  <div id="fade-overlay"></div>
+
+  <script type="module">
+    'use strict';
+
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('dragstart', e => e.preventDefault());
+    document.addEventListener('selectstart', e => e.preventDefault());
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {});
+    }
+
+    const $ = id => document.getElementById(id);
+    const textContainer = $('loader-title');
+    [..."Загрузка..."].forEach((char, index) => {
+      const span = document.createElement('span');
+      span.textContent = char;
+      span.style.animationDelay = `${index * 0.1}s`;
+      textContainer.appendChild(span);
+    });
+
+    const translations = {
+      ru: { install_hint: "Для комфортной игры на телефоне установите приложение.", ios_text: "Поделиться → На экран 'Домой'", android_text: "Меню (⋮) → Установить приложение", install_btn: "Установить приложение" },
+      en: { install_hint: "For the best experience on mobile, install the app.", ios_text: "Share → Add to Home Screen", android_text: "Menu (⋮) → Install app", install_btn: "Install App" },
+      fr: { install_hint: "Pour une meilleure expérience, installez l'application.", ios_text: "Partager → Sur l'écran d'accueil", android_text: "Menu (⋮) → Installer l'application", install_btn: "Installer l'App" },
+      es: { install_hint: "Para una mejor experiencia, instala la aplicación.", ios_text: "Compartir → Añadir a pantalla de inicio", android_text: "Menú (⋮) → Instalar aplicación", install_btn: "Instalar App" },
+      it: { install_hint: "Per un'esperienza migliore, installa l'app.", ios_text: "Condividi → Aggiungi alla schermata Home", android_text: "Menu (⋮) → Installa app", install_btn: "Installa App" }
+    };
+
+    let currentLang = 'ru';
+    async function setLanguage(lang, force = false) {
+      if (currentLang === lang && !force) return;
+      currentLang = lang;
+      document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.lang === lang));
+      const elements = document.querySelectorAll('[data-i18n]');
+      elements.forEach(el => { el.style.opacity = '0'; });
+      await new Promise(r => setTimeout(r, 250));
+      elements.forEach(el => {
+        const key = el.dataset.i18n;
+        if (translations[lang][key]) el.innerHTML = translations[lang][key];
+        el.style.opacity = '1';
+      });
+    }
+    document.querySelectorAll('.lang-btn').forEach(btn => btn.addEventListener('click', () => setLanguage(btn.dataset.lang)));
+
+    function isPWA() { return window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches || window.navigator.standalone === true; }
+    function isMobile() { return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches); }
+
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; $('install-btn').style.display = 'inline-block'; });
+    $('install-btn').addEventListener('click', async () => { if (deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; $('install-btn').style.display = 'none'; } });
+
+    const activateScreen = (id) => {
+      document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+      if (id) $(id).classList.add('active');
+    };
+
+    async function startApp() {
+      if (isMobile() && !isPWA()) {
+        activateScreen('install-screen'); setLanguage('ru', true); return;
+      }
+
+      const imgL1 = $('img-l1'), imgL2 = $('img-l2'), fade = $('fade-overlay');
+
+      activateScreen('screen-l1');
+      fade.style.transition = 'none'; fade.style.opacity = '0';
+      if (imgL1) imgL1.classList.add('visible');
+
+      await new Promise(r => setTimeout(r, 5000));
+
+      fade.style.transition = 'opacity 1.5s ease'; fade.style.opacity = '1';
+      await new Promise(r => setTimeout(r, 1500));
+
+      activateScreen('screen-l2');
+      if (imgL2) imgL2.classList.add('visible');
+      fade.style.opacity = '0';
       
-      <style>
-        .woland-menu { position: absolute; inset: 0; overflow: hidden; background: #000; opacity: 0; transition: opacity 1.5s ease; }
-        .woland-menu.active { opacity: 1; }
-        .woland-menu__bg-wrapper { position: absolute; inset: 0; z-index: 0; transform: scale(1.50); transition: transform 1.8s cubic-bezier(0.25, 1, 0.5, 1); }
-        .woland-menu.menu-mode .woland-menu__bg-wrapper { transform: scale(1.00); }
-        .woland-menu__bg, .woland-menu__lightning { position: absolute; inset: 0; background-size: cover; background-position: center; }
-        .woland-menu__lightning { opacity: 0; pointer-events: none; mix-blend-mode: screen; }
-        .woland-menu__shade { position: absolute; inset: 0; z-index: 1; background: rgba(0, 0, 0, 0.3); transition: background 1.5s ease; }
-        .woland-menu.dark-shade .woland-menu__shade { background: rgba(0, 0, 0, 0.7); }
-        .woland-menu__logo-container { position: absolute; top: 10vh; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; justify-content: center; pointer-events: none; width: 100%; transition: top 1.5s cubic-bezier(0.25, 1, 0.5, 1); }
-        .woland-menu__logo { width: min(75vw, 520px); max-height: 32vh; object-fit: contain; opacity: 0; transform: scaleY(0); transform-origin: bottom center; transition: transform 1.5s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 1.5s ease; }
-        .woland-menu__logo.animate-in { opacity: 1; transform: scaleY(1); }
-        .woland-menu.menu-mode .woland-menu__logo-container { top: 2vh; }
-        .woland-menu.menu-mode .woland-menu__logo { transform: scale(0.68) scaleY(1); transform-origin: top center; }
-        .woland-menu__title-screen { position: absolute; inset: 0; z-index: 5; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 12vh; transition: opacity 0.6s ease, visibility 0.6s; }
-        .woland-menu.menu-mode .woland-menu__title-screen { opacity: 0; visibility: hidden; pointer-events: none; }
-        .woland-menu__press-to-continue { font-size: clamp(16px, 2.8vh, 24px); color: #dcdcdc; letter-spacing: 2px; text-shadow: 0 0 12px rgba(255,0,0,0.6); transition: opacity 0.7s ease; }
-        .woland-menu__press-to-continue.show { animation: pulse-text 3s infinite ease-in-out; }
-        @keyframes pulse-text { 0% { opacity: 0; } 50% { opacity: 1; } 100% { opacity: 0; } }
-        .woland-menu__buttons-screen { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 1.5s ease, visibility 1.5s; }
-        .woland-menu.menu-mode .woland-menu__buttons-screen { opacity: 1; visibility: visible; pointer-events: auto; }
-        .woland-menu__content { display: flex; flex-direction: column; gap: clamp(10px, 2vh, 16px); width: 100%; max-width: 350px; margin-top: 20vh; position: relative; }
-        
-        .btn-folder { position: relative; background: linear-gradient(180deg, #4a1a20 0%, #2a0c10 40%, #110406 100%); border: 2px solid #b33333; color: #ffdddd; font-size: clamp(14px, 2.1vh, 18px); padding: clamp(10px, 1.5vh, 14px) 20px; cursor: pointer; transition: background 0.4s, border 0.4s, box-shadow 0.4s, transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s; text-align: center; box-shadow: 0 6px 20px rgba(0,0,0,0.9), inset 0 2px 4px rgba(255,150,150,0.3), inset 0 -2px 4px rgba(0,0,0,0.8); letter-spacing: 2px; text-shadow: 0 1px 3px #000; clip-path: polygon(15px 0%, 100% 0%, calc(100% - 15px) 100%, 0% 100%); transform: scale(1); }
-        .btn-folder::before { content: ''; position: absolute; top: -10px; left: 18px; width: 40%; height: 10px; background: #4a1a20; border: 2px solid #b33333; border-bottom: none; clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%); box-shadow: inset 0 2px 2px rgba(255,150,150,0.3); transition: background 0.4s, border 0.4s; }
-        .btn-folder::after { content: ''; position: absolute; inset: 2px; border: 1px solid rgba(255, 100, 100, 0.2); clip-path: polygon(13px 0%, 100% 0%, calc(100% - 13px) 100%, 0% 100%); pointer-events: none; }
-        .btn-folder:hover, .btn-folder.hovered { background: linear-gradient(180deg, #70252e 0%, #421218 40%, #1a0609 100%); border-color: #ff5555; color: #ffffff; box-shadow: 0 0 30px rgba(255,30,30,0.6), inset 0 2px 6px rgba(255,200,200,0.4); transform: scale(1.05); }
-        .btn-folder:hover::before, .btn-folder.hovered::before { background: #70252e; border-color: #ff5555; }
-        .btn-folder:active { transform: scale(0.98); box-shadow: 0 2px 10px rgba(0,0,0,0.8), inset 0 2px 5px rgba(0,0,0,0.5); }
-        
-        @keyframes drop-in { 0% { opacity: 0; transform: translateY(-100px); } 60% { opacity: 1; transform: translateY(5px); } 80% { transform: translateY(-2px); } 100% { opacity: 1; transform: translateY(0); } }
-        @keyframes fall-down { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(100px); } }
-        
-        .woland-menu__bottom { position: absolute; bottom: 10px; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 5px; z-index: 10; }
-        .btn-link { background: transparent; border: none; color: #999; font-size: clamp(11px, 1.6vh, 13px); cursor: pointer; text-decoration: underline; text-underline-offset: 5px; margin-bottom: 5px; transition: color 0.3s, opacity 1s ease; letter-spacing: 1px; opacity: 0; }
-        .btn-link:hover { color: #ff4d4d; }
-        .woland-menu__footer { color: #666; font-size: 11px; letter-spacing: 1px; transition: opacity 1.5s ease; }
-        .woland-menu__version { color: #444; font-size: 6px; font-family: monospace; letter-spacing: 0px; transition: opacity 1.5s ease; }
-      </style>
-    `;
-    this.isMounted = true;
+      await new Promise(r => setTimeout(r, 2500));
+      if (imgL2) imgL2.classList.remove('visible');
+      await new Promise(r => setTimeout(r, 1500));
 
-    const menuEl = container.querySelector('.woland-menu');
-    const logoEl = container.querySelector('.woland-menu__logo');
-    const backBtn = container.querySelector('#btn-title-screen');
-    const pressText = container.querySelector('.woland-menu__press-to-continue');
-    const footerEl = container.querySelector('.woland-menu__footer');
-    const versionEl = container.querySelector('#version-display');
-    const titleScreen = container.querySelector('.woland-menu__title-screen');
+      activateScreen('disclaimer-screen');
+    }
 
-    setTimeout(() => {
-      menuEl.classList.add('active');
-      footerEl.style.opacity = '1';
-      versionEl.style.opacity = '1';
-    }, 500);
+    $('disclaimer-screen').addEventListener('click', async () => {
+      const fade = $('fade-overlay');
+      fade.style.transition = 'opacity 1.5s ease-in-out'; fade.style.opacity = '1';
+      await new Promise(r => setTimeout(r, 1500));
 
-    setTimeout(() => {
-      if (window.SoundsEngine) {
-        window.SoundsEngine.init();
-        const playMenuMusic = () => {
-          if (window.SoundsEngine.loadedBuffers && window.SoundsEngine.loadedBuffers['menu_theme']) {
-            if (window.SoundsEngine.currentMusicTrack !== 'menu_theme') {
-              window.SoundsEngine.setMasterVolume('music', 0);
-              window.SoundsEngine.play('menu_theme', { loop: true, type: 'music' });
-              window.SoundsEngine.currentMusicTrack = 'menu_theme';
-              let vol = 0; 
-              const targetVal = 0.8;
-              const step = targetVal / 20;
-              const fadeIn = setInterval(() => {
-                vol += step;
-                if (vol >= targetVal) { vol = targetVal; clearInterval(fadeIn); }
-                window.SoundsEngine.setMasterVolume('music', vol);
-              }, 50);
-            } else {
-              window.SoundsEngine.setMasterVolume('music', 0.8);
-            }
-          } else {
-            setTimeout(playMenuMusic, 100);
-          }
+      activateScreen('loading-screen');
+      await new Promise(r => setTimeout(r, 500));
+      fade.style.opacity = '0';
+
+      try {
+        await import('./Фон/settings-manager.js').then(m => m.Settings.init()).catch(() => {});
+        await import('./Фон/sounds.js').catch(() => {});
+        if (window.SoundsEngine) window.SoundsEngine.init();
+
+        await loadAssets();
+
+        const menuModule = await import('./Блоки/menu.js');
+        if (menuModule && menuModule.Menu) {
+          await menuModule.Menu.start('title');
+        }
+
+        fade.style.transition = 'opacity 1s ease-in-out'; fade.style.opacity = '1';
+        await new Promise(r => setTimeout(r, 1000));
+        
+        activateScreen(null);
+        $('game-container').classList.add('active');
+        fade.style.opacity = '0';
+
+      } catch (err) {
+        console.error('Критическая ошибка:', err);
+        $('loading-status').textContent = 'Ошибка загрузки';
+      }
+    }, { once: true });
+
+    // ★ СИСТЕМА КЭШИРОВАНИЯ (IndexedDB) ★
+    const DB_NAME = 'woland_db';
+    const STORE_NAME = 'assets';
+    let db = null;
+
+    function initDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = (e) => {
+          const d = e.target.result;
+          if (!d.objectStoreNames.contains(STORE_NAME)) d.createObjectStore(STORE_NAME);
         };
-        playMenuMusic();
-      }
-      logoEl.classList.add('animate-in');
-    }, 2000);
-
-    setTimeout(() => {
-      pressText.style.opacity = '1';
-      pressText.classList.add('show');
-      titleScreen.style.pointerEvents = 'auto';
-    }, 3500);
-
-    const playThunder = () => {
-      if (!window.SoundsEngine) return;
-      const mainSound = THUNDER_SOUNDS[Math.floor(Math.random() * THUNDER_SOUNDS.length)];
-      const mainPan = Math.random() * 2 - 1;
-      const mainVol = Math.random() * 0.5 + 0.5;
-      window.SoundsEngine.play(mainSound, { type: 'effects', pan: mainPan, volume: mainVol, reverb: true });
-      
-      if (Math.random() > 0.4) {
-        setTimeout(() => {
-          const echoSound = THUNDER_SOUNDS[Math.floor(Math.random() * THUNDER_SOUNDS.length)];
-          window.SoundsEngine.play(echoSound, { type: 'effects', pan: mainPan > 0 ? -0.9 : 0.9, volume: mainVol * 0.4, reverb: true });
-        }, Math.random() * 600 + 200);
-      }
-    };
-
-    const triggerLightning = () => {
-      const lightningEl = container.querySelector('.woland-menu__lightning');
-      if (!lightningEl) return;
-      const flashSteps = [
-        { opacity: 0.95, duration: 50 }, { opacity: 0.15, duration: 70 },
-        { opacity: 0.80, duration: 40 }, { opacity: 0.30, duration: 100 },
-        { opacity: 1.00, duration: 60 }, { opacity: 0.00, duration: 500 }
-      ];
-      playThunder();
-      let currentStep = 0;
-      const runFlash = () => {
-        if (currentStep >= flashSteps.length) { lightningEl.style.opacity = '0'; return; }
-        const stepData = flashSteps[currentStep];
-        lightningEl.style.transition = `opacity ${stepData.duration / 1000}s ease`;
-        lightningEl.style.opacity = stepData.opacity;
-        currentStep++;
-        setTimeout(runFlash, stepData.duration);
-      };
-      runFlash();
-    };
-
-    const scheduleLightning = () => {
-      const delay = Math.random() * 9000 + 6000; 
-      this.lightningTimeout = setTimeout(() => { triggerLightning(); scheduleLightning(); }, delay);
-    };
-    scheduleLightning();
-
-    fetch('./version.json')
-      .then(res => res.json())
-      .then(data => {
-        if (versionEl && data.version) versionEl.textContent = data.version;
-      })
-      .catch(() => {
-        if (versionEl) versionEl.textContent = 'Версия неизвестна';
+        req.onsuccess = () => { db = req.result; resolve(); };
+        req.onerror = () => reject(req.error);
       });
-
-    this.renderScreen = (screenName, containerEl, animateIn = true) => {
-      const config = this.buttonsConfig[screenName];
-      const btnContainer = containerEl.querySelector('#menu-buttons-container');
-      const oldButtons = btnContainer.querySelectorAll('.btn-folder');
-
-      const hideOld = () => {
-        return new Promise(resolve => {
-          if (oldButtons.length === 0) return resolve();
-          oldButtons.forEach((btn, index) => {
-            btn.style.animation = 'none'; 
-            void btn.offsetWidth;
-            const delay = (oldButtons.length - 1 - index) * 0.05; 
-            btn.style.animation = `fall-down 0.4s cubic-bezier(0.4, 0, 1, 1) ${delay}s forwards`;
-          });
-          setTimeout(resolve, 400 + (oldButtons.length * 50) + 50); 
-        });
-      };
-
-      const renderNew = () => {
-        btnContainer.innerHTML = ''; 
-        config.forEach((btnInfo, index) => {
-          const btn = document.createElement('button');
-          btn.className = 'btn-folder';
-          btn.id = btnInfo.id;
-          btn.innerHTML = `<span>${btnInfo.text}</span>`;
-          
-          btn.addEventListener('pointerenter', () => btn.classList.add('hovered'));
-          btn.addEventListener('pointerleave', () => btn.classList.remove('hovered'));
-          btn.addEventListener('pointerdown', () => btn.classList.add('hovered'));
-          btn.addEventListener('pointerup', () => btn.classList.remove('hovered'));
-          btn.addEventListener('touchcancel', () => btn.classList.remove('hovered'));
-
-          btnContainer.appendChild(btn);
-
-          if (animateIn) {
-            btn.style.opacity = '0';
-            btn.style.animation = `drop-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) ${index * 0.1}s forwards`;
-          } else {
-            btn.style.opacity = '1';
-          }
-
-          btn.onclick = () => {
-            if (this.isTransitioning) return;
-            this.handleButtonClick(btnInfo, containerEl);
-          };
-        });
-      };
-
-      hideOld().then(() => {
-        renderNew();
-        this.currentScreen = screenName;
-      });
-    };
-
-    this.handleButtonClick = (btnInfo, containerEl) => {
-      if (this.isTransitioning) return;
-      this.isTransitioning = true;
-
-      if (window.SoundsEngine && btnInfo.sound) {
-        window.SoundsEngine.play(btnInfo.sound, { type: 'effects' });
-      }
-
-      if (window.SoundsEngine) {
-        let vol = window.SoundsEngine.volumes.music || 0.8;
-        const targetVal = 0;
-        const step = vol / 14;
-        const fadeOut = setInterval(() => {
-          vol -= step;
-          if (vol <= 0) { vol = 0; clearInterval(fadeOut); }
-          window.SoundsEngine.setMasterVolume('music', vol);
-          window.SoundsEngine.setMasterVolume('effects', vol);
-        }, 50);
-      }
-
-      const menuEl = containerEl.querySelector('.woland-menu');
-      menuEl.style.transition = 'opacity 1.5s ease';
-      menuEl.style.opacity = '0';
-
-      setTimeout(async () => {
-        if (window.SoundsEngine) window.SoundsEngine.stopAll();
-        
-        try {
-          if (btnInfo.action === 'goto-mode') {
-            this.renderScreen('mode', containerEl);
-            menuEl.style.opacity = '1';
-            this.isTransitioning = false;
-          } 
-          else if (btnInfo.action === 'goto-type') {
-            this.gameMode = btnInfo.mode;
-            this.renderScreen('type', containerEl);
-            menuEl.style.opacity = '1';
-            this.isTransitioning = false;
-          }
-          else if (btnInfo.action === 'back-main') {
-            this.renderScreen('main', containerEl);
-            menuEl.style.opacity = '1';
-            this.isTransitioning = false;
-          }
-          else if (btnInfo.action === 'back-mode') {
-            this.renderScreen('mode', containerEl);
-            menuEl.style.opacity = '1';
-            this.isTransitioning = false;
-          }
-          
-          // ★ 4 ТИПА ВЫЗОВА ★
-          else if (btnInfo.action === 'start-story') {
-            const mod = await import('./select.js');
-            if (this.gameMode === 'two') {
-              if (mod && mod.Select) mod.Select.start('two_players');
-            } else {
-              if (mod && mod.Select) mod.Select.start('one_player');
-            }
-          }
-          else if (btnInfo.action === 'start-endless') {
-            const mod = await import('./endless.js');
-            if (this.gameMode === 'two') {
-              if (mod && mod.Endless) mod.Endless.start('two_players_endless');
-            } else {
-              if (mod && mod.Endless) mod.Endless.start('one_player_endless');
-            }
-          }
-          
-          else if (btnInfo.action === 'module-settings') {
-            const mod = await import('./settings.js');
-            if (mod && mod.Settings) mod.Settings.start();
-          }
-          else if (btnInfo.action === 'module-about') {
-            const mod = await import('./about.js');
-            if (mod && mod.About) mod.About.start();
-          }
-        } catch (e) {
-          console.error('Ошибка перехода:', e);
-          menuEl.style.opacity = '1';
-          this.isTransitioning = false;
-        }
-      }, 1500);
-    };
-
-    const goToMenu = () => {
-      if (this.isTransitioning || this.currentState === 'menu') return;
-      this.isTransitioning = true;
-      
-      menuEl.classList.add('menu-mode', 'dark-shade');
-      if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' });
-
-      if (window.SoundsEngine) {
-        let vol = window.SoundsEngine.volumes.music || 0.8;
-        const targetVal = 0.4;
-        const step = (vol - targetVal) / 14;
-        const fadeOut = setInterval(() => {
-          vol -= step;
-          if (vol <= targetVal) { vol = targetVal; clearInterval(fadeOut); }
-          window.SoundsEngine.setMasterVolume('music', vol);
-          window.SoundsEngine.setMasterVolume('effects', vol);
-        }, 50);
-      }
-
-      setTimeout(() => {
-        this.renderScreen('main', container, true);
-      }, 100);
-
-      setTimeout(() => {
-        backBtn.style.transition = 'opacity 1s ease';
-        backBtn.style.opacity = '1';
-        backBtn.style.pointerEvents = 'auto';
-        this.isTransitioning = false;
-      }, 1500);
-    };
-
-    container.querySelector('.woland-menu__title-screen').onclick = () => goToMenu();
-
-    if (backBtn) {
-      backBtn.onclick = () => {
-        if (this.isTransitioning) return;
-        this.isTransitioning = true;
-        if (window.SoundsEngine) window.SoundsEngine.play('btn_back', { type: 'effects' });
-        
-        backBtn.style.opacity = '0';
-        backBtn.style.pointerEvents = 'none';
-        
-        this.currentScreen = 'main';
-        const btnContainer = container.querySelector('#menu-buttons-container');
-        btnContainer.innerHTML = ''; 
-
-        menuEl.classList.remove('menu-mode', 'dark-shade');
-        
-        if (window.SoundsEngine) {
-          let vol = window.SoundsEngine.volumes.music || 0.4;
-          const targetVal = 0.8;
-          const step = (targetVal - vol) / 14;
-          const fadeIn = setInterval(() => {
-            vol += step;
-            if (vol >= targetVal) { vol = targetVal; clearInterval(fadeIn); }
-            window.SoundsEngine.setMasterVolume('music', vol);
-            window.SoundsEngine.setMasterVolume('effects', vol);
-          }, 50);
-        }
-
-        pressText.style.opacity = '1';
-        pressText.classList.add('show');
-        
-        setTimeout(() => { this.isTransitioning = false; }, 1000);
-      };
     }
-  }
-};
+
+    function getAsset(key) {
+      return new Promise((resolve) => {
+        if (!db) return resolve(null);
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const req = tx.objectStore(STORE_NAME).get(key);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      });
+    }
+
+    function putAsset(key, blob) {
+      return new Promise((resolve) => {
+        if (!db) return resolve();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).put(blob, key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      });
+    }
+
+    async function loadAssets() {
+      const status = $('loading-status');
+      const progressBar = $('progress-bar');
+      const progress = $('progress-fill');
+      const sizeText = $('loading-size');
+      
+      try {
+        status.textContent = 'Проверка файлов...';
+        await initDB();
+
+        const resp = await fetch('./load.json');
+        if (!resp.ok) throw new Error('load.json не найден');
+        const manifest = await resp.json();
+
+        const queue = [
+          ...Object.entries(manifest.sounds || {}).map(([id, data]) => ({ id, url: data.url, size: data.size, type: 'Звуки' })),
+          ...Object.entries(manifest.textures || {}).map(([id, data]) => ({ id, url: data.url, size: data.size, type: 'Текстуры' }))
+        ];
+
+        window.GameAssets = window.GameAssets || {};
+        let totalBytes = queue.reduce((sum, item) => sum + (item.size || 0), 0);
+        let missingFiles = [];
+        
+        // Проверяем, что уже скачано
+        for (const item of queue) {
+          const cachedBlob = await getAsset(item.url);
+          if (cachedBlob) {
+            if (item.type === 'Текстуры') {
+              window.GameAssets[item.id] = URL.createObjectURL(cachedBlob);
+            } else if (window.SoundsEngine) {
+              await window.SoundsEngine.loadSound(item.id, cachedBlob);
+            }
+          } else {
+            missingFiles.push(item);
+          }
+        }
+
+        // Если всё в кэше — пропускаем загрузку
+        if (missingFiles.length === 0) {
+          status.textContent = 'Все файлы в кэше';
+          progressBar.style.display = 'none';
+          sizeText.style.display = 'none';
+          return;
+        }
+
+        // Качаем недостающее
+        status.textContent = 'Загрузка...';
+        progressBar.style.display = 'block';
+        sizeText.style.display = 'block';
+        
+        let loadedBytes = totalBytes;
+        missingFiles.forEach(f => loadedBytes -= (f.size || 0));
+
+        sizeText.textContent = `${(loadedBytes / 1024 / 1024).toFixed(1)} МБ / ${(totalBytes / 1024 / 1024).toFixed(1)} МБ`;
+
+        for (let i = 0; i < missingFiles.length; i++) {
+          const item = missingFiles[i];
+          status.textContent = `Загрузка: ${item.type} [${i + 1}/${missingFiles.length}]`;
+          
+          try {
+            const res = await fetch(item.url);
+            if (!res.ok) throw new Error('404');
+            const blob = await res.blob();
+            
+            await putAsset(item.url, blob);
+            loadedBytes += (item.size || blob.size);
+            
+            if (item.type === 'Текстуры') {
+              window.GameAssets[item.id] = URL.createObjectURL(blob);
+            } else if (window.SoundsEngine) {
+              await window.SoundsEngine.loadSound(item.id, blob);
+            }
+          } catch (e) {
+            console.warn(`[Пропуск] ${item.url}`);
+          }
+          
+          const percent = Math.min(100, Math.round((loadedBytes / totalBytes) * 100));
+          progress.style.width = `${percent}%`;
+          sizeText.textContent = `${(loadedBytes / 1024 / 1024).toFixed(1)} МБ / ${(totalBytes / 1024 / 1024).toFixed(1)} МБ`;
+        }
+
+        status.textContent = 'Готово!';
+        progress.style.width = '100%';
+        
+      } catch (e) {
+        console.warn('Ошибка загрузки:', e);
+        status.textContent = 'Ошибка';
+      }
+    }
+
+    startApp();
+  </script>
+</body>
+</html>

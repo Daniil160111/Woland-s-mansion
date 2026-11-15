@@ -66,7 +66,6 @@ export const Menu = {
         bgWrapper.classList.add('normal-scale');
         logoEl.classList.add('animate-in');
         
-        // Просто меняем кнопки на главное меню, БЕЗ выключения экрана
         this.renderScreen('main', container, true);
 
         backBtn.style.animation = 'none';
@@ -78,7 +77,6 @@ export const Menu = {
           backBtn.style.pointerEvents = 'auto';
         }, 1500); 
 
-        // Восстанавливаем музыку (если она была приглушена)
         if (window.SoundsEngine) {
           let vol = window.SoundsEngine.volumes.music || 0.4;
           const targetVal = 0.8; 
@@ -97,6 +95,18 @@ export const Menu = {
         logoEl.classList.remove('animate-in'); 
         backBtn.style.opacity = '0';
         backBtn.style.pointerEvents = 'none';
+        
+        if (window.SoundsEngine) {
+          let vol = window.SoundsEngine.volumes.music || 0.8;
+          const targetVal = 0.4;
+          const step = (targetVal - vol) / 14;
+          const fadeOut = setInterval(() => {
+            vol += step;
+            if (vol <= targetVal) { vol = targetVal; clearInterval(fadeOut); }
+            window.SoundsEngine.setMasterVolume('music', vol);
+            window.SoundsEngine.setMasterVolume('effects', vol);
+          }, 50);
+        }
       }
       return;
     }
@@ -123,10 +133,10 @@ export const Menu = {
           <img class="woland-menu__logo" src="${logo}" alt="Woland's Mansion" onerror="this.style.display='none';">
         </div>
 
+        <!-- Версия убрана из HTML -->
         <div class="woland-menu__bottom">
           <button class="btn-link" id="btn-title-screen" type="button" style="opacity: 0; pointer-events: none;">Титульный экран</button>
           <div class="woland-menu__footer" style="opacity: 0;">HTML Gaming 2026</div>
-          <div class="woland-menu__version" id="version-display" style="opacity: 0;">v0.0.0</div>
         </div>
       </section>
       
@@ -139,11 +149,35 @@ export const Menu = {
         .woland-menu__lightning { opacity: 0; pointer-events: none; mix-blend-mode: screen; }
         .woland-menu__shade { position: absolute; inset: 0; z-index: 1; background: rgba(0, 0, 0, 0.3); transition: background 1.5s ease; }
         .woland-menu.dark-shade .woland-menu__shade { background: rgba(0, 0, 0, 0.7); }
-        .woland-menu__logo-container { position: absolute; top: 10vh; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; justify-content: center; pointer-events: none; width: 100%; transition: top 1.5s cubic-bezier(0.25, 1, 0.5, 1); }
-        .woland-menu__logo { width: min(75vw, 520px); max-height: 32vh; object-fit: contain; opacity: 0; transform: scaleY(0); transform-origin: bottom center; transition: transform 1.5s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 1.5s ease; }
+        
+        /* ★ ЛОГОТИП С БЕЛЫМ СВЕЧЕНИЕМ ИЗ-ЗА КРАЕВ (ХРОМАКЕЙ) ★ */
+        .woland-menu__logo-container { 
+          position: absolute; top: 10vh; left: 50%; transform: translateX(-50%); 
+          z-index: 9999; display: flex; justify-content: center; pointer-events: none; 
+          width: 100%; transition: top 1.5s cubic-bezier(0.25, 1, 0.5, 1); 
+        }
+        
+        .woland-menu__logo {
+          width: min(75vw, 520px); max-height: 32vh; object-fit: contain;
+          
+          /* Двойная тень создает свечение вокруг непрозрачных краев */
+          filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 5px rgba(255, 255, 255, 0.9));
+          
+          opacity: 0; 
+          transform: scaleY(0); 
+          transform-origin: bottom center;
+          
+          /* Анимация 1.5с: резкий старт, плавное торможение */
+          transition: transform 1.5s cubic-bezier(0, 0.5, 0.3, 1), opacity 1s ease;
+        }
+        
         .woland-menu__logo.animate-in { opacity: 1; transform: scaleY(1); }
         .woland-menu.menu-mode .woland-menu__logo-container { top: 2vh; }
-        .woland-menu.menu-mode .woland-menu__logo { transform: scale(0.68) scaleY(1); transform-origin: top center; }
+        .woland-menu.menu-mode .woland-menu__logo { 
+          transform: scale(0.68) scaleY(1); transform-origin: top center; 
+          filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.6)); 
+        }
+
         .woland-menu__title-screen { position: absolute; inset: 0; z-index: 5; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 12vh; transition: opacity 0.6s ease, visibility 0.6s; }
         .woland-menu.menu-mode .woland-menu__title-screen { opacity: 0; visibility: hidden; pointer-events: none; }
         .woland-menu__press-to-continue { font-size: clamp(16px, 2.8vh, 24px); color: #dcdcdc; letter-spacing: 2px; text-shadow: 0 0 12px rgba(255,0,0,0.6); transition: opacity 0.7s ease; }
@@ -167,7 +201,6 @@ export const Menu = {
         .btn-link { background: transparent; border: none; color: #999; font-size: clamp(11px, 1.6vh, 13px); cursor: pointer; text-decoration: underline; text-underline-offset: 5px; margin-bottom: 5px; transition: color 0.3s, opacity 1s ease; letter-spacing: 1px; opacity: 0; }
         .btn-link:hover { color: #ff4d4d; }
         .woland-menu__footer { color: #666; font-size: 11px; letter-spacing: 1px; transition: opacity 1.5s ease; }
-        .woland-menu__version { color: #444; font-size: 6px; font-family: monospace; letter-spacing: 0px; transition: opacity 1.5s ease; }
       </style>
     `;
     this.isMounted = true;
@@ -177,13 +210,11 @@ export const Menu = {
     const backBtn = container.querySelector('#btn-title-screen');
     const pressText = container.querySelector('.woland-menu__press-to-continue');
     const footerEl = container.querySelector('.woland-menu__footer');
-    const versionEl = container.querySelector('#version-display');
     const titleScreen = container.querySelector('.woland-menu__title-screen');
 
     setTimeout(() => {
       menuEl.classList.add('active');
       footerEl.style.opacity = '1';
-      versionEl.style.opacity = '1';
     }, 500);
 
     setTimeout(() => {
@@ -215,11 +246,12 @@ export const Menu = {
       logoEl.classList.add('animate-in');
     }, 2000);
 
+    // Сдвигаем появление "Нажмите" на 0.5с позже (из-за удлинения анимации логотипа)
     setTimeout(() => {
       pressText.style.opacity = '1';
       pressText.classList.add('show');
       titleScreen.style.pointerEvents = 'auto';
-    }, 3500);
+    }, 4000);
 
     const playThunder = () => {
       if (!window.SoundsEngine) return;
@@ -262,15 +294,6 @@ export const Menu = {
       this.lightningTimeout = setTimeout(() => { triggerLightning(); scheduleLightning(); }, delay);
     };
     scheduleLightning();
-
-    fetch('./version.json')
-      .then(res => res.json())
-      .then(data => {
-        if (versionEl && data.version) versionEl.textContent = data.version;
-      })
-      .catch(() => {
-        if (versionEl) versionEl.textContent = 'Версия неизвестна';
-      });
 
     this.renderScreen = (screenName, containerEl, animateIn = true) => {
       const config = this.buttonsConfig[screenName];
@@ -334,7 +357,6 @@ export const Menu = {
         window.SoundsEngine.play(btnInfo.sound, { type: 'effects' });
       }
 
-      // ВНУТРИ МЕНЮ: Просто меняем экраны, БЕЗ затемнения и выключения музыки
       if (btnInfo.action === 'goto-mode') {
         this.renderScreen('mode', containerEl);
         this.isTransitioning = false;
@@ -352,10 +374,7 @@ export const Menu = {
         this.renderScreen('mode', containerEl);
         this.isTransitioning = false;
       }
-      
-      // ПЕРЕХОД В ДРУГИЕ БЛОКИ: Затухание и затемнение
       else {
-        // 1. Затухание звука за 0.7с
         if (window.SoundsEngine) {
           let vol = window.SoundsEngine.volumes.music || 0.8;
           const targetVal = 0;
@@ -368,7 +387,6 @@ export const Menu = {
           }, 50);
         }
 
-        // 2. Затемнение экрана за 1.5с
         const menuEl = containerEl.querySelector('.woland-menu');
         menuEl.style.transition = 'opacity 1.5s ease';
         menuEl.style.opacity = '0';

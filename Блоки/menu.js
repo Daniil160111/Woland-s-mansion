@@ -21,12 +21,12 @@ export const Menu = {
   buttonsConfig: {
     main: [
       { id: 'btn-play', text: 'Играть', action: 'goto-mode', sound: 'btn_click' },
-      { id: 'btn-settings', text: 'Настройки', action: 'module-settings', sound: 'transition' },
-      { id: 'btn-about', text: 'Об игре', action: 'module-about', sound: 'transition' }
+      { id: 'btn-settings', text: 'Настройки', action: 'module-settings', sound: 'btn_click' },
+      { id: 'btn-about', text: 'Об игре', action: 'module-about', sound: 'btn_click' }
     ],
     mode: [
-      { id: 'btn-single', text: 'Одиночная игра', action: 'goto-type', mode: 'one', sound: 'transition' },
-      { id: 'btn-multi', text: 'Мультиплеер', action: 'goto-type', mode: 'two', sound: 'transition' },
+      { id: 'btn-single', text: 'Одиночная игра', action: 'goto-type', mode: 'one', sound: 'btn_click' },
+      { id: 'btn-multi', text: 'Мультиплеер', action: 'goto-type', mode: 'two', sound: 'btn_click' },
       { id: 'btn-back-mode', text: 'Назад', action: 'back-main', sound: 'btn_back' }
     ],
     type: [
@@ -54,17 +54,16 @@ export const Menu = {
 
     const isMenu = mode === 'menu';
 
-    // Если меню уже создано, просто переключаем состояние
+    // Если меню уже создано
     if (this.isMounted && container.querySelector('.woland-menu')) {
       const menuEl = container.querySelector('.woland-menu');
       const bgWrapper = container.querySelector('.woland-menu__bg-wrapper');
       const backBtn = container.querySelector('#btn-title-screen');
       const logoEl = container.querySelector('.woland-menu__logo');
       
-      // СБРОС ЗВУКА (исправление глюка с тишиной при возврате)
+      // СБРОС ЗВУКА
       if (window.SoundsEngine) {
         window.SoundsEngine.currentMusicTrack = null; 
-        // Принудительно перезапускаем музыку с фейдом
         window.SoundsEngine.play('menu_theme', { loop: true, type: 'music' });
         let vol = 0;
         const targetVal = isMenu ? 0.4 : 0.8;
@@ -81,7 +80,7 @@ export const Menu = {
         menuEl.classList.add('menu-mode', 'dark-shade');
         bgWrapper.classList.add('normal-scale');
         logoEl.classList.add('animate-in');
-        menuEl.style.opacity = '1'; // Принудительно показываем
+        menuEl.style.opacity = '1'; 
         this.renderScreen('main', container, true);
 
         backBtn.style.animation = 'none';
@@ -140,7 +139,7 @@ export const Menu = {
         .woland-menu__shade { position: absolute; inset: 0; z-index: 1; background: rgba(0, 0, 0, 0.3); transition: background 1.5s ease; }
         .woland-menu.dark-shade .woland-menu__shade { background: rgba(0, 0, 0, 0.7); }
         
-        /* ★ ЛОГОТИП С КОРОТКИМ СВЕЧЕНИЕМ ★ */
+        /* ★ ЛОГОТИП: СВЕЧЕНИЕ ТОЛЬКО ПО ВНЕШНЕМУ КОНТУРУ ★ */
         .woland-menu__logo-container { 
           position: absolute; top: 10vh; left: 50%; transform: translateX(-50%); 
           z-index: 9999; display: flex; justify-content: center; pointer-events: none; 
@@ -150,8 +149,9 @@ export const Menu = {
         .woland-menu__logo {
           width: min(75vw, 520px); max-height: 32vh; object-fit: contain;
           
-          /* Короткое, но яркое свечение (3px), уходящее в 0 */
-          filter: drop-shadow(0 0 3px rgba(255, 255, 255, 1)) drop-shadow(0 0 8px rgba(255, 255, 255, 0.3));
+          /* drop-shadow работает ТОЛЬКО с внешними краями непрозрачных пикселей.
+             Внутренние прозрачные вырезы (как в букве 'O') остаются без свечения. */
+          filter: drop-shadow(0 0 4px rgba(255, 255, 255, 1)) drop-shadow(0 0 10px rgba(255, 255, 255, 0.4));
           
           opacity: 0; 
           transform: scaleY(0); 
@@ -341,11 +341,11 @@ export const Menu = {
       if (this.isTransitioning) return;
       this.isTransitioning = true;
 
+      // ★ ЗВУКИ КНОПОК ★
       if (window.SoundsEngine && btnInfo.sound) {
         window.SoundsEngine.play(btnInfo.sound, { type: 'effects' });
       }
 
-      // ВНУТРИ МЕНЮ: Просто меняем экраны
       if (btnInfo.action === 'goto-mode') {
         this.renderScreen('mode', containerEl);
         this.isTransitioning = false;
@@ -363,8 +363,6 @@ export const Menu = {
         this.renderScreen('mode', containerEl);
         this.isTransitioning = false;
       }
-      
-      // ПЕРЕХОД В ДРУГИЕ БЛОКИ
       else {
         if (window.SoundsEngine) {
           let vol = window.SoundsEngine.volumes.music || 0.8;
@@ -411,20 +409,15 @@ export const Menu = {
               if (mod && mod.About) mod.About.start();
             }
           } catch (e) {
-            // ★ ИСПРАВЛЕНИЕ ОШИБКИ: Если блок не найден, показываем ошибку и возвращаем меню
             console.error('Ошибка перехода (блок не найден):', e);
-            menuEl.style.opacity = '1'; // Возвращаем меню
+            menuEl.style.opacity = '1';
             this.isTransitioning = false;
             
-            // Принудительно восстанавливаем звук
             if (window.SoundsEngine) {
               window.SoundsEngine.currentMusicTrack = null;
               window.SoundsEngine.play('menu_theme', { loop: true, type: 'music' });
               window.SoundsEngine.setMasterVolume('music', 0.8);
             }
-            
-            // Опционально: можно вывести сообщение об ошибке
-            // alert('Этот режим еще в разработке!');
           }
         }, 1500);
       }
@@ -435,7 +428,7 @@ export const Menu = {
       this.isTransitioning = true;
       
       menuEl.classList.add('menu-mode', 'dark-shade');
-      if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' });
+      if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' }); // Звук перехода
 
       if (window.SoundsEngine) {
         let vol = window.SoundsEngine.volumes.music || 0.8;
@@ -467,7 +460,7 @@ export const Menu = {
       backBtn.onclick = () => {
         if (this.isTransitioning) return;
         this.isTransitioning = true;
-        if (window.SoundsEngine) window.SoundsEngine.play('btn_back', { type: 'effects' });
+        if (window.SoundsEngine) window.SoundsEngine.play('btn_back', { type: 'effects' }); // Звук назад
         
         backBtn.style.opacity = '0';
         backBtn.style.pointerEvents = 'none';

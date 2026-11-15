@@ -12,9 +12,9 @@
   "theme_color": "#0a0616",
   "prefer_related_applications": false,
   "icons": [
-    { "src": "Текстуры/Меню/Название.jpg", "sizes": "192x192", "type": "image/jpeg", "purpose": "any" },
-    { "src": "Текстуры/Меню/Название.jpg", "sizes": "512x512", "type": "image/jpeg", "purpose": "any" },
-    { "src": "Текстуры/Меню/Название.jpg", "sizes": "192x192", "type": "image/jpeg", "purpose": "maskable" },
-    { "src": "Текстуры/Меню/Название.jpg", "sizes": "512x512", "type": "image/jpeg", "purpose": "maskable" }
+    { "src": "icon/Иконка.jpg", "sizes": "192x192", "type": "image/jpeg", "purpose": "any" },
+    { "src": "icon/Иконка.jpg", "sizes": "512x512", "type": "image/jpeg", "purpose": "any" },
+    { "src": "icon/Иконка.jpg", "sizes": "192x192", "type": "image/jpeg", "purpose": "maskable" },
+    { "src": "/icon/Иконка.jpg", "sizes": "512x512", "type": "image/jpeg", "purpose": "maskable" }
   ]
 }

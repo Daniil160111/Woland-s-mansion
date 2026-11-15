@@ -9,8 +9,8 @@
   <title>Woland's Mansion</title>
   
   <link rel="manifest" href="./manifest.json">
-  <link rel="icon" href="./icon/Иконка.jpg" type="image/jpeg">
-  <link rel="apple-touch-icon" href="./icon/Иконка.jpg">
+  <link rel="icon" href="./icon/icon.jpg" type="image/jpeg">
+  <link rel="apple-touch-icon" href="./icon/icon.jpg">
   
   <style>
     @font-face {
@@ -76,11 +76,13 @@
 </head>
 <body>
 
+  <!-- ★ ЕДИНЫЙ ПУТЬ К ЛОГОТИПУ ★ -->
   <section id="screen-l1" class="screen"><img id="img-l1" class="l-image" src="./Текстуры/Меню/L1.jpg" alt="L1" onerror="this.style.display='none';"></section>
   <section id="screen-l2" class="screen"><img id="img-l2" class="l-image" src="./Текстуры/Меню/l2.jpg" alt="L2" onerror="this.style.display='none';"></section>
 
   <section id="install-screen" class="screen">
     <div class="install-content">
+      <!-- ★ ЕДИНЫЙ ПУТЬ К ЛОГОТИПУ ★ -->
       <img src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" onerror="this.hidden=true">
       <p data-i18n="install_hint">Для комфортной игры на телефоне установите приложение.</p>
       <div class="install-card"><strong>iPhone / iPad (Safari)</strong><span data-i18n="ios_text">Поделиться → На экран "Домой"</span></div>
@@ -99,6 +101,7 @@
 
   <section id="loading-screen" class="screen">
     <div class="loading-center">
+      <!-- ★ ЕДИНЫЙ ПУТЬ К ЛОГОТИПУ ★ -->
       <img id="loading-logo" src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" onerror="this.hidden=true">
       <div class="loader-title" id="loader-title"></div>
       <div class="progress" id="progress-bar"><div id="progress-fill"></div></div>
@@ -227,7 +230,7 @@
       }
     }, { once: true });
 
-    // ★ СИСТЕМА КЭШИРОВАНИЯ (IndexedDB) ★
+    // ★ УСКОРЕННАЯ СИСТЕМА КЭШИРОВАНИЯ (IndexedDB + Параллельная проверка) ★
     const DB_NAME = 'woland_db';
     const STORE_NAME = 'assets';
     let db = null;
@@ -285,19 +288,26 @@
 
         window.GameAssets = window.GameAssets || {};
         let totalBytes = queue.reduce((sum, item) => sum + (item.size || 0), 0);
-        let missingFiles = [];
         
-        // Проверяем, что уже скачано
-        for (const item of queue) {
+        // ★ УСКОРЕНИЕ: Параллельная проверка через Promise.all ★
+        const checkPromises = queue.map(async (item) => {
           const cachedBlob = await getAsset(item.url);
-          if (cachedBlob) {
-            if (item.type === 'Текстуры') {
-              window.GameAssets[item.id] = URL.createObjectURL(cachedBlob);
+          return { item, cachedBlob };
+        });
+
+        const results = await Promise.all(checkPromises);
+        let missingFiles = [];
+
+        // Синхронно раскладываем результат
+        for (const res of results) {
+          if (res.cachedBlob) {
+            if (res.item.type === 'Текстуры') {
+              window.GameAssets[res.item.id] = URL.createObjectURL(res.cachedBlob);
             } else if (window.SoundsEngine) {
-              await window.SoundsEngine.loadSound(item.id, cachedBlob);
+              await window.SoundsEngine.loadSound(res.item.id, res.cachedBlob);
             }
           } else {
-            missingFiles.push(item);
+            missingFiles.push(res.item);
           }
         }
 

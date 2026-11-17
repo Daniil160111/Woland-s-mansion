@@ -69,7 +69,6 @@ export const Menu = {
           <div class="woland-menu__content" id="menu-buttons-container"></div>
         </div>
 
-        <!-- Обертка логотипа -->
         <div class="woland-menu__logo-container">
           <img class="woland-menu__logo" src="${logo}" alt="Woland's Mansion" onerror="this.style.display='none';">
         </div>
@@ -90,7 +89,7 @@ export const Menu = {
         .woland-menu__shade { position: absolute; inset: 0; z-index: 1; background: rgba(0, 0, 0, 0.3); transition: background 1.5s ease; }
         .woland-menu.menu-mode .woland-menu__shade { background: rgba(0, 0, 0, 0.7); }
         
-        /* ★ ПЛАВНАЯ АНИМАЦИЯ ЛОГОТИПА (ЕДИНЫЙ РАЗМЕР + TRANSFORM) ★ */
+        /* ★ ЛОГОТИП: ФИКСИРОВАННЫЙ РАЗМЕР + ПЛАВНЫЙ TRANSFORM ★ */
         .woland-menu__logo-container { 
           position: absolute; 
           top: 45%; 
@@ -101,54 +100,44 @@ export const Menu = {
           justify-content: center; 
           pointer-events: none; 
           width: 100%; 
-          /* Плавный переезд вверх */
           transition: top 1.2s cubic-bezier(0.25, 1, 0.5, 1), transform 1.2s cubic-bezier(0.25, 1, 0.5, 1); 
         }
         
         .woland-menu__logo {
-          /* Задаем базовый размер, который будет масштабироваться */
-          width: 210px; 
+          width: 210px; /* Фиксированный размер на титульном */
           max-height: 32vh; 
           object-fit: contain;
           
-          /* Базовое состояние на титульном экране */
-          transform: scale(1) scaleY(1); 
-          transform-origin: center center;
+          /* Начальное состояние для анимации появления */
+          opacity: 0; 
+          transform: scaleY(0); 
+          transform-origin: bottom center;
           
-          /* Плавное изменение масштаба и свечения */
-          transition: transform 1.2s cubic-bezier(0.25, 1, 0.5, 1), opacity 1s ease, filter 1.2s ease;
+          /* Анимация появления (старт резкий, конец плавный) */
+          transition: transform 1.5s cubic-bezier(0, 0.5, 0.3, 1), opacity 1s ease, filter 1.2s ease;
           
           filter: 
             drop-shadow(0 0 1px rgba(255, 255, 255, 1)) 
             drop-shadow(0 0 3px rgba(255, 255, 255, 0.9))
             drop-shadow(0 0 6px rgba(255, 255, 255, 0.6))
             drop-shadow(0 0 12px rgba(255, 255, 255, 0.3));
-            
-          opacity: 0; 
         }
         
-        /* Анимация появления при загрузке */
         .woland-menu__logo.animate-in { 
           opacity: 1; 
-          animation: logo-appear 1.5s cubic-bezier(0, 0.5, 0.3, 1) forwards;
-        }
-
-        @keyframes logo-appear {
-          0% { transform: scaleY(0); }
-          100% { transform: scaleY(1); }
+          transform: scaleY(1); /* Плавное растягивание вверх */
         }
         
-        /* ★ ПЕРЕХОД В МЕНЮ ★ */
+        /* ★ ПЕРЕХОД В МЕНЮ (УВЕЛИЧЕНИЕ НА 40% И ОТСТУП) ★ */
         .woland-menu.menu-mode .woland-menu__logo-container { 
-          top: 3vh; /* Отступ от верхнего края */
+          top: 3vh; /* Отступ сверху */
           transform: translate(-50%, 0); 
         }
         
         .woland-menu.menu-mode .woland-menu__logo { 
-          /* Увеличение на 40% (210 * 1.4 = 294) */
+          /* Увеличиваем в 1.4 раза (на 40%) */
           transform: scale(1.4) scaleY(1); 
           transform-origin: top center; 
-          /* Уменьшение свечения в меню */
           filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 3px rgba(255, 255, 255, 0.4)); 
         }
 
@@ -215,6 +204,7 @@ export const Menu = {
       footerEl.style.opacity = '1';
     }, 500);
 
+    // Тут вызывается анимация появления (растягивание)
     setTimeout(() => {
       logoEl.classList.add('animate-in');
     }, 2000);

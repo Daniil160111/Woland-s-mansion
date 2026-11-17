@@ -89,10 +89,10 @@ export const Menu = {
         .woland-menu__shade { position: absolute; inset: 0; z-index: 1; background: rgba(0, 0, 0, 0.3); transition: background 1.5s ease; }
         .woland-menu.menu-mode .woland-menu__shade { background: rgba(0, 0, 0, 0.7); }
         
-        /* ★ ЛОГОТИП: ЦЕНТР ЭКРАНА, ПОТОМ УЕЗЖАЕТ ВВЕРХ ★ */
+        /* ★ ЛОГОТИП: УМЕНЬШЕН НА 25% И ПОДНЯТ ★ */
         .woland-menu__logo-container { 
           position: absolute; 
-          top: 50%; 
+          top: 40%; 
           left: 50%; 
           transform: translate(-50%, -50%); 
           z-index: 9999; 
@@ -104,7 +104,9 @@ export const Menu = {
         }
         
         .woland-menu__logo {
-          width: min(75vw, 520px); max-height: 32vh; object-fit: contain;
+          width: min(65vw, 390px); /* Уменьшено на 25% */
+          max-height: 32vh; 
+          object-fit: contain;
           filter: 
             drop-shadow(0 0 1px rgba(255, 255, 255, 1)) 
             drop-shadow(0 0 3px rgba(255, 255, 255, 0.9))
@@ -118,7 +120,6 @@ export const Menu = {
         
         .woland-menu__logo.animate-in { opacity: 1; transform: scaleY(1); }
         
-        /* В режиме меню логотип уезжает наверх и уменьшается */
         .woland-menu.menu-mode .woland-menu__logo-container { 
           top: 2vh; 
           transform: translate(-50%, 0); 
@@ -167,7 +168,7 @@ export const Menu = {
       window.SoundsEngine.currentMusicTrack = null; 
       window.SoundsEngine.play('menu_theme', { loop: true, type: 'music' });
       let vol = 0;
-      const targetVal = 0.8;
+      const targetVal = 0.32; // ★ 60% ТИШЕ (было 0.8)
       const step = targetVal / 20;
       const fadeIn = setInterval(() => {
         vol += step;
@@ -323,7 +324,7 @@ export const Menu = {
       }
       else {
         if (window.SoundsEngine) {
-          let vol = window.SoundsEngine.volumes.music || 0.8;
+          let vol = window.SoundsEngine.volumes.music || 0.32; // Учитываем тихую громкость
           const targetVal = 0;
           const step = vol / 14;
           const fadeOut = setInterval(() => {
@@ -374,7 +375,7 @@ export const Menu = {
             if (window.SoundsEngine) {
               window.SoundsEngine.currentMusicTrack = null;
               window.SoundsEngine.play('menu_theme', { loop: true, type: 'music' });
-              window.SoundsEngine.setMasterVolume('music', 0.8);
+              window.SoundsEngine.setMasterVolume('music', 0.32); // Возвращаем тихую громкость
             }
           }
         }, 1500);
@@ -389,8 +390,8 @@ export const Menu = {
       if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' });
 
       if (window.SoundsEngine) {
-        let vol = window.SoundsEngine.volumes.music || 0.8;
-        const targetVal = 0.4;
+        let vol = window.SoundsEngine.volumes.music || 0.32;
+        const targetVal = 0.16; // При переходе в меню приглушаем еще сильнее
         const step = (vol - targetVal) / 14;
         const fadeOut = setInterval(() => {
           vol -= step;
@@ -430,8 +431,8 @@ export const Menu = {
         menuEl.classList.remove('menu-mode', 'dark-shade');
         
         if (window.SoundsEngine) {
-          let vol = window.SoundsEngine.volumes.music || 0.4;
-          const targetVal = 0.8;
+          let vol = window.SoundsEngine.volumes.music || 0.16;
+          const targetVal = 0.32; // Возвращаем тихую громкость
           const step = (targetVal - vol) / 14;
           const fadeIn = setInterval(() => {
             vol += step;

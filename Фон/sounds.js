@@ -107,7 +107,7 @@ class SoundEngine {
             const bufferDuration = this.loadedBuffers[id].duration;
             source.loopStart = 0;
             // Обрезаем за 0.24 сек до конца
-            source.loopEnd = Math.max(0.1, bufferDuration - 0.24);
+            source.loopEnd = Math.max(0.1, bufferDuration - 0.34);
         } else {
             source.loop = false;
         }

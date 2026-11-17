@@ -1,7 +1,8 @@
-// js/sounds.js
+// Фон/sounds.js
 
-// Защита от копирования и выделений
+// Глобальная защита от копирования и скачивания
 (function() {
+    'use strict';
     document.addEventListener('contextmenu', e => e.preventDefault());
     document.addEventListener('dragstart', e => e.preventDefault());
     document.addEventListener('selectstart', e => e.preventDefault());
@@ -23,7 +24,7 @@ class SoundEngine {
         this.currentMusicTrack = null;
         
         this.audioMode = 'stereo';
-        this.volumes = { music: 0.8, effects: 0.8 };
+        this.volumes = { music: 0.32, effects: 0.8 }; // Музыка по умолчанию тише
     }
 
     init() {
@@ -72,13 +73,23 @@ class SoundEngine {
             type = 'effects', 
             volume = 1.0, 
             position = null,
-            pan = 0,       // НОВОЕ: стерео панорама (-1 лево, 1 право)
+            pan = 0,       
             reverb = false 
         } = options;
 
         const source = this.ctx.createBufferSource();
         source.buffer = this.loadedBuffers[id];
-        source.loop = loop;
+        
+        // ★ ПЛАВНЫЙ ЛУП (ОБРЕЗАЕМ КОНЕЦ НА 0.07 СЕК) ★
+        if (loop) {
+            source.loop = true;
+            const bufferDuration = this.loadedBuffers[id].duration;
+            source.loopStart = 0;
+            // Обрезаем за 0.07 сек до конца, чтобы не было паузы
+            source.loopEnd = Math.max(0.1, bufferDuration - 0.07);
+        } else {
+            source.loop = false;
+        }
 
         const gainNode = this.ctx.createGain();
         gainNode.gain.value = volume;
@@ -87,7 +98,7 @@ class SoundEngine {
 
         let lastNode = source;
 
-        // --- ПРОСТРАНСТВЕННЫЙ ЗВУК (Позиция) ---
+        // Пространственный звук
         if (position && this.audioMode !== 'mono' && this.ctx.createPanner) {
             const panner = this.ctx.createPanner();
             panner.panningModel = 'equalpower';
@@ -98,7 +109,7 @@ class SoundEngine {
             lastNode.connect(panner);
             lastNode = panner;
         } 
-        // --- СТЕРЕО ПАНОРАМА (если задан pan) ---
+        // Стерео панорама
         else if (pan !== 0 && this.ctx.createStereoPanner) {
             const stereoPanner = this.ctx.createStereoPanner();
             stereoPanner.pan.value = Math.max(-1, Math.min(1, pan));
@@ -106,7 +117,7 @@ class SoundEngine {
             lastNode = stereoPanner;
         }
 
-        // --- ЭФФЕКТ РЕВЕРБЕРАЦИИ (ЭХО) ---
+        // Реверберация (эхо)
         if (reverb && type === 'effects') {
             const delayNode = this.ctx.createDelay();
             delayNode.delayTime.value = 0.28;

@@ -62,7 +62,6 @@ export const Menu = {
         <div class="woland-menu__shade"></div>
 
         <div class="woland-menu__title-screen">
-          <!-- ★ ИЗМЕНЕН ТЕКСТ И СТИЛЬ ★ -->
           <div class="woland-menu__press-to-continue" style="opacity: 0;">Нажмите на экран!</div>
         </div>
 
@@ -90,7 +89,7 @@ export const Menu = {
         .woland-menu__shade { position: absolute; inset: 0; z-index: 1; background: rgba(0, 0, 0, 0.3); transition: background 1.5s ease; }
         .woland-menu.menu-mode .woland-menu__shade { background: rgba(0, 0, 0, 0.7); }
         
-        /* ★ ЛОГОТИП: УМЕНЬШЕН ЕЩЕ НА 30% ★ */
+        /* ★ ЛОГОТИП НА ТИТУЛЬНОМ (210px) И В МЕНЮ (294px + отступ) ★ */
         .woland-menu__logo-container { 
           position: absolute; 
           top: 45%; 
@@ -105,7 +104,7 @@ export const Menu = {
         }
         
         .woland-menu__logo {
-          width: min(65vw, 200px); /* Уменьшено еще на 30% (было 290px) */
+          width: min(65vw, 210px); /* ★ УВЕЛИЧЕНО НА 5% (было 200px) ★ */
           max-height: 32vh; 
           object-fit: contain;
           filter: 
@@ -122,11 +121,14 @@ export const Menu = {
         .woland-menu__logo.animate-in { opacity: 1; transform: scaleY(1); }
         
         .woland-menu.menu-mode .woland-menu__logo-container { 
-          top: 2vh; 
+          top: 3vh; /* Небольшой отступ от верхнего края */
           transform: translate(-50%, 0); 
         }
+        
+        /* ★ В МЕНЮ УВЕЛИЧИВАЕТСЯ НА 40% (210px * 1.4 = 294px) ★ */
         .woland-menu.menu-mode .woland-menu__logo { 
-          transform: scale(0.68) scaleY(1); 
+          width: min(65vw, 294px); 
+          transform: scale(1) scaleY(1); 
           transform-origin: top center; 
           filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 3px rgba(255, 255, 255, 0.4)); 
         }
@@ -134,12 +136,11 @@ export const Menu = {
         .woland-menu__title-screen { position: absolute; inset: 0; z-index: 5; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 12vh; transition: opacity 0.6s ease, visibility 0.6s; }
         .woland-menu.menu-mode .woland-menu__title-screen { opacity: 0; visibility: hidden; pointer-events: none; }
         
-        /* ★ ТЕКСТ: КРАСНЫЙ, БОЛЬШОЙ, СО СВЕЧЕНИЕМ ★ */
         .woland-menu__press-to-continue { 
-          font-size: clamp(24px, 4.5vh, 48px); /* В 2 раза больше */
-          color: #ff3333; /* Красный */
+          font-size: clamp(24px, 4.5vh, 48px); 
+          color: #ff3333; 
           letter-spacing: 2px; 
-          text-shadow: 0 0 5px rgba(255, 100, 100, 0.8), 0 0 15px rgba(255, 0, 0, 0.5); /* Микросвечение */
+          text-shadow: 0 0 5px rgba(255, 100, 100, 0.8), 0 0 15px rgba(255, 0, 0, 0.5); 
           transition: opacity 0.7s ease; 
           font-weight: bold;
         }

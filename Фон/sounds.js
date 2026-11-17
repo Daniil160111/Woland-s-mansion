@@ -23,11 +23,10 @@ class SoundEngine {
         this.activeSounds = new Set(); 
         this.currentMusicTrack = null;
         
-        // ★ ПРИНУДИТЕЛЬНЫЙ DOLBY SURROUND (3D) ★
+        // ★ ПРИНУДИТЕЛЬНЫЙ 3D SURROUND ★
         this.audioMode = 'surround'; 
         this.volumes = { music: 0.32, effects: 0.8 };
         
-        // Для реверберации (Dolby эффект)
         this.convolver = null;
         this.reverbGain = null;
     }
@@ -47,11 +46,9 @@ class SoundEngine {
         this.masterMusic.connect(this.ctx.destination);
         this.masterEffects.connect(this.ctx.destination);
         
-        // ★ СОЗДАНИЕ РЕВЕРБЕРАЦИИ (DOLBY SURROUND) ★
         this.convolver = this.ctx.createConvolver();
         this.reverbGain = this.ctx.createGain();
         
-        // Генерация импульса для эха (2.5 секунды)
         const rate = this.ctx.sampleRate;
         const length = rate * 2.5;
         const impulse = this.ctx.createBuffer(2, length, rate);
@@ -64,7 +61,7 @@ class SoundEngine {
         this.convolver.buffer = impulse;
         this.convolver.connect(this.reverbGain);
         this.reverbGain.connect(this.masterEffects);
-        this.reverbGain.gain.value = 0.3; // Громкость эха по умолчанию
+        this.reverbGain.gain.value = 0.3;
         
         this.setMasterVolume('music', this.volumes.music);
         this.setMasterVolume('effects', this.volumes.effects);
@@ -104,13 +101,13 @@ class SoundEngine {
         const source = this.ctx.createBufferSource();
         source.buffer = this.loadedBuffers[id];
         
-        // ★ ПЛАВНЫЙ ЛУП (ОБРЕЗАЕМ КОНЕЦ НА 0.14 СЕК) ★
+        // ★ ОБРЕЗКА ЛУПА ЕЩЕ НА 0.10 СЕК (ИТОГО 0.24) ★
         if (loop) {
             source.loop = true;
             const bufferDuration = this.loadedBuffers[id].duration;
             source.loopStart = 0;
-            // Обрезаем за 0.14 сек до конца (0.07 + 0.07 = 0.14), чтобы избежать паузы
-            source.loopEnd = Math.max(0.1, bufferDuration - 0.14);
+            // Обрезаем за 0.24 сек до конца
+            source.loopEnd = Math.max(0.1, bufferDuration - 0.24);
         } else {
             source.loop = false;
         }
@@ -122,20 +119,25 @@ class SoundEngine {
 
         let lastNode = source;
 
-        // ★ DOLBY SURROUND (3D ЗВУК) ★
-        if (position && this.audioMode !== 'mono' && this.ctx.createPanner) {
+        // ★ ПРИНУДИТЕЛЬНЫЙ SURROUND ДЛЯ ВСЕХ ЗВУКОВ ★
+        if (this.audioMode !== 'mono' && this.ctx.createPanner) {
             const panner = this.ctx.createPanner();
-            // HRTF - это модель, которая симулирует реальное человеческое ухо (Dolby)
-            panner.panningModel = 'HRTF'; 
+            panner.panningModel = 'HRTF'; // Dolby эффект
             panner.distanceModel = 'inverse';
-            panner.positionX.value = position.x || 0;
-            panner.positionY.value = position.y || 0;
-            panner.positionZ.value = position.z || 1;
+            
+            // Если позиция не задана, создаем случайную (для объема)
+            const px = position ? position.x : (Math.random() * 2 - 1) * 2;
+            const py = position ? position.y : (Math.random() * 2 - 1);
+            const pz = position ? position.z : (Math.random() * 2 + 0.5);
+            
+            panner.positionX.value = px;
+            panner.positionY.value = py;
+            panner.positionZ.value = pz;
             
             lastNode.connect(panner);
             lastNode = panner;
         } 
-        // Стерео панорама (если нет 3D позиции)
+        // Стерео панорама (на случай если HRTF не поддерживается)
         else if (pan !== 0 && this.ctx.createStereoPanner) {
             const stereoPanner = this.ctx.createStereoPanner();
             stereoPanner.pan.value = Math.max(-1, Math.min(1, pan));
@@ -143,7 +145,6 @@ class SoundEngine {
             lastNode = stereoPanner;
         }
 
-        // Реверберация (эхо)
         if (reverb && type === 'effects') {
             const delayNode = this.ctx.createDelay();
             delayNode.delayTime.value = 0.28;

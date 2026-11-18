@@ -409,9 +409,8 @@
         let loaded = 0;
 
         for (const zipInfo of zips) {
-          // Проверяем, есть ли файлы для этого архива в missingFiles
           const filesToExtract = missingFiles.filter(zipInfo.filter);
-          if (filesToExtract.length === 0) continue; // Если нет — пропускаем архив
+          if (filesToExtract.length === 0) continue; 
 
           status.textContent = `Скачивание ${zipInfo.name}...`;
           
@@ -423,7 +422,13 @@
           const zip = await JSZip.loadAsync(zipBlob);
 
           for (const item of filesToExtract) {
-            const zipPath = item.url.replace('./', '');
+            let zipPath = item.url.replace('./', '');
+            
+            // ★ ИСПРАВЛЕНИЕ ПУТЕЙ ★
+            if (zipInfo.name === 'sounds.zip') {
+              zipPath = zipPath.replace('Звуки/', '');
+            }
+            
             const file = zip.file(zipPath);
             
             if (file) {
@@ -436,7 +441,7 @@
                 await window.SoundsEngine.loadSound(item.id, fileBlob);
               }
             } else {
-              console.warn(`Файл ${item.url} не найден в ${zipInfo.name}!`);
+              console.warn(`Файл ${item.url} не найден в ${zipInfo.name} (искали ${zipPath})!`);
             }
             
             loaded++;

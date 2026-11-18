@@ -60,8 +60,6 @@
     @keyframes bubbles-move { 0% { background-position: 0 0; } 100% { background-position: 100px 0; } }
 
     #loading-size { font-size: 14px; color: #aaa; display: none; }
-    
-    /* Статус и ошибки */
     #loading-status { position: absolute; bottom: 25px; right: 25px; font-size: 14px; color: #666; text-align: right; max-width: 200px; }
     #loading-error { position: absolute; bottom: 50px; right: 25px; font-size: 14px; color: #ff3333; text-align: right; display: none; }
 
@@ -210,7 +208,7 @@
               };
             });
           } else {
-            isUpdateNeeded = true; // Первый запуск
+            isUpdateNeeded = true;
           }
         }
       } catch (e) {
@@ -227,7 +225,6 @@
         activateScreen('install-screen'); setLanguage('ru', true); return;
       }
 
-      // 1. Проверка версии происходит тут
       await checkVersion();
 
       const imgL1 = $('img-l1'), imgL2 = $('img-l2'), fade = $('fade-overlay');
@@ -266,7 +263,6 @@
         await import('./Фон/sounds.js').catch(() => {});
         if (window.SoundsEngine) window.SoundsEngine.init();
 
-        // 2. Загрузка, проверка и скачивание
         await loadAssets(isUpdateNeeded);
 
         const menuModule = await import('./Блоки/menu.js');
@@ -292,7 +288,7 @@
       }
     }, { once: true });
 
-    // ★ СИСТЕМА КЭШИРОВАНИЯ (ZIP + IndexedDB) ★
+    // ★ СИСТЕМА КЭШИРОВАНИЯ (2 ZIP + IndexedDB) ★
     const DB_NAME = 'woland_db';
     const STORE_NAME = 'assets';
     let db = null;
@@ -339,7 +335,6 @@
       });
     }
 
-    // Кнопка "Исправить проблемы"
     $('btn-fix').onclick = async () => {
       $('btn-fix').classList.remove('show');
       $('loading-error').style.display = 'none';
@@ -369,7 +364,6 @@
         window.GameAssets = window.GameAssets || {};
         let missingFiles = [];
 
-        // Стадия 1: Проверка (моментальная)
         status.textContent = 'Проверка...';
         if (!forceUpdate) {
           const checkPromises = queue.map(async (item) => {
@@ -395,7 +389,6 @@
           missingFiles = queue;
         }
 
-        // Если всё на месте — выходим
         if (missingFiles.length === 0) {
           status.textContent = 'Все файлы в кэше';
           progressBar.style.display = 'none';
@@ -403,48 +396,55 @@
           return;
         }
 
-        // Стадия 2: Скачивание/Обновление
         status.textContent = forceUpdate ? 'Обновление...' : 'Скачивание...';
         progressBar.style.display = 'block';
         sizeText.style.display = 'block';
         
-        const zipResp = await fetch('./game.zip');
-        if (!zipResp.ok) throw new Error('game.zip не найден');
-        const zipBlob = await zipResp.blob();
-        
-        progress.style.width = '50%'; 
-        sizeText.textContent = 'Распаковка...';
-        
-        const zip = await JSZip.loadAsync(zipBlob);
-        
+        // ★ СКАЧИВАЕМ И РАСПАКОВЫВАЕМ ОБА АРХИВА ★
+        const zips = [
+          { name: 'sounds.zip', filter: (item) => item.type === 'Звуки' && !item.url.includes('Игра эффекты') },
+          { name: 'effects.zip', filter: (item) => item.type === 'Звуки' && item.url.includes('Игра эффекты') }
+        ];
+
         let loaded = 0;
-        for (const item of missingFiles) {
-          // Пути в load.json: "./Звуки/Меню/Меню.opus"
-          // Пути в архиве: "Звуки/Меню/Меню.opus"
-          const zipPath = item.url.replace('./', '');
-          const file = zip.file(zipPath);
+
+        for (const zipInfo of zips) {
+          // Проверяем, есть ли файлы для этого архива в missingFiles
+          const filesToExtract = missingFiles.filter(zipInfo.filter);
+          if (filesToExtract.length === 0) continue; // Если нет — пропускаем архив
+
+          status.textContent = `Скачивание ${zipInfo.name}...`;
           
-          if (file) {
-            const fileBlob = await file.async('blob');
-            await putAsset(item.url, fileBlob);
+          const zipResp = await fetch('./' + zipInfo.name);
+          if (!zipResp.ok) throw new Error(`${zipInfo.name} не найден`);
+          const zipBlob = await zipResp.blob();
+          
+          status.textContent = `Распаковка ${zipInfo.name}...`;
+          const zip = await JSZip.loadAsync(zipBlob);
+
+          for (const item of filesToExtract) {
+            const zipPath = item.url.replace('./', '');
+            const file = zip.file(zipPath);
             
-            if (item.type === 'Текстуры') {
-              window.GameAssets[item.id] = URL.createObjectURL(fileBlob);
-            } else if (window.SoundsEngine) {
-              await window.SoundsEngine.loadSound(item.id, fileBlob);
+            if (file) {
+              const fileBlob = await file.async('blob');
+              await putAsset(item.url, fileBlob);
+              
+              if (item.type === 'Текстуры') {
+                window.GameAssets[item.id] = URL.createObjectURL(fileBlob);
+              } else if (window.SoundsEngine) {
+                await window.SoundsEngine.loadSound(item.id, fileBlob);
+              }
+            } else {
+              console.warn(`Файл ${item.url} не найден в ${zipInfo.name}!`);
             }
-          } else {
-            console.warn(`Файл ${item.url} не найден в архиве!`);
-            $('loading-error').textContent = `Нет файла: ${zipPath}`;
-            $('loading-error').style.display = 'block';
+            
+            loaded++;
+            const percent = Math.round((loaded / missingFiles.length) * 100);
+            progress.style.width = `${percent}%`;
           }
-          
-          loaded++;
-          const percent = 50 + Math.round((loaded / missingFiles.length) * 50);
-          progress.style.width = `${percent}%`;
         }
 
-        // Стадия 3: Финальная проверка
         status.textContent = 'Проверка...';
         let checkFailed = false;
         

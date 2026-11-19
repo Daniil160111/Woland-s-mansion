@@ -41,19 +41,15 @@
     #disclaimer-screen { background: #000; cursor: pointer; z-index: 100; padding: 0; }
     #disclaimer-img { width: 100vw; height: 100vh; object-fit: cover; display: block; }
 
-    /* ★ НОВЫЙ ПИКСЕЛЬНЫЙ ПЕРЕХОД ★ */
-    #pixel-transition {
+    /* ★ CANVAS ДЛЯ ПИКСЕЛЬНОГО ПЕРЕХОДА ★ */
+    #pixel-canvas {
       position: fixed; inset: 0; z-index: 150; display: none;
-      display: grid; pointer-events: none;
-    }
-    .pixel-block {
-      background: transparent;
-      transition: background 0.1s ease;
+      width: 100%; height: 100%;
     }
 
     #fade-overlay { position: fixed; inset: 0; background: #000; z-index: 50; pointer-events: none; opacity: 0; transition: opacity 1.5s ease-in-out; }
 
-    #loading-screen { background: #050407; z-index: 90; padding: 0; overflow: hidden; }
+    #loading-screen { background: #050407; z-index: 90; padding: 0; overflow: hidden; opacity: 0; transition: opacity 0.7s ease; }
     .loading-center { display: flex; flex-direction: column; align-items: center; gap: 15px; width: 90%; max-width: 600px; margin-top: -10vh; }
     #loading-logo { width: min(80vw, 500px); max-height: 25vh; object-fit: contain; }
     
@@ -112,8 +108,8 @@
     <img id="disclaimer-img" src="./Текстуры/Меню/Дисклеймер.jpg" alt="Disclaimer" onerror="this.style.display='none';">
   </section>
 
-  <!-- ★ КОНТЕЙНЕР ДЛЯ ПИКСЕЛЬНОГО ПЕРЕХОДА ★ -->
-  <div id="pixel-transition"></div>
+  <!-- ★ CANVAS ДЛЯ ПЕРЕХОДА ★ -->
+  <canvas id="pixel-canvas"></canvas>
 
   <section id="loading-screen" class="screen">
     <div class="loading-center">
@@ -250,68 +246,96 @@
       activateScreen('disclaimer-screen');
     }
 
-    // ★ ПИКСЕЛЬНЫЙ ПЕРЕХОД ★
+    // ★ ПИКСЕЛЬНЫЙ ПЕРЕХОД НА CANVAS ★
     async function pixelTransition() {
-      const container = $('pixel-transition');
-      const cols = 20; // Количество пикселей по горизонтали
-      const rows = 15; // Количество пикселей по вертикали
+      const canvas = $('pixel-canvas');
+      const ctx = canvas.getContext('2d');
       
-      container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-      container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
-      container.innerHTML = '';
-      container.style.display = 'grid';
+      // Разрешение "пикселей" (10x10 для мобилок и больше для ПК)
+      const pixelSize = 20; 
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
 
-      // Создаем сетку пикселей
+      // Количество колонок и строк
+      const cols = Math.ceil(canvas.width / pixelSize);
+      const rows = Math.ceil(canvas.height / pixelSize);
+
+      canvas.style.display = 'block';
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Создаем массив пикселей и их задержек
+      const pixels = [];
+      let maxDelay = 1.2; // Максимальная задержка (1.2 сек)
+
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          const block = document.createElement('div');
-          block.className = 'pixel-block';
-          
-          // Задержка зависит от позиции (слева-направо, сверху-вниз)
-          // Максимальная задержка должна быть такой, чтобы общий процесс занял 1.5 сек
-          const maxDelay = 1.2; // Оставляем 0.3 сек на саму анимацию пикселя
-          const progress = (r * cols + c) / (rows * cols); // 0.0 -> 1.0
+          // Расчет задержки от левого верхнего угла к правому нижнему
+          const progress = (r * cols + c) / (rows * cols);
           const delay = progress * maxDelay;
           
-          block.style.transitionDelay = `${delay}s`;
-          container.appendChild(block);
+          pixels.push({
+            x: c * pixelSize,
+            y: r * pixelSize,
+            delay: delay * 1000, // переводим в миллисекунды
+            startTime: performance.now()
+          });
         }
       }
 
-      // Запускаем анимацию
-      const blocks = container.querySelectorAll('.pixel-block');
-      blocks.forEach(b => {
-        // Сначала плавно размываем (в течение 0.15 сек)
-        b.style.transition = 'background 0.15s ease, filter 0.15s ease';
-        b.style.filter = 'blur(4px)';
-        b.style.background = 'rgba(0,0,0,0)';
-        
-        // Затем резко затемняем (через 0.15 сек)
-        setTimeout(() => {
-          b.style.background = '#000';
-          b.style.filter = 'none';
-        }, parseFloat(b.style.transitionDelay) * 1000 + 150);
-      });
+      // Анимация
+      return new Promise(resolve => {
+        function animate() {
+          const now = performance.now();
+          let allDone = true;
 
-      // Ждем 1.5 секунды, пока всё не станет черным
-      await new Promise(r => setTimeout(r, 1500));
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          for (const p of pixels) {
+            const elapsed = now - p.startTime;
+
+            if (elapsed >= p.delay) {
+              // Время пикселя пришло
+              const timeSincePixelStart = elapsed - p.delay;
+              
+              if (timeSincePixelStart < 150) {
+                // Фаза 1: Появление размытия (0.15 сек)
+                const alpha = timeSincePixelStart / 150; // 0 -> 1
+                ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+                ctx.filter = 'blur(2px)'; // Эффект размытия
+                ctx.fillRect(p.x, p.y, pixelSize + 2, pixelSize + 2);
+              } else {
+                // Фаза 2: Сплошной черный
+                ctx.fillStyle = '#000';
+                ctx.filter = 'none';
+                ctx.fillRect(p.x, p.y, pixelSize + 2, pixelSize + 2);
+              }
+              
+              if (timeSincePixelStart < 300) allDone = false; // Ждем, пока все дочерние анимации завершатся
+            } else {
+              allDone = false;
+            }
+          }
+
+          if (!allDone) {
+            requestAnimationFrame(animate);
+          } else {
+            resolve();
+          }
+        }
+
+        requestAnimationFrame(animate);
+      });
     }
 
     $('disclaimer-screen').addEventListener('click', async () => {
-      // 1. Запускаем пиксельный переход (1.5 сек)
+      // 1. Запускаем пиксельный переход
       await pixelTransition();
 
-      // 2. Показываем экран загрузки (0.7 сек)
+      // 2. Показываем экран загрузки (плавно 0.7 сек)
+      const loadingScreen = $('loading-screen');
+      loadingScreen.style.opacity = '1';
       activateScreen('loading-screen');
       
-      // Делаем экран загрузки плавно видимым
-      const loadingScreen = $('loading-screen');
-      loadingScreen.style.opacity = '0';
-      loadingScreen.style.transition = 'opacity 0.7s ease';
-      requestAnimationFrame(() => {
-        loadingScreen.style.opacity = '1';
-      });
-
       await new Promise(r => setTimeout(r, 700));
 
       try {
@@ -328,14 +352,14 @@
 
         localStorage.setItem('woland_version', currentServerVersion);
 
-        // Скрываем пиксели и показываем игру
+        // Скрываем canvas и показываем игру
         const fade = $('fade-overlay');
         fade.style.transition = 'opacity 1s ease-in-out'; fade.style.opacity = '1';
         await new Promise(r => setTimeout(r, 1000));
         
         activateScreen(null);
         $('game-container').classList.add('active');
-        $('pixel-transition').style.display = 'none';
+        $('pixel-canvas').style.display = 'none';
         fade.style.opacity = '0';
 
       } catch (err) {

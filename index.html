@@ -62,8 +62,16 @@
     #loading-size { font-size: 14px; color: #aaa; display: none; }
     #loading-status { position: absolute; bottom: 25px; right: 25px; font-size: 14px; color: #666; text-align: right; max-width: 200px; }
     
-    /* ★ Кнопка "Повторить попытку" ★ */
-    #btn-retry { display: none; margin-top: 20px; padding: 10px 20px; background: #800000; color: #fff; border: 2px solid #f00; border-radius: 8px; cursor: pointer; font-size: 14px; z-index: 100; }
+    /* ★ Ошибка и кнопка повтора ★ */
+    #loading-error { 
+      position: absolute; bottom: 60px; right: 25px; font-size: 14px; color: #ff3333; 
+      text-align: right; display: none; max-width: 250px; 
+    }
+    #btn-retry { 
+      display: none; margin-top: 20px; padding: 10px 20px; 
+      background: #800000; color: #fff; border: 2px solid #f00; 
+      border-radius: 8px; cursor: pointer; font-size: 14px; z-index: 100; 
+    }
     #btn-retry.show { display: block; }
 
     #update-modal { position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.8); display: none; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
@@ -117,8 +125,8 @@
       <div class="progress" id="progress-bar"><div id="progress-fill"></div></div>
       <div id="loading-size">0.0 МБ / 0.0 МБ</div>
     </div>
-    <!-- Кнопка повтора -->
     <button id="btn-retry">Повторить попытку</button>
+    <div id="loading-error"></div>
     <div id="loading-status">Подготовка...</div>
   </section>
 
@@ -189,6 +197,7 @@
       $('loading-status').textContent = 'Проверка версии...';
       try {
         const res = await fetch('./version.json');
+        if (!res.ok) throw new Error('404');
         const data = await res.json();
         currentServerVersion = data.version;
         
@@ -215,7 +224,6 @@
         }
       } catch (e) {
         console.warn('Не удалось проверить версию:', e);
-        // Показываем ошибку на 0.5 сек
         $('loading-error').textContent = 'Не удалось проверить версию';
         $('loading-error').style.display = 'block';
         await new Promise(r => setTimeout(r, 500));
@@ -274,7 +282,7 @@
         const totalDiagonals = cols + rows - 1;
         const timePerDiagonal = totalDuration / totalDiagonals;
         
-        const blurDuration = 150; // Блюр 150мс (0.1 сек дольше)
+        const blurDuration = 150; 
 
         function animate(now) {
           const elapsed = now - startTime;
@@ -330,32 +338,34 @@
       
       await new Promise(r => setTimeout(r, 900));
 
-      // Запускаем загрузку
       await runLoadProcess(isUpdateNeeded);
     }, { once: true });
 
-    // ★ ПРОЦЕСС ЗАГРУЗКИ И ПРОВЕРКИ ★
+    // ★ ПРОЦЕСС ЗАГРУЗКИ И ПРОВЕРКИ (с защитой от зависаний) ★
     async function runLoadProcess(forceUpdate = false) {
       const status = $('loading-status');
       const progressBar = $('progress-bar');
       const progress = $('progress-fill');
       const sizeText = $('loading-size');
       const btnRetry = $('btn-retry');
+      const errorText = $('loading-error');
       
       try {
         status.textContent = 'Проверка...';
         btnRetry.classList.remove('show');
+        errorText.style.display = 'none';
         
         await initDB();
 
-        // 1. Загружаем манифест
         let manifest;
         try {
           const resp = await fetch('./load.json');
           if (!resp.ok) throw new Error('load.json не найден');
           manifest = await resp.json();
         } catch (e) {
-          status.textContent = 'Не удалось загрузить список файлов';
+          status.textContent = 'Ошибка списка файлов';
+          errorText.textContent = 'Не удалось загрузить load.json';
+          errorText.style.display = 'block';
           btnRetry.classList.add('show');
           return;
         }
@@ -368,11 +378,12 @@
         window.GameAssets = window.GameAssets || {};
         let missingFiles = [];
 
-        // 2. Проверяем кэш
         if (!forceUpdate) {
           const checkPromises = queue.map(async (item) => {
-            const cachedBlob = await getAsset(item.url);
-            return { item, cachedBlob };
+            try {
+              const cachedBlob = await getAsset(item.url);
+              return { item, cachedBlob };
+            } catch(e) { return { item, cachedBlob: null }; }
           });
 
           const results = await Promise.all(checkPromises);
@@ -393,7 +404,7 @@
           missingFiles = queue;
         }
 
-        // 3. Если качать нечего — просто переходим в игру
+        // ★ Если качать нечего — просто переходим в игру ★
         if (missingFiles.length === 0) {
           status.textContent = 'Готово!';
           progressBar.style.display = 'none';
@@ -403,7 +414,7 @@
           return;
         }
 
-        // 4. Качаем недостающее
+        // Качаем недостающее
         status.textContent = forceUpdate ? 'Обновление...' : 'Скачивание...';
         progressBar.style.display = 'block';
         sizeText.style.display = 'block';
@@ -430,7 +441,6 @@
             }
           } catch (e) {
             console.warn(`[Пропуск] ${item.url}`);
-            // Если файл не скачался — он останется в missingFiles при повторной проверке
           }
           
           const percent = Math.min(100, Math.round((loadedBytes / totalBytes) * 100));
@@ -438,7 +448,7 @@
           sizeText.textContent = `${(loadedBytes / 1024 / 1024).toFixed(1)} МБ / ${(totalBytes / 1024 / 1024).toFixed(1)} МБ`;
         }
 
-        // 5. Финальная проверка целостности (перепроверяем кэш)
+        // Финальная проверка
         status.textContent = 'Проверка целостности...';
         let checkFailed = false;
         
@@ -446,8 +456,8 @@
           const cached = await getAsset(item.url);
           if (!cached) {
             checkFailed = true;
-            $('loading-error').textContent = 'Не удалось проверить целостность файлов';
-            $('loading-error').style.display = 'block';
+            errorText.textContent = 'Не удалось проверить целостность файлов';
+            errorText.style.display = 'block';
             break;
           }
         }
@@ -465,6 +475,8 @@
       } catch (e) {
         console.error('Ошибка загрузки:', e);
         status.textContent = 'Ошибка загрузки';
+        errorText.textContent = e.message || 'Неизвестная ошибка';
+        errorText.style.display = 'block';
         btnRetry.classList.add('show');
       }
     }
@@ -491,7 +503,10 @@
 
       } catch (err) {
         console.error('Критическая ошибка:', err);
-        $('loading-status').textContent = 'Ошибка запуска';
+        $('loading-status').textContent = 'Ошибка запуска меню';
+        $('loading-error').textContent = err.message;
+        $('loading-error').style.display = 'block';
+        $('btn-retry').classList.add('show');
       }
     }
 
@@ -499,7 +514,7 @@
     $('btn-retry').onclick = async () => {
       $('btn-retry').classList.remove('show');
       $('loading-error').style.display = 'none';
-      // Перезапускаем процесс
+      // Перезапускаем процесс (сначала проверка, потом загрузка при необходимости)
       await runLoadProcess(false);
     };
 

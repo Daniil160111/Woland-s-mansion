@@ -53,7 +53,8 @@
     /* Экран загрузки */
     #loading-screen { 
       background: #050407; z-index: 90; padding: 0; overflow: hidden; 
-      opacity: 0; transition: opacity 0.7s ease; 
+      /* ★ ИЗМЕНЕНО: Более плавное и равномерное появление 0.9с ★ */
+      opacity: 0; transition: opacity 0.9s linear; 
     }
     .loading-center { display: flex; flex-direction: column; align-items: center; gap: 15px; width: 90%; max-width: 600px; margin-top: -10vh; }
     #loading-logo { width: min(80vw, 500px); max-height: 25vh; object-fit: contain; }
@@ -268,47 +269,34 @@
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         let startTime = performance.now();
-        let totalDuration = 1500; // 1.5 секунды на весь эффект
+        let totalDuration = 1500; // 1.5 секунды
 
-        // Общее количество диагоналей (волн)
         const totalDiagonals = cols + rows - 1;
-        // Время на одну диагональ
         const timePerDiagonal = totalDuration / totalDiagonals;
-        // Время "размытия" для одного пикселя
-        const blurDuration = 50;
+        
+        // ★ Блюр держится на 0.1 сек дольше (было 50мс, стало 150мс) ★
+        const blurDuration = 150;
 
         function animate(now) {
           const elapsed = now - startTime;
           ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-          let allDone = true;
-
           for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
-              // Номер диагонали (волны), к которой относится пиксель
               const diagonalIndex = r + c;
-              
-              // Время, когда должен начаться эффект для этой диагонали
               const startDelay = diagonalIndex * timePerDiagonal;
-              
-              // Время с начала эффекта для конкретного пикселя
               const timeSinceStart = elapsed - startDelay;
 
-              if (timeSinceStart < 0) {
-                // Пиксель ещё не появился
-                allDone = false;
-                continue;
-              }
+              if (timeSinceStart < 0) continue;
 
               if (timeSinceStart < blurDuration) {
-                // Фаза 1: Размытый пиксель (появляется)
+                // Фаза 1: Блюр
                 const alpha = timeSinceStart / blurDuration;
                 ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
                 ctx.filter = 'blur(3px)';
                 ctx.fillRect(c * pixelSize, r * pixelSize, pixelSize + 1, pixelSize + 1);
-                allDone = false;
               } else {
-                // Фаза 2: Сплошной черный (становится черным)
+                // Фаза 2: Черный
                 ctx.fillStyle = '#000';
                 ctx.filter = 'none';
                 ctx.fillRect(c * pixelSize, r * pixelSize, pixelSize + 1, pixelSize + 1);
@@ -316,7 +304,7 @@
             }
           }
 
-          if (elapsed > totalDuration + 100) { // Небольшой запас
+          if (elapsed > totalDuration + 150) { 
             resolve();
           } else {
             requestAnimationFrame(animate);
@@ -331,16 +319,23 @@
       // 1. Запускаем эффект пикселей
       await pixelTransition();
 
-      // 2. Скрываем дисклеймер и Canvas
-      $('disclaimer-screen').classList.remove('active');
-      $('pixel-canvas').style.display = 'none';
-
-      // 3. Показываем экран загрузки (плавно 0.7 сек)
-      const loadingScreen = $('loading-screen');
-      loadingScreen.style.opacity = '1';
-      activateScreen('loading-screen');
+      // 2. Полностью скрываем дисклеймер и Canvas (чтобы картинка не просвечивала)
+      const discScreen = $('disclaimer-screen');
+      discScreen.classList.remove('active');
+      discScreen.style.display = 'none'; // Жесткое скрытие
       
-      await new Promise(r => setTimeout(r, 700));
+      const canvas = $('pixel-canvas');
+      canvas.style.display = 'none';
+
+      // 3. Показываем экран загрузки (плавно 0.9 сек, линейно)
+      const loadingScreen = $('loading-screen');
+      loadingScreen.classList.add('active');
+      // Небольшая задержка, чтобы браузер применил display: flex, но opacity остался 0
+      requestAnimationFrame(() => {
+        loadingScreen.style.opacity = '1';
+      });
+      
+      await new Promise(r => setTimeout(r, 900));
 
       try {
         await import('./Фон/settings-manager.js').then(m => m.Settings.init()).catch(() => {});

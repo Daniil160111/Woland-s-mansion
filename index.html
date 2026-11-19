@@ -41,6 +41,16 @@
     #disclaimer-screen { background: #000; cursor: pointer; z-index: 100; padding: 0; }
     #disclaimer-img { width: 100vw; height: 100vh; object-fit: cover; display: block; }
 
+    /* ★ НОВЫЙ ПИКСЕЛЬНЫЙ ПЕРЕХОД ★ */
+    #pixel-transition {
+      position: fixed; inset: 0; z-index: 150; display: none;
+      display: grid; pointer-events: none;
+    }
+    .pixel-block {
+      background: transparent;
+      transition: background 0.1s ease;
+    }
+
     #fade-overlay { position: fixed; inset: 0; background: #000; z-index: 50; pointer-events: none; opacity: 0; transition: opacity 1.5s ease-in-out; }
 
     #loading-screen { background: #050407; z-index: 90; padding: 0; overflow: hidden; }
@@ -101,6 +111,9 @@
   <section id="disclaimer-screen" class="screen">
     <img id="disclaimer-img" src="./Текстуры/Меню/Дисклеймер.jpg" alt="Disclaimer" onerror="this.style.display='none';">
   </section>
+
+  <!-- ★ КОНТЕЙНЕР ДЛЯ ПИКСЕЛЬНОГО ПЕРЕХОДА ★ -->
+  <div id="pixel-transition"></div>
 
   <section id="loading-screen" class="screen">
     <div class="loading-center">
@@ -186,7 +199,6 @@
         
         if (localVersion !== currentServerVersion) {
           if (localVersion !== '0.0.0') {
-            // Показываем окно только если это не первый запуск
             $('new-version').textContent = currentServerVersion;
             $('update-modal').style.display = 'flex';
             return new Promise((resolve) => {
@@ -201,7 +213,7 @@
               };
             });
           } else {
-            isUpdateNeeded = true; // Первый запуск
+            isUpdateNeeded = true; 
           }
         }
       } catch (e) {
@@ -238,14 +250,69 @@
       activateScreen('disclaimer-screen');
     }
 
-    $('disclaimer-screen').addEventListener('click', async () => {
-      const fade = $('fade-overlay');
-      fade.style.transition = 'opacity 1.5s ease-in-out'; fade.style.opacity = '1';
-      await new Promise(r => setTimeout(r, 1500));
+    // ★ ПИКСЕЛЬНЫЙ ПЕРЕХОД ★
+    async function pixelTransition() {
+      const container = $('pixel-transition');
+      const cols = 20; // Количество пикселей по горизонтали
+      const rows = 15; // Количество пикселей по вертикали
+      
+      container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+      container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+      container.innerHTML = '';
+      container.style.display = 'grid';
 
+      // Создаем сетку пикселей
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const block = document.createElement('div');
+          block.className = 'pixel-block';
+          
+          // Задержка зависит от позиции (слева-направо, сверху-вниз)
+          // Максимальная задержка должна быть такой, чтобы общий процесс занял 1.5 сек
+          const maxDelay = 1.2; // Оставляем 0.3 сек на саму анимацию пикселя
+          const progress = (r * cols + c) / (rows * cols); // 0.0 -> 1.0
+          const delay = progress * maxDelay;
+          
+          block.style.transitionDelay = `${delay}s`;
+          container.appendChild(block);
+        }
+      }
+
+      // Запускаем анимацию
+      const blocks = container.querySelectorAll('.pixel-block');
+      blocks.forEach(b => {
+        // Сначала плавно размываем (в течение 0.15 сек)
+        b.style.transition = 'background 0.15s ease, filter 0.15s ease';
+        b.style.filter = 'blur(4px)';
+        b.style.background = 'rgba(0,0,0,0)';
+        
+        // Затем резко затемняем (через 0.15 сек)
+        setTimeout(() => {
+          b.style.background = '#000';
+          b.style.filter = 'none';
+        }, parseFloat(b.style.transitionDelay) * 1000 + 150);
+      });
+
+      // Ждем 1.5 секунды, пока всё не станет черным
+      await new Promise(r => setTimeout(r, 1500));
+    }
+
+    $('disclaimer-screen').addEventListener('click', async () => {
+      // 1. Запускаем пиксельный переход (1.5 сек)
+      await pixelTransition();
+
+      // 2. Показываем экран загрузки (0.7 сек)
       activateScreen('loading-screen');
-      await new Promise(r => setTimeout(r, 500));
-      fade.style.opacity = '0';
+      
+      // Делаем экран загрузки плавно видимым
+      const loadingScreen = $('loading-screen');
+      loadingScreen.style.opacity = '0';
+      loadingScreen.style.transition = 'opacity 0.7s ease';
+      requestAnimationFrame(() => {
+        loadingScreen.style.opacity = '1';
+      });
+
+      await new Promise(r => setTimeout(r, 700));
 
       try {
         await import('./Фон/settings-manager.js').then(m => m.Settings.init()).catch(() => {});
@@ -261,11 +328,14 @@
 
         localStorage.setItem('woland_version', currentServerVersion);
 
+        // Скрываем пиксели и показываем игру
+        const fade = $('fade-overlay');
         fade.style.transition = 'opacity 1s ease-in-out'; fade.style.opacity = '1';
         await new Promise(r => setTimeout(r, 1000));
         
         activateScreen(null);
         $('game-container').classList.add('active');
+        $('pixel-transition').style.display = 'none';
         fade.style.opacity = '0';
 
       } catch (err) {
@@ -341,7 +411,6 @@
         window.GameAssets = window.GameAssets || {};
         let missingFiles = [];
 
-        // 1. Проверка кэша
         status.textContent = 'Проверка...';
         if (!forceUpdate) {
           const checkPromises = queue.map(async (item) => {
@@ -363,7 +432,6 @@
             }
           }
         } else {
-          // Если обновляемся — чистим старый кэш
           await clearCache();
           missingFiles = queue;
         }
@@ -375,7 +443,6 @@
           return;
         }
 
-        // 2. Загрузка
         status.textContent = forceUpdate ? 'Обновление...' : 'Скачивание...';
         progressBar.style.display = 'block';
         sizeText.style.display = 'block';

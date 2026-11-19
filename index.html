@@ -41,15 +41,20 @@
     #disclaimer-screen { background: #000; cursor: pointer; z-index: 100; padding: 0; }
     #disclaimer-img { width: 100vw; height: 100vh; object-fit: cover; display: block; }
 
-    /* ★ CANVAS ДЛЯ ПИКСЕЛЬНОГО ПЕРЕХОДА ★ */
+    /* ★ CANVAS ДЛЯ ПЕРЕХОДА ★ */
     #pixel-canvas {
       position: fixed; inset: 0; z-index: 150; display: none;
       width: 100%; height: 100%;
+      background: transparent;
     }
 
     #fade-overlay { position: fixed; inset: 0; background: #000; z-index: 50; pointer-events: none; opacity: 0; transition: opacity 1.5s ease-in-out; }
 
-    #loading-screen { background: #050407; z-index: 90; padding: 0; overflow: hidden; opacity: 0; transition: opacity 0.7s ease; }
+    /* Экран загрузки */
+    #loading-screen { 
+      background: #050407; z-index: 90; padding: 0; overflow: hidden; 
+      opacity: 0; transition: opacity 0.7s ease; 
+    }
     .loading-center { display: flex; flex-direction: column; align-items: center; gap: 15px; width: 90%; max-width: 600px; margin-top: -10vh; }
     #loading-logo { width: min(80vw, 500px); max-height: 25vh; object-fit: contain; }
     
@@ -246,80 +251,75 @@
       activateScreen('disclaimer-screen');
     }
 
-    // ★ ПИКСЕЛЬНЫЙ ПЕРЕХОД НА CANVAS ★
+    // ★ ЭФФЕКТ "ДОМИНО" (ПИКСЕЛИ ПО ДИАГОНАЛИ) ★
     async function pixelTransition() {
-      const canvas = $('pixel-canvas');
-      const ctx = canvas.getContext('2d');
-      
-      // Разрешение "пикселей" (10x10 для мобилок и больше для ПК)
-      const pixelSize = 20; 
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-
-      // Количество колонок и строк
-      const cols = Math.ceil(canvas.width / pixelSize);
-      const rows = Math.ceil(canvas.height / pixelSize);
-
-      canvas.style.display = 'block';
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Создаем массив пикселей и их задержек
-      const pixels = [];
-      let maxDelay = 1.2; // Максимальная задержка (1.2 сек)
-
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          // Расчет задержки от левого верхнего угла к правому нижнему
-          const progress = (r * cols + c) / (rows * cols);
-          const delay = progress * maxDelay;
-          
-          pixels.push({
-            x: c * pixelSize,
-            y: r * pixelSize,
-            delay: delay * 1000, // переводим в миллисекунды
-            startTime: performance.now()
-          });
-        }
-      }
-
-      // Анимация
       return new Promise(resolve => {
-        function animate() {
-          const now = performance.now();
-          let allDone = true;
+        const canvas = $('pixel-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        const pixelSize = 20; 
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
 
+        const cols = Math.ceil(canvas.width / pixelSize);
+        const rows = Math.ceil(canvas.height / pixelSize);
+
+        canvas.style.display = 'block';
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        let startTime = performance.now();
+        let totalDuration = 1500; // 1.5 секунды на весь эффект
+
+        // Общее количество диагоналей (волн)
+        const totalDiagonals = cols + rows - 1;
+        // Время на одну диагональ
+        const timePerDiagonal = totalDuration / totalDiagonals;
+        // Время "размытия" для одного пикселя
+        const blurDuration = 50;
+
+        function animate(now) {
+          const elapsed = now - startTime;
           ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-          for (const p of pixels) {
-            const elapsed = now - p.startTime;
+          let allDone = true;
 
-            if (elapsed >= p.delay) {
-              // Время пикселя пришло
-              const timeSincePixelStart = elapsed - p.delay;
+          for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              // Номер диагонали (волны), к которой относится пиксель
+              const diagonalIndex = r + c;
               
-              if (timeSincePixelStart < 150) {
-                // Фаза 1: Появление размытия (0.15 сек)
-                const alpha = timeSincePixelStart / 150; // 0 -> 1
+              // Время, когда должен начаться эффект для этой диагонали
+              const startDelay = diagonalIndex * timePerDiagonal;
+              
+              // Время с начала эффекта для конкретного пикселя
+              const timeSinceStart = elapsed - startDelay;
+
+              if (timeSinceStart < 0) {
+                // Пиксель ещё не появился
+                allDone = false;
+                continue;
+              }
+
+              if (timeSinceStart < blurDuration) {
+                // Фаза 1: Размытый пиксель (появляется)
+                const alpha = timeSinceStart / blurDuration;
                 ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
-                ctx.filter = 'blur(2px)'; // Эффект размытия
-                ctx.fillRect(p.x, p.y, pixelSize + 2, pixelSize + 2);
+                ctx.filter = 'blur(3px)';
+                ctx.fillRect(c * pixelSize, r * pixelSize, pixelSize + 1, pixelSize + 1);
+                allDone = false;
               } else {
-                // Фаза 2: Сплошной черный
+                // Фаза 2: Сплошной черный (становится черным)
                 ctx.fillStyle = '#000';
                 ctx.filter = 'none';
-                ctx.fillRect(p.x, p.y, pixelSize + 2, pixelSize + 2);
+                ctx.fillRect(c * pixelSize, r * pixelSize, pixelSize + 1, pixelSize + 1);
               }
-              
-              if (timeSincePixelStart < 300) allDone = false; // Ждем, пока все дочерние анимации завершатся
-            } else {
-              allDone = false;
             }
           }
 
-          if (!allDone) {
-            requestAnimationFrame(animate);
-          } else {
+          if (elapsed > totalDuration + 100) { // Небольшой запас
             resolve();
+          } else {
+            requestAnimationFrame(animate);
           }
         }
 
@@ -328,10 +328,14 @@
     }
 
     $('disclaimer-screen').addEventListener('click', async () => {
-      // 1. Запускаем пиксельный переход
+      // 1. Запускаем эффект пикселей
       await pixelTransition();
 
-      // 2. Показываем экран загрузки (плавно 0.7 сек)
+      // 2. Скрываем дисклеймер и Canvas
+      $('disclaimer-screen').classList.remove('active');
+      $('pixel-canvas').style.display = 'none';
+
+      // 3. Показываем экран загрузки (плавно 0.7 сек)
       const loadingScreen = $('loading-screen');
       loadingScreen.style.opacity = '1';
       activateScreen('loading-screen');
@@ -352,14 +356,12 @@
 
         localStorage.setItem('woland_version', currentServerVersion);
 
-        // Скрываем canvas и показываем игру
         const fade = $('fade-overlay');
         fade.style.transition = 'opacity 1s ease-in-out'; fade.style.opacity = '1';
         await new Promise(r => setTimeout(r, 1000));
         
         activateScreen(null);
         $('game-container').classList.add('active');
-        $('pixel-canvas').style.display = 'none';
         fade.style.opacity = '0';
 
       } catch (err) {

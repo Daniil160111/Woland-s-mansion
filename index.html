@@ -63,15 +63,8 @@
     #loading-status { position: absolute; bottom: 25px; right: 25px; font-size: 14px; color: #666; text-align: right; max-width: 200px; }
     
     /* ★ Ошибка и кнопка повтора ★ */
-    #loading-error { 
-      position: absolute; bottom: 60px; right: 25px; font-size: 14px; color: #ff3333; 
-      text-align: right; display: none; max-width: 250px; 
-    }
-    #btn-retry { 
-      display: none; margin-top: 20px; padding: 10px 20px; 
-      background: #800000; color: #fff; border: 2px solid #f00; 
-      border-radius: 8px; cursor: pointer; font-size: 14px; z-index: 100; 
-    }
+    #loading-error { position: absolute; bottom: 60px; right: 25px; font-size: 14px; color: #ff3333; text-align: right; display: none; max-width: 250px; }
+    #btn-retry { display: none; margin-top: 20px; padding: 10px 20px; background: #800000; color: #fff; border: 2px solid #f00; border-radius: 8px; cursor: pointer; font-size: 14px; z-index: 100; }
     #btn-retry.show { display: block; }
 
     #update-modal { position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.8); display: none; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
@@ -378,6 +371,7 @@
         window.GameAssets = window.GameAssets || {};
         let missingFiles = [];
 
+        // 1. Проверка кэша
         if (!forceUpdate) {
           const checkPromises = queue.map(async (item) => {
             try {
@@ -404,7 +398,7 @@
           missingFiles = queue;
         }
 
-        // ★ Если качать нечего — просто переходим в игру ★
+        // 2. Если качать нечего — пропускаем полосу и запускаем игру
         if (missingFiles.length === 0) {
           status.textContent = 'Готово!';
           progressBar.style.display = 'none';
@@ -414,13 +408,14 @@
           return;
         }
 
-        // Качаем недостающее
+        // 3. Качаем недостающее
         status.textContent = forceUpdate ? 'Обновление...' : 'Скачивание...';
         progressBar.style.display = 'block';
         sizeText.style.display = 'block';
         
         let totalBytes = queue.reduce((sum, item) => sum + (item.size || 0), 0);
         let loadedBytes = 0;
+        let failedCount = 0;
 
         for (let i = 0; i < missingFiles.length; i++) {
           const item = missingFiles[i];
@@ -431,7 +426,9 @@
             if (!res.ok) throw new Error('404');
             const blob = await res.blob();
             
-            await putAsset(item.url, blob);
+            // Пытаемся сохранить в кэш, но если не получается — идем дальше
+            try { await putAsset(item.url, blob); } catch(e) { console.warn('Кэш переполнен?', e); }
+            
             loadedBytes += (item.size || blob.size);
             
             if (item.type === 'Текстуры') {
@@ -440,7 +437,8 @@
               await window.SoundsEngine.loadSound(item.id, blob);
             }
           } catch (e) {
-            console.warn(`[Пропуск] ${item.url}`);
+            console.warn(`[Ошибка скачивания] ${item.url}`);
+            failedCount++;
           }
           
           const percent = Math.min(100, Math.round((loadedBytes / totalBytes) * 100));
@@ -448,33 +446,21 @@
           sizeText.textContent = `${(loadedBytes / 1024 / 1024).toFixed(1)} МБ / ${(totalBytes / 1024 / 1024).toFixed(1)} МБ`;
         }
 
-        // Финальная проверка
-        status.textContent = 'Проверка целостности...';
-        let checkFailed = false;
-        
-        for (const item of queue) {
-          const cached = await getAsset(item.url);
-          if (!cached) {
-            checkFailed = true;
-            errorText.textContent = 'Не удалось проверить целостность файлов';
-            errorText.style.display = 'block';
-            break;
-          }
+        // 4. Мягкая проверка (если файл не скачался, просто предупреждаем, но не блокируем игру)
+        if (failedCount > 0) {
+          console.warn(`Не удалось скачать ${failedCount} файлов. Игра запустится без них.`);
         }
 
-        if (checkFailed) {
-          status.textContent = 'Ошибка целостности';
-          btnRetry.classList.add('show');
-        } else {
-          status.textContent = 'Готово!';
-          progress.style.width = '100%';
-          localStorage.setItem('woland_version', currentServerVersion);
-          await finishLoading();
-        }
+        status.textContent = 'Готово!';
+        progress.style.width = '100%';
+        localStorage.setItem('woland_version', currentServerVersion);
+        
+        // Запускаем игру даже если были ошибки
+        await finishLoading();
         
       } catch (e) {
-        console.error('Ошибка загрузки:', e);
-        status.textContent = 'Ошибка загрузки';
+        console.error('Критическая ошибка загрузки:', e);
+        status.textContent = 'Ошибка';
         errorText.textContent = e.message || 'Неизвестная ошибка';
         errorText.style.display = 'block';
         btnRetry.classList.add('show');
@@ -502,9 +488,9 @@
         fade.style.opacity = '0';
 
       } catch (err) {
-        console.error('Критическая ошибка:', err);
+        console.error('Критическая ошибка при запуске меню:', err);
         $('loading-status').textContent = 'Ошибка запуска меню';
-        $('loading-error').textContent = err.message;
+        $('loading-error').textContent = err.message || 'menu.js не найден';
         $('loading-error').style.display = 'block';
         $('btn-retry').classList.add('show');
       }
@@ -514,7 +500,7 @@
     $('btn-retry').onclick = async () => {
       $('btn-retry').classList.remove('show');
       $('loading-error').style.display = 'none';
-      // Перезапускаем процесс (сначала проверка, потом загрузка при необходимости)
+      // Перезапускаем процесс
       await runLoadProcess(false);
     };
 

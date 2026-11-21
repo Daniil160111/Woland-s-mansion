@@ -44,7 +44,6 @@
     #pixel-canvas { position: fixed; inset: 0; z-index: 150; display: none; width: 100%; height: 100%; background: transparent; }
     #fade-overlay { position: fixed; inset: 0; background: #000; z-index: 50; pointer-events: none; opacity: 0; transition: opacity 1.5s ease-in-out; }
 
-    /* Экран загрузки */
     #loading-screen { background: #050407; z-index: 90; padding: 0; overflow: hidden; opacity: 0; transition: opacity 0.9s linear; }
     .loading-center { display: flex; flex-direction: column; align-items: center; gap: 15px; width: 90%; max-width: 600px; margin-top: -10vh; }
     #loading-logo { width: min(80vw, 500px); max-height: 25vh; object-fit: contain; }
@@ -61,32 +60,12 @@
 
     #loading-size { font-size: 14px; color: #aaa; display: none; }
     #loading-status { position: absolute; bottom: 25px; right: 25px; font-size: 14px; color: #666; text-align: right; max-width: 200px; }
-    
-    /* ★ Ошибка и кнопка повтора ★ */
-    #loading-error { position: absolute; bottom: 60px; right: 25px; font-size: 14px; color: #ff3333; text-align: right; display: none; max-width: 250px; }
-    #btn-retry { display: none; margin-top: 20px; padding: 10px 20px; background: #800000; color: #fff; border: 2px solid #f00; border-radius: 8px; cursor: pointer; font-size: 14px; z-index: 100; }
-    #btn-retry.show { display: block; }
-
-    #update-modal { position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,0.8); display: none; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
-    .update-box { background: #1a0a0a; border: 2px solid #b33333; padding: 30px; border-radius: 12px; text-align: center; max-width: 400px; }
-    .update-box h2 { color: #ff5555; margin-bottom: 15px; font-size: 24px; }
-    .update-box p { color: #ccc; margin-bottom: 25px; font-size: 16px; }
-    .update-box button { padding: 12px 30px; font-size: 16px; background: #800000; color: #fff; border: 2px solid #f00; border-radius: 8px; cursor: pointer; margin: 0 10px; }
 
     #game-container { position: fixed; inset: 0; z-index: 10; display: none; }
     #game-container.active { display: block; }
   </style>
 </head>
 <body>
-
-  <div id="update-modal">
-    <div class="update-box">
-      <h2>Доступно обновление!</h2>
-      <p>Вышла новая версия игры (<span id="new-version">1.0.0</span>). Хотите обновиться сейчас?</p>
-      <button id="btn-update-yes">Обновить</button>
-      <button id="btn-update-no" style="background: transparent; border-color: #555; color: #888;">Позже</button>
-    </div>
-  </div>
 
   <section id="screen-l1" class="screen"><img id="img-l1" class="l-image" src="./Текстуры/Меню/L1.jpg" alt="L1" onerror="this.style.display='none';"></section>
   <section id="screen-l2" class="screen"><img id="img-l2" class="l-image" src="./Текстуры/Меню/l2.jpg" alt="L2" onerror="this.style.display='none';"></section>
@@ -118,8 +97,6 @@
       <div class="progress" id="progress-bar"><div id="progress-fill"></div></div>
       <div id="loading-size">0.0 МБ / 0.0 МБ</div>
     </div>
-    <button id="btn-retry">Повторить попытку</button>
-    <div id="loading-error"></div>
     <div id="loading-status">Подготовка...</div>
   </section>
 
@@ -182,54 +159,10 @@
       if (id) $(id).classList.add('active');
     };
 
-    // ★ СИСТЕМА ПРОВЕРКИ ВЕРСИИ С ОБРАБОТКОЙ ОШИБОК ★
-    let isUpdateNeeded = false;
-    let currentServerVersion = "1.0.0";
-
-    async function checkVersion() {
-      $('loading-status').textContent = 'Проверка версии...';
-      try {
-        const res = await fetch('./version.json');
-        if (!res.ok) throw new Error('404');
-        const data = await res.json();
-        currentServerVersion = data.version;
-        
-        const localVersion = localStorage.getItem('woland_version') || '0.0.0';
-        
-        if (localVersion !== currentServerVersion) {
-          if (localVersion !== '0.0.0') {
-            $('new-version').textContent = currentServerVersion;
-            $('update-modal').style.display = 'flex';
-            return new Promise((resolve) => {
-              $('btn-update-yes').onclick = () => {
-                $('update-modal').style.display = 'none';
-                isUpdateNeeded = true;
-                resolve();
-              };
-              $('btn-update-no').onclick = () => {
-                $('update-modal').style.display = 'none';
-                resolve();
-              };
-            });
-          } else {
-            isUpdateNeeded = true; 
-          }
-        }
-      } catch (e) {
-        console.warn('Не удалось проверить версию:', e);
-        $('loading-error').textContent = 'Не удалось проверить версию';
-        $('loading-error').style.display = 'block';
-        await new Promise(r => setTimeout(r, 500));
-        $('loading-error').style.display = 'none';
-      }
-    }
-
     async function startApp() {
       if (isMobile() && !isPWA()) {
         activateScreen('install-screen'); setLanguage('ru', true); return;
       }
-
-      await checkVersion();
 
       const imgL1 = $('img-l1'), imgL2 = $('img-l2'), fade = $('fade-overlay');
 
@@ -253,7 +186,7 @@
       activateScreen('disclaimer-screen');
     }
 
-    // ★ ЭФФЕКТ "ДОМИНО" (ПИКСЕЛИ ПО ДИАГОНАЛИ) ★
+    // ★ ПИКСЕЛЬНЫЙ ПЕРЕХОД ★
     async function pixelTransition() {
       return new Promise(resolve => {
         const canvas = $('pixel-canvas');
@@ -316,12 +249,9 @@
     $('disclaimer-screen').addEventListener('click', async () => {
       await pixelTransition();
 
-      const discScreen = $('disclaimer-screen');
-      discScreen.classList.remove('active');
-      discScreen.style.display = 'none'; 
-      
-      const canvas = $('pixel-canvas');
-      canvas.style.display = 'none';
+      $('disclaimer-screen').classList.remove('active');
+      $('disclaimer-screen').style.display = 'none';
+      $('pixel-canvas').style.display = 'none';
 
       const loadingScreen = $('loading-screen');
       loadingScreen.classList.add('active');
@@ -331,148 +261,12 @@
       
       await new Promise(r => setTimeout(r, 900));
 
-      await runLoadProcess(isUpdateNeeded);
-    }, { once: true });
-
-    // ★ ПРОЦЕСС ЗАГРУЗКИ И ПРОВЕРКИ (с защитой от зависаний) ★
-    async function runLoadProcess(forceUpdate = false) {
-      const status = $('loading-status');
-      const progressBar = $('progress-bar');
-      const progress = $('progress-fill');
-      const sizeText = $('loading-size');
-      const btnRetry = $('btn-retry');
-      const errorText = $('loading-error');
-      
-      try {
-        status.textContent = 'Проверка...';
-        btnRetry.classList.remove('show');
-        errorText.style.display = 'none';
-        
-        await initDB();
-
-        let manifest;
-        try {
-          const resp = await fetch('./load.json');
-          if (!resp.ok) throw new Error('load.json не найден');
-          manifest = await resp.json();
-        } catch (e) {
-          status.textContent = 'Ошибка списка файлов';
-          errorText.textContent = 'Не удалось загрузить load.json';
-          errorText.style.display = 'block';
-          btnRetry.classList.add('show');
-          return;
-        }
-
-        const queue = [
-          ...Object.entries(manifest.sounds || {}).map(([id, data]) => ({ id, url: data.url, size: data.size, type: 'Звуки' })),
-          ...Object.entries(manifest.textures || {}).map(([id, data]) => ({ id, url: data.url, size: data.size, type: 'Текстуры' }))
-        ];
-
-        window.GameAssets = window.GameAssets || {};
-        let missingFiles = [];
-
-        // 1. Проверка кэша
-        if (!forceUpdate) {
-          const checkPromises = queue.map(async (item) => {
-            try {
-              const cachedBlob = await getAsset(item.url);
-              return { item, cachedBlob };
-            } catch(e) { return { item, cachedBlob: null }; }
-          });
-
-          const results = await Promise.all(checkPromises);
-
-          for (const res of results) {
-            if (res.cachedBlob) {
-              if (res.item.type === 'Текстуры') {
-                window.GameAssets[res.item.id] = URL.createObjectURL(res.cachedBlob);
-              } else if (window.SoundsEngine) {
-                await window.SoundsEngine.loadSound(res.item.id, res.cachedBlob);
-              }
-            } else {
-              missingFiles.push(res.item);
-            }
-          }
-        } else {
-          await clearCache();
-          missingFiles = queue;
-        }
-
-        // 2. Если качать нечего — пропускаем полосу и запускаем игру
-        if (missingFiles.length === 0) {
-          status.textContent = 'Готово!';
-          progressBar.style.display = 'none';
-          sizeText.style.display = 'none';
-          localStorage.setItem('woland_version', currentServerVersion);
-          await finishLoading();
-          return;
-        }
-
-        // 3. Качаем недостающее
-        status.textContent = forceUpdate ? 'Обновление...' : 'Скачивание...';
-        progressBar.style.display = 'block';
-        sizeText.style.display = 'block';
-        
-        let totalBytes = queue.reduce((sum, item) => sum + (item.size || 0), 0);
-        let loadedBytes = 0;
-        let failedCount = 0;
-
-        for (let i = 0; i < missingFiles.length; i++) {
-          const item = missingFiles[i];
-          status.textContent = `Загрузка: ${item.type} [${i + 1}/${missingFiles.length}]`;
-          
-          try {
-            const res = await fetch(item.url);
-            if (!res.ok) throw new Error('404');
-            const blob = await res.blob();
-            
-            // Пытаемся сохранить в кэш, но если не получается — идем дальше
-            try { await putAsset(item.url, blob); } catch(e) { console.warn('Кэш переполнен?', e); }
-            
-            loadedBytes += (item.size || blob.size);
-            
-            if (item.type === 'Текстуры') {
-              window.GameAssets[item.id] = URL.createObjectURL(blob);
-            } else if (window.SoundsEngine) {
-              await window.SoundsEngine.loadSound(item.id, blob);
-            }
-          } catch (e) {
-            console.warn(`[Ошибка скачивания] ${item.url}`);
-            failedCount++;
-          }
-          
-          const percent = Math.min(100, Math.round((loadedBytes / totalBytes) * 100));
-          progress.style.width = `${percent}%`;
-          sizeText.textContent = `${(loadedBytes / 1024 / 1024).toFixed(1)} МБ / ${(totalBytes / 1024 / 1024).toFixed(1)} МБ`;
-        }
-
-        // 4. Мягкая проверка (если файл не скачался, просто предупреждаем, но не блокируем игру)
-        if (failedCount > 0) {
-          console.warn(`Не удалось скачать ${failedCount} файлов. Игра запустится без них.`);
-        }
-
-        status.textContent = 'Готово!';
-        progress.style.width = '100%';
-        localStorage.setItem('woland_version', currentServerVersion);
-        
-        // Запускаем игру даже если были ошибки
-        await finishLoading();
-        
-      } catch (e) {
-        console.error('Критическая ошибка загрузки:', e);
-        status.textContent = 'Ошибка';
-        errorText.textContent = e.message || 'Неизвестная ошибка';
-        errorText.style.display = 'block';
-        btnRetry.classList.add('show');
-      }
-    }
-
-    // Функция, которая запускает игру
-    async function finishLoading() {
       try {
         await import('./Фон/settings-manager.js').then(m => m.Settings.init()).catch(() => {});
         await import('./Фон/sounds.js').catch(() => {});
         if (window.SoundsEngine) window.SoundsEngine.init();
+
+        await loadAssets();
 
         const menuModule = await import('./Блоки/menu.js');
         if (menuModule && menuModule.Menu) {
@@ -488,21 +282,10 @@
         fade.style.opacity = '0';
 
       } catch (err) {
-        console.error('Критическая ошибка при запуске меню:', err);
-        $('loading-status').textContent = 'Ошибка запуска меню';
-        $('loading-error').textContent = err.message || 'menu.js не найден';
-        $('loading-error').style.display = 'block';
-        $('btn-retry').classList.add('show');
+        console.error('Критическая ошибка:', err);
+        $('loading-status').textContent = 'Ошибка загрузки';
       }
-    }
-
-    // ★ КНОПКА ПОВТОРА ★
-    $('btn-retry').onclick = async () => {
-      $('btn-retry').classList.remove('show');
-      $('loading-error').style.display = 'none';
-      // Перезапускаем процесс
-      await runLoadProcess(false);
-    };
+    }, { once: true });
 
     // ★ СИСТЕМА КЭШИРОВАНИЯ (IndexedDB) ★
     const DB_NAME = 'woland_db';
@@ -541,14 +324,98 @@
       });
     }
 
-    function clearCache() {
-      return new Promise((resolve) => {
-        if (!db) return resolve();
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        tx.objectStore(STORE_NAME).clear();
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => resolve();
-      });
+    async function loadAssets(forceUpdate = false) {
+      const status = $('loading-status');
+      const progressBar = $('progress-bar');
+      const progress = $('progress-fill');
+      const sizeText = $('loading-size');
+      
+      try {
+        await initDB();
+
+        const resp = await fetch('./load.json');
+        if (!resp.ok) throw new Error('load.json не найден');
+        const manifest = await resp.json();
+
+        const queue = [
+          ...Object.entries(manifest.sounds || {}).map(([id, data]) => ({ id, url: data.url, size: data.size, type: 'Звуки' })),
+          ...Object.entries(manifest.textures || {}).map(([id, data]) => ({ id, url: data.url, size: data.size, type: 'Текстуры' }))
+        ];
+
+        window.GameAssets = window.GameAssets || {};
+        let missingFiles = [];
+
+        status.textContent = 'Проверка...';
+        if (!forceUpdate) {
+          const checkPromises = queue.map(async (item) => {
+            const cachedBlob = await getAsset(item.url);
+            return { item, cachedBlob };
+          });
+
+          const results = await Promise.all(checkPromises);
+
+          for (const res of results) {
+            if (res.cachedBlob) {
+              if (res.item.type === 'Текстуры') {
+                window.GameAssets[res.item.id] = URL.createObjectURL(res.cachedBlob);
+              } else if (window.SoundsEngine) {
+                await window.SoundsEngine.loadSound(res.item.id, res.cachedBlob);
+              }
+            } else {
+              missingFiles.push(res.item);
+            }
+          }
+        } else {
+          missingFiles = queue;
+        }
+
+        if (missingFiles.length === 0) {
+          status.textContent = 'Все файлы в кэше';
+          progressBar.style.display = 'none';
+          sizeText.style.display = 'none';
+          return;
+        }
+
+        status.textContent = 'Скачивание...';
+        progressBar.style.display = 'block';
+        sizeText.style.display = 'block';
+        
+        let totalBytes = queue.reduce((sum, item) => sum + (item.size || 0), 0);
+        let loadedBytes = 0;
+
+        for (let i = 0; i < missingFiles.length; i++) {
+          const item = missingFiles[i];
+          status.textContent = `Загрузка: ${item.type} [${i + 1}/${missingFiles.length}]`;
+          
+          try {
+            const res = await fetch(item.url);
+            if (!res.ok) throw new Error('404');
+            const blob = await res.blob();
+            
+            await putAsset(item.url, blob);
+            loadedBytes += (item.size || blob.size);
+            
+            if (item.type === 'Текстуры') {
+              window.GameAssets[item.id] = URL.createObjectURL(blob);
+            } else if (window.SoundsEngine) {
+              await window.SoundsEngine.loadSound(item.id, blob);
+            }
+          } catch (e) {
+            console.warn(`[Пропуск] ${item.url}`);
+          }
+          
+          const percent = Math.min(100, Math.round((loadedBytes / totalBytes) * 100));
+          progress.style.width = `${percent}%`;
+          sizeText.textContent = `${(loadedBytes / 1024 / 1024).toFixed(1)} МБ / ${(totalBytes / 1024 / 1024).toFixed(1)} МБ`;
+        }
+
+        status.textContent = 'Готово!';
+        progress.style.width = '100%';
+        
+      } catch (e) {
+        console.warn('Ошибка загрузки:', e);
+        status.textContent = 'Ошибка';
+      }
     }
 
     startApp();

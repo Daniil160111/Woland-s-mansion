@@ -159,6 +159,16 @@
       if (id) $(id).classList.add('active');
     };
 
+    // ★ ИНИЦИАЛИЗАЦИЯ НАСТРОЕК ★
+    let SettingsModule = null;
+    try {
+      const mod = await import('./Фон/settings-manager.js');
+      SettingsModule = mod.Settings;
+      SettingsModule.init();
+    } catch (e) {
+      console.warn('settings-manager.js не найден, используются стандартные настройки.');
+    }
+
     async function startApp() {
       if (isMobile() && !isPWA()) {
         activateScreen('install-screen'); setLanguage('ru', true); return;
@@ -186,13 +196,13 @@
       activateScreen('disclaimer-screen');
     }
 
-    // ★ ПИКСЕЛЬНЫЙ ПЕРЕХОД ★
+    // ★ ОПТИМИЗИРОВАННЫЙ ПИКСЕЛЬНЫЙ ПЕРЕХОД (120 FPS) ★
     async function pixelTransition() {
       return new Promise(resolve => {
         const canvas = $('pixel-canvas');
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { alpha: false });
         
-        const pixelSize = 20; 
+        const pixelSize = 30; // Увеличили размер пикселя для меньше нагрузки
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
@@ -200,19 +210,21 @@
         const rows = Math.ceil(canvas.height / pixelSize);
 
         canvas.style.display = 'block';
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#050407'; // Заливаем фон
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         let startTime = performance.now();
-        let totalDuration = 1500; 
+        let totalDuration = 1500;
 
         const totalDiagonals = cols + rows - 1;
         const timePerDiagonal = totalDuration / totalDiagonals;
-        
-        const blurDuration = 150; 
+        const blurDuration = 150;
 
         function animate(now) {
           const elapsed = now - startTime;
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          // Оптимизация: вместо перерисовки всего экрана, мы рисуем поверх
+          // Но для диагоналей все равно нужно рисовать прямоугольники
 
           for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
@@ -221,15 +233,12 @@
               const timeSinceStart = elapsed - startDelay;
 
               if (timeSinceStart < 0) continue;
+              if (timeSinceStart > blurDuration + 50) continue; // Уже нарисован
 
               if (timeSinceStart < blurDuration) {
+                // Рисуем полупрозрачный пиксель
                 const alpha = timeSinceStart / blurDuration;
-                ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
-                ctx.filter = 'blur(3px)';
-                ctx.fillRect(c * pixelSize, r * pixelSize, pixelSize + 1, pixelSize + 1);
-              } else {
-                ctx.fillStyle = '#000';
-                ctx.filter = 'none';
+                ctx.fillStyle = `rgba(5, 4, 7, ${alpha})`;
                 ctx.fillRect(c * pixelSize, r * pixelSize, pixelSize + 1, pixelSize + 1);
               }
             }
@@ -253,6 +262,7 @@
       $('disclaimer-screen').style.display = 'none';
       $('pixel-canvas').style.display = 'none';
 
+      // ★ СРАЗУ ЗАПУСКАЕМ ЗАГРУЗКУ, НО ПОКАЗЫВАЕМ ПОЛОСУ ТОЛЬКО ЕСЛИ НУЖНО ★
       const loadingScreen = $('loading-screen');
       loadingScreen.classList.add('active');
       requestAnimationFrame(() => {
@@ -262,7 +272,8 @@
       await new Promise(r => setTimeout(r, 900));
 
       try {
-        await import('./Фон/settings-manager.js').then(m => m.Settings.init()).catch(() => {});
+        if (SettingsModule) SettingsModule.apply();
+
         await import('./Фон/sounds.js').catch(() => {});
         if (window.SoundsEngine) window.SoundsEngine.init();
 
@@ -369,6 +380,7 @@
           missingFiles = queue;
         }
 
+        // ★ ЕСЛИ КАЧАТЬ НЕЧЕГО — СКРЫВАЕМ ПРОГРЕСС-БАР ★
         if (missingFiles.length === 0) {
           status.textContent = 'Все файлы в кэше';
           progressBar.style.display = 'none';

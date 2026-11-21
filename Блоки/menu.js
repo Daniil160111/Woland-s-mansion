@@ -89,7 +89,6 @@ export const Menu = {
         .woland-menu__shade { position: absolute; inset: 0; z-index: 1; background: rgba(0, 0, 0, 0.3); transition: background 1.5s ease; }
         .woland-menu.menu-mode .woland-menu__shade { background: rgba(0, 0, 0, 0.7); }
         
-        /* ★ ЛОГОТИП: ФИКСИРОВАННЫЙ РАЗМЕР + ПЛАВНЫЙ TRANSFORM ★ */
         .woland-menu__logo-container { 
           position: absolute; 
           top: 45%; 
@@ -100,42 +99,32 @@ export const Menu = {
           justify-content: center; 
           pointer-events: none; 
           width: 100%; 
-          transition: top 1.2s cubic-bezier(0.25, 1, 0.5, 1), transform 1.2s cubic-bezier(0.25, 1, 0.5, 1); 
+          transition: top 1.5s cubic-bezier(0.25, 1, 0.5, 1), transform 1.5s cubic-bezier(0.25, 1, 0.5, 1); 
         }
         
         .woland-menu__logo {
-          width: 210px; /* Фиксированный размер на титульном */
+          width: min(65vw, 210px); 
           max-height: 32vh; 
           object-fit: contain;
-          
-          /* Начальное состояние для анимации появления */
-          opacity: 0; 
-          transform: scaleY(0); 
-          transform-origin: bottom center;
-          
-          /* Анимация появления (старт резкий, конец плавный) */
-          transition: transform 1.5s cubic-bezier(0, 0.5, 0.3, 1), opacity 1s ease, filter 1.2s ease;
-          
           filter: 
             drop-shadow(0 0 1px rgba(255, 255, 255, 1)) 
             drop-shadow(0 0 3px rgba(255, 255, 255, 0.9))
             drop-shadow(0 0 6px rgba(255, 255, 255, 0.6))
             drop-shadow(0 0 12px rgba(255, 255, 255, 0.3));
+          opacity: 0; 
+          transform: scaleY(0); 
+          transform-origin: bottom center;
+          transition: transform 1.5s cubic-bezier(0, 0.5, 0.3, 1), opacity 1s ease;
         }
         
-        .woland-menu__logo.animate-in { 
-          opacity: 1; 
-          transform: scaleY(1); /* Плавное растягивание вверх */
-        }
+        .woland-menu__logo.animate-in { opacity: 1; transform: scaleY(1); }
         
-        /* ★ ПЕРЕХОД В МЕНЮ (УВЕЛИЧЕНИЕ НА 40% И ОТСТУП) ★ */
         .woland-menu.menu-mode .woland-menu__logo-container { 
-          top: 3vh; /* Отступ сверху */
+          top: 3vh; 
           transform: translate(-50%, 0); 
         }
         
         .woland-menu.menu-mode .woland-menu__logo { 
-          /* Увеличиваем в 1.4 раза (на 40%) */
           transform: scale(1.4) scaleY(1); 
           transform-origin: top center; 
           filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 3px rgba(255, 255, 255, 0.4)); 
@@ -154,7 +143,11 @@ export const Menu = {
         }
         .woland-menu__press-to-continue.show { animation: pulse-text 3s infinite ease-in-out; }
         
-        @keyframes pulse-text { 0% { opacity: 0; } 50% { opacity: 1; } 100% { opacity: 0; } }
+        @keyframes pulse-text { 
+          0% { opacity: 0; } 
+          50% { opacity: 1; } 
+          100% { opacity: 0; } 
+        }
         
         .woland-menu__buttons-screen { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 1.5s ease, visibility 1.5s; }
         .woland-menu.menu-mode .woland-menu__buttons-screen { opacity: 1; visibility: visible; pointer-events: auto; }
@@ -185,18 +178,41 @@ export const Menu = {
     const footerEl = container.querySelector('.woland-menu__footer');
     const titleScreen = container.querySelector('.woland-menu__title-screen');
 
+    // ★ ЗАПУСК МУЗЫКИ (С ОБРЕЗКОЙ 0.41 И DOLBY) ★
     if (window.SoundsEngine) {
-      window.SoundsEngine.currentMusicTrack = null; 
-      window.SoundsEngine.play('menu_theme', { loop: true, type: 'music' });
-      let vol = 0;
-      const targetVal = 0.32; 
-      const step = targetVal / 20;
-      const fadeIn = setInterval(() => {
-        vol += step;
-        if (vol >= targetVal) { vol = targetVal; clearInterval(fadeIn); }
-        window.SoundsEngine.setMasterVolume('music', vol);
-        window.SoundsEngine.setMasterVolume('effects', vol);
-      }, 50);
+      window.SoundsEngine.init();
+      window.SoundsEngine.setAudioMode('surround'); // Включаем поддержку 3D
+      
+      const playMenuMusic = () => {
+        if (window.SoundsEngine.loadedBuffers && window.SoundsEngine.loadedBuffers['menu_theme']) {
+          if (window.SoundsEngine.currentMusicTrack !== 'menu_theme') {
+            window.SoundsEngine.setMasterVolume('music', 0);
+            
+            // ★ ПЕРЕДАЕМ dolby: true и loopEndOffset: 0.41 ★
+            window.SoundsEngine.play('menu_theme', { 
+              loop: true, 
+              type: 'music',
+              dolby: true,         // Включаем HRTF (Dolby) для музыки
+              loopEndOffset: 0.41  // Обрезка в конце
+            });
+            
+            window.SoundsEngine.currentMusicTrack = 'menu_theme';
+            
+            let vol = 0; 
+            const targetVal = 0.32; 
+            const step = targetVal / 20;
+            const fadeIn = setInterval(() => {
+              vol += step;
+              if (vol >= targetVal) { vol = targetVal; clearInterval(fadeIn); }
+              window.SoundsEngine.setMasterVolume('music', vol);
+            }, 50);
+          }
+        } else {
+          setTimeout(playMenuMusic, 100);
+        }
+      };
+      
+      playMenuMusic();
     }
 
     setTimeout(() => {
@@ -204,7 +220,6 @@ export const Menu = {
       footerEl.style.opacity = '1';
     }, 500);
 
-    // Тут вызывается анимация появления (растягивание)
     setTimeout(() => {
       logoEl.classList.add('animate-in');
     }, 2000);
@@ -220,12 +235,26 @@ export const Menu = {
       const mainSound = THUNDER_SOUNDS[Math.floor(Math.random() * THUNDER_SOUNDS.length)];
       const mainPan = Math.random() * 2 - 1;
       const mainVol = Math.random() * 0.5 + 0.5;
-      window.SoundsEngine.play(mainSound, { type: 'effects', pan: mainPan, volume: mainVol, reverb: true });
+      
+      // ★ ДЛЯ ЭФФЕКТОВ dolby НЕ ВКЛЮЧАЕМ (используем pan) ★
+      window.SoundsEngine.play(mainSound, { 
+        type: 'effects', 
+        pan: mainPan, 
+        volume: mainVol, 
+        reverb: true,
+        dolby: false // Явно выключаем 3D для эффекта
+      });
       
       if (Math.random() > 0.4) {
         setTimeout(() => {
           const echoSound = THUNDER_SOUNDS[Math.floor(Math.random() * THUNDER_SOUNDS.length)];
-          window.SoundsEngine.play(echoSound, { type: 'effects', pan: mainPan > 0 ? -0.9 : 0.9, volume: mainVol * 0.4, reverb: true });
+          window.SoundsEngine.play(echoSound, { 
+            type: 'effects', 
+            pan: mainPan > 0 ? -0.9 : 0.9, 
+            volume: mainVol * 0.4, 
+            reverb: true,
+            dolby: false 
+          });
         }, Math.random() * 600 + 200);
       }
     };
@@ -323,8 +352,12 @@ export const Menu = {
       if (this.isTransitioning) return;
       this.isTransitioning = true;
 
+      // ★ ЭФФЕКТЫ БЕЗ DOLBY ★
       if (window.SoundsEngine && btnInfo.sound) {
-        window.SoundsEngine.play(btnInfo.sound, { type: 'effects' });
+        window.SoundsEngine.play(btnInfo.sound, { 
+          type: 'effects',
+          dolby: false 
+        });
       }
 
       if (btnInfo.action === 'goto-mode') {
@@ -396,7 +429,9 @@ export const Menu = {
             
             if (window.SoundsEngine) {
               window.SoundsEngine.currentMusicTrack = null;
-              window.SoundsEngine.play('menu_theme', { loop: true, type: 'music' });
+              window.SoundsEngine.play('menu_theme', { 
+                loop: true, type: 'music', dolby: true, loopEndOffset: 0.41 
+              });
               window.SoundsEngine.setMasterVolume('music', 0.32); 
             }
           }
@@ -409,7 +444,7 @@ export const Menu = {
       this.isTransitioning = true;
       
       menuEl.classList.add('menu-mode', 'dark-shade');
-      if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects' });
+      if (window.SoundsEngine) window.SoundsEngine.play('transition', { type: 'effects', dolby: false });
 
       if (window.SoundsEngine) {
         let vol = window.SoundsEngine.volumes.music || 0.32;
@@ -441,7 +476,7 @@ export const Menu = {
       backBtn.onclick = () => {
         if (this.isTransitioning) return;
         this.isTransitioning = true;
-        if (window.SoundsEngine) window.SoundsEngine.play('btn_back', { type: 'effects' });
+        if (window.SoundsEngine) window.SoundsEngine.play('btn_back', { type: 'effects', dolby: false });
         
         backBtn.style.opacity = '0';
         backBtn.style.pointerEvents = 'none';

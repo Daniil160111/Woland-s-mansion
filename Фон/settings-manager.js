@@ -1,55 +1,111 @@
-// js/settings-manager.js
+// Фон/settings-manager.js
 
 export const Settings = {
-    // Заводские настройки
+    // Заводские (рекомендуемые) настройки
     defaults: {
-        audioMode: 'stereo',   // 'mono' | 'stereo' | 'surround'
-        language: 'auto',      // 'auto' | 'ru' | 'en' | 'fr' | 'es' | 'it'
-        volumeMusic: 80,       // 0-100
-        volumeEffects: 80,     // 0-100
+        // Звук
+        masterVolume: 100,   // 0-150
+        effectsVolume: 100,  // 0-150
+        audioMode: 'dolby',  // 'mono', 'stereo', 'dolby'
+        
+        // Яркость
         brightness: 100,       // 0-150
-        vibration: true,       // true | false
+        minBrightness: 25,     // 0-50
+        
+        // Графика
+        aspectRatio: 'auto',   // 'auto', '4:3', '16:9', '20:9', '21:9', '16:10'
+        shadows: 'medium',     // 'ultra', 'high', 'medium', 'low', 'simple', 'off'
+        realisticLight: 'medium', // 'ultra', 'high', 'medium', 'low'
+        render3D: 'high',      // 'no_distortion', 'ultra', 'high', 'medium', 'low'
+        textureQuality: 'high',// 'ultra', 'high', 'medium', 'low'
+        drawDistance: 'far'    // 'no_simplification', 'far', 'near', 'close'
     },
 
     current: {},
 
     init() {
-        // Загружаем из памяти или ставим дефолт
         const saved = localStorage.getItem('woland_settings');
         this.current = saved ? JSON.parse(saved) : { ...this.defaults };
 
-        // Определяем язык, если стоит 'auto'
-        if (this.current.language === 'auto') {
-            this.current.language = this.detectSystemLanguage();
-        }
-
+        // Применяем настройки при запуске
         this.apply();
-    },
-
-    detectSystemLanguage() {
-        const lang = navigator.language.slice(0, 2).toLowerCase();
-        const supported = ['ru', 'en', 'fr', 'es', 'it'];
-        return supported.includes(lang) ? lang : 'en';
     },
 
     set(key, value) {
         this.current[key] = value;
-        localStorage.setItem('woland_settings', JSON.stringify(this.current));
+        // Применение происходит только при нажатии "Сохранить", 
+        // но визуальные (яркость, звук) можно менять сразу
         this.apply();
     },
 
-    apply() {
-        // Применяем яркость ко всему документу
-        document.body.style.filter = `brightness(${this.current.brightness}%)`;
+    save() {
+        localStorage.setItem('woland_settings', JSON.stringify(this.current));
+        console.log('[Settings] Сохранено');
+    },
+
+    reset() {
+        this.current = { ...this.defaults };
+        localStorage.removeItem('woland_settings');
+        this.apply();
+        console.log('[Settings] Сброшено к заводским');
+    },
+
+    // Сброс только одной категории к рекомендуемым
+    resetCategory(category) {
+        const categoryKeys = {
+            audio: ['masterVolume', 'effectsVolume', 'audioMode'],
+            brightness: ['brightness', 'minBrightness'],
+            graphics: ['aspectRatio', 'shadows', 'realisticLight', 'render3D', 'textureQuality', 'drawDistance']
+        };
         
-        // Сообщаем движку звука о новых настройках
-        if (window.SoundsEngine) {
-            window.SoundsEngine.setMasterVolume('music', this.current.volumeMusic / 100);
-            window.SoundsEngine.setMasterVolume('effects', this.current.volumeEffects / 100);
-            window.SoundsEngine.setAudioMode(this.current.audioMode);
+        if (categoryKeys[category]) {
+            categoryKeys[category].forEach(key => {
+                this.current[key] = this.defaults[key];
+            });
+            this.save();
+            this.apply();
         }
+    },
+
+    apply() {
+        // 1. Применяем яркость (CSS-фильтр ко всему body)
+        const baseBrightness = this.current.brightness;
+        const minBrightness = this.current.minBrightness;
         
-        // Здесь позже будет смена языка (для интерфейса)
-        console.log(`[Settings] Язык: ${this.current.language}, Яркость: ${this.current.brightness}%`);
+        // Если игрок выкрутил яркость на 0, применяем минимальную
+        const finalBrightness = baseBrightness === 0 ? minBrightness : baseBrightness;
+        
+        // Переводим 0-150 в 0.0-1.5 для CSS
+        const brightnessCss = (finalBrightness / 100).toFixed(2);
+        document.body.style.filter = `brightness(${brightnessCss})`;
+
+        // 2. Применяем звук
+        if (window.SoundsEngine) {
+            window.SoundsEngine.setMasterVolume('music', (this.current.masterVolume / 100) * 0.32);
+            window.SoundsEngine.setMasterVolume('effects', (this.current.effectsVolume / 100) * 0.8);
+            
+            // Режим звука
+            if (this.current.audioMode === 'dolby') {
+                window.SoundsEngine.setAudioMode('surround');
+            } else if (this.current.audioMode === 'mono') {
+                window.SoundsEngine.setAudioMode('mono');
+            } else {
+                window.SoundsEngine.setAudioMode('stereo');
+            }
+        }
+
+        // 3. Соотношение сторон (визуально)
+        const canvas = document.getElementById('renderCanvas'); // Если Babylon.js
+        if (canvas) {
+            // Тут будет логика для Babylon.js (сброс соотношения сторон)
+        }
+
+        // Логирование для отладки
+        console.log('[Settings] Применено:', {
+            brightness: brightnessCss,
+            masterVol: this.current.masterVolume,
+            effectsVol: this.current.effectsVolume,
+            audioMode: this.current.audioMode
+        });
     }
 };

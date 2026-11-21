@@ -1,19 +1,5 @@
 // Фон/sounds.js
 
-// Глобальная защита
-(function() {
-    'use strict';
-    document.addEventListener('contextmenu', e => e.preventDefault());
-    document.addEventListener('dragstart', e => e.preventDefault());
-    document.addEventListener('selectstart', e => e.preventDefault());
-    document.addEventListener('copy', e => e.preventDefault());
-    document.addEventListener('cut', e => e.preventDefault());
-    document.addEventListener('keydown', e => {
-        if ((e.ctrlKey && ['c','s','u'].includes(e.key.toLowerCase())) || e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I')) e.preventDefault();
-    });
-    document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
-})();
-
 class SoundEngine {
     constructor() {
         this.ctx = null;
@@ -23,8 +9,7 @@ class SoundEngine {
         this.activeSounds = new Set(); 
         this.currentMusicTrack = null;
         
-        // ★ ПРИНУДИТЕЛЬНЫЙ 3D SURROUND ★
-        this.audioMode = 'surround'; 
+        this.audioMode = 'stereo'; // По умолчанию стерео
         this.volumes = { music: 0.32, effects: 0.8 };
         
         this.convolver = null;
@@ -95,19 +80,20 @@ class SoundEngine {
             volume = 1.0, 
             position = null,
             pan = 0,       
-            reverb = false 
+            reverb = false,
+            dolby = false,         // ★ НОВЫЙ ПАРАМЕТР: включает HRTF (Dolby Surround)
+            loopEndOffset = 0      // ★ Смещение для обрезки лупа
         } = options;
 
         const source = this.ctx.createBufferSource();
         source.buffer = this.loadedBuffers[id];
         
-        // ★ ОБРЕЗКА ЛУПА ЕЩЕ НА 0.10 СЕК (ИТОГО 0.24) ★
+        // Логика лупа
         if (loop) {
             source.loop = true;
             const bufferDuration = this.loadedBuffers[id].duration;
             source.loopStart = 0;
-            // Обрезаем за 0.24 сек до конца
-            source.loopEnd = Math.max(0.1, bufferDuration - 0.41);
+            source.loopEnd = Math.max(0.1, bufferDuration - loopEndOffset);
         } else {
             source.loop = false;
         }
@@ -119,16 +105,16 @@ class SoundEngine {
 
         let lastNode = source;
 
-        // ★ ПРИНУДИТЕЛЬНЫЙ SURROUND ДЛЯ ВСЕХ ЗВУКОВ ★
-        if (this.audioMode !== 'mono' && this.ctx.createPanner) {
+        // ★ DOLBY SURROUND (только если явно включен) ★
+        if (dolby && this.ctx.createPanner) {
             const panner = this.ctx.createPanner();
-            panner.panningModel = 'HRTF'; // Dolby эффект
+            panner.panningModel = 'HRTF'; // Настоящий 3D
             panner.distanceModel = 'inverse';
             
-            // Если позиция не задана, создаем случайную (для объема)
-            const px = position ? position.x : (Math.random() * 2 - 1) * 2;
-            const py = position ? position.y : (Math.random() * 2 - 1);
-            const pz = position ? position.z : (Math.random() * 2 + 0.5);
+            // Если позиция не задана, ставим в центр
+            const px = position ? position.x : 0;
+            const py = position ? position.y : 0;
+            const pz = position ? position.z : 0;
             
             panner.positionX.value = px;
             panner.positionY.value = py;
@@ -137,7 +123,7 @@ class SoundEngine {
             lastNode.connect(panner);
             lastNode = panner;
         } 
-        // Стерео панорама (на случай если HRTF не поддерживается)
+        // Обычная стерео панорама (для эффектов)
         else if (pan !== 0 && this.ctx.createStereoPanner) {
             const stereoPanner = this.ctx.createStereoPanner();
             stereoPanner.pan.value = Math.max(-1, Math.min(1, pan));

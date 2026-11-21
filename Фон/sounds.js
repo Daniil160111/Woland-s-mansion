@@ -9,7 +9,7 @@ class SoundEngine {
         this.activeSounds = new Set(); 
         this.currentMusicTrack = null;
         
-        this.audioMode = 'stereo'; // По умолчанию стерео
+        this.audioMode = 'stereo'; 
         this.volumes = { music: 0.32, effects: 0.8 };
         
         this.convolver = null;
@@ -81,14 +81,13 @@ class SoundEngine {
             position = null,
             pan = 0,       
             reverb = false,
-            dolby = false,         // ★ НОВЫЙ ПАРАМЕТР: включает HRTF (Dolby Surround)
-            loopEndOffset = 0      // ★ Смещение для обрезки лупа
+            dolby = false,         // ★ УНИВЕРСАЛЬНЫЙ ПАРАМЕТР
+            loopEndOffset = 0      
         } = options;
 
         const source = this.ctx.createBufferSource();
         source.buffer = this.loadedBuffers[id];
         
-        // Логика лупа
         if (loop) {
             source.loop = true;
             const bufferDuration = this.loadedBuffers[id].duration;
@@ -105,13 +104,12 @@ class SoundEngine {
 
         let lastNode = source;
 
-        // ★ DOLBY SURROUND (только если явно включен) ★
+        // ★ ЕСЛИ ПЕРЕДАН DOLBY: TRUE — ВКЛЮЧАЕМ HRTF ★
         if (dolby && this.ctx.createPanner) {
             const panner = this.ctx.createPanner();
-            panner.panningModel = 'HRTF'; // Настоящий 3D
+            panner.panningModel = 'HRTF'; 
             panner.distanceModel = 'inverse';
             
-            // Если позиция не задана, ставим в центр
             const px = position ? position.x : 0;
             const py = position ? position.y : 0;
             const pz = position ? position.z : 0;
@@ -123,7 +121,7 @@ class SoundEngine {
             lastNode.connect(panner);
             lastNode = panner;
         } 
-        // Обычная стерео панорама (для эффектов)
+        // ОБЫЧНОЕ СТЕРЕО
         else if (pan !== 0 && this.ctx.createStereoPanner) {
             const stereoPanner = this.ctx.createStereoPanner();
             stereoPanner.pan.value = Math.max(-1, Math.min(1, pan));

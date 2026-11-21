@@ -1,24 +1,23 @@
 // Фон/settings-manager.js
 
 export const Settings = {
-    // Заводские (рекомендуемые) настройки
     defaults: {
         // Звук
-        masterVolume: 100,   // 0-150
-        effectsVolume: 100,  // 0-150
-        audioMode: 'dolby',  // 'mono', 'stereo', 'dolby'
+        masterVolume: 100,   // 0-150 (множитель)
+        effectsVolume: 100,  // 0-150 (множитель)
+        audioMode: 'dolby',  
         
         // Яркость
-        brightness: 100,       // 0-150
-        minBrightness: 25,     // 0-50
+        brightness: 100,       
+        minBrightness: 25,     
         
         // Графика
-        aspectRatio: 'auto',   // 'auto', '4:3', '16:9', '20:9', '21:9', '16:10'
-        shadows: 'medium',     // 'ultra', 'high', 'medium', 'low', 'simple', 'off'
-        realisticLight: 'medium', // 'ultra', 'high', 'medium', 'low'
-        render3D: 'high',      // 'no_distortion', 'ultra', 'high', 'medium', 'low'
-        textureQuality: 'high',// 'ultra', 'high', 'medium', 'low'
-        drawDistance: 'far'    // 'no_simplification', 'far', 'near', 'close'
+        aspectRatio: 'auto',   
+        shadows: 'medium',     
+        realisticLight: 'medium',
+        render3D: 'high',      
+        textureQuality: 'high',
+        drawDistance: 'far'    
     },
 
     current: {},
@@ -26,15 +25,11 @@ export const Settings = {
     init() {
         const saved = localStorage.getItem('woland_settings');
         this.current = saved ? JSON.parse(saved) : { ...this.defaults };
-
-        // Применяем настройки при запуске
         this.apply();
     },
 
     set(key, value) {
         this.current[key] = value;
-        // Применение происходит только при нажатии "Сохранить", 
-        // но визуальные (яркость, звук) можно менять сразу
         this.apply();
     },
 
@@ -50,7 +45,6 @@ export const Settings = {
         console.log('[Settings] Сброшено к заводским');
     },
 
-    // Сброс только одной категории к рекомендуемым
     resetCategory(category) {
         const categoryKeys = {
             audio: ['masterVolume', 'effectsVolume', 'audioMode'],
@@ -68,21 +62,25 @@ export const Settings = {
     },
 
     apply() {
-        // 1. Применяем яркость (CSS-фильтр ко всему body)
+        // 1. Яркость
         const baseBrightness = this.current.brightness;
         const minBrightness = this.current.minBrightness;
-        
-        // Если игрок выкрутил яркость на 0, применяем минимальную
         const finalBrightness = baseBrightness === 0 ? minBrightness : baseBrightness;
-        
-        // Переводим 0-150 в 0.0-1.5 для CSS
         const brightnessCss = (finalBrightness / 100).toFixed(2);
         document.body.style.filter = `brightness(${brightnessCss})`;
 
-        // 2. Применяем звук
+        // 2. Звук (Множители)
         if (window.SoundsEngine) {
-            window.SoundsEngine.setMasterVolume('music', (this.current.masterVolume / 100) * 0.32);
-            window.SoundsEngine.setMasterVolume('effects', (this.current.effectsVolume / 100) * 0.8);
+            // Базовые значения из движка (0.32 для музыки и 0.8 для эффектов)
+            const baseMusic = 0.32;
+            const baseEffects = 0.8;
+            
+            // Умножаем на настройки (100 = 1.0, 150 = 1.5, 50 = 0.5)
+            const musicMult = this.current.masterVolume / 100;
+            const effectsMult = this.current.effectsVolume / 100;
+
+            window.SoundsEngine.setMasterVolume('music', baseMusic * musicMult);
+            window.SoundsEngine.setMasterVolume('effects', baseEffects * effectsMult);
             
             // Режим звука
             if (this.current.audioMode === 'dolby') {
@@ -93,19 +91,5 @@ export const Settings = {
                 window.SoundsEngine.setAudioMode('stereo');
             }
         }
-
-        // 3. Соотношение сторон (визуально)
-        const canvas = document.getElementById('renderCanvas'); // Если Babylon.js
-        if (canvas) {
-            // Тут будет логика для Babylon.js (сброс соотношения сторон)
-        }
-
-        // Логирование для отладки
-        console.log('[Settings] Применено:', {
-            brightness: brightnessCss,
-            masterVol: this.current.masterVolume,
-            effectsVol: this.current.effectsVolume,
-            audioMode: this.current.audioMode
-        });
     }
 };

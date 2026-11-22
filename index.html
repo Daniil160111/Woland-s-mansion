@@ -3,434 +3,407 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#0a0616">
+  <title>Woland's Mansion</title>
+  <meta name="description" content="Woland's Mansion — HTML horror game">
+  <meta name="theme-color" content="#050308">
+
+  <!-- ===== PWA / ИКОНКА ===== -->
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/jpeg" href="./icon/Иконка.jpg" sizes="512x512">
+  <link rel="apple-touch-icon" href="./icon/Иконка.jpg">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Woland's Mansion</title>
-  
-  <link rel="manifest" href="./manifest.json">
-  <link rel="icon" href="./icon/icon.jpg" type="image/jpeg">
-  <link rel="apple-touch-icon" href="./icon/icon.jpg">
-  
+  <meta name="apple-mobile-web-app-title" content="Woland's Mansion">
+
   <style>
-    @font-face { font-family: 'WolandFont'; src: url('./supermario286rusbylyajka.otf') format('opentype'); font-display: swap; }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'WolandFont', 'Courier New', monospace; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #050407; color: #fff; touch-action: none; }
-    img, canvas, video { pointer-events: none; -webkit-user-drag: none; }
+    @font-face {
+      font-family: 'WolandGame';
+      src: url('./supermario286rusbylyajka.otf') format('opentype');
+      font-display: block;
+    }
+    /* игровой шрифт везде, включая блоки настроек/меню */
+    *, *::before, *::after {
+      font-family: 'WolandGame', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    }
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      background: #000; color: #fff;
+      overflow: hidden; overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none; -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    #game-container { position: fixed; inset: 0; background: #000; }
 
-    .screen { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.5s, visibility 0.5s; padding: 20px; text-align: center; }
-    .screen.active { opacity: 1; visibility: visible; pointer-events: auto; }
+    /* ================= BOOT ================= */
+    #boot {
+      position: fixed; inset: 0; z-index: 9999; background: #000;
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity .45s ease; will-change: opacity;
+    }
+    #boot.done { opacity: 0; pointer-events: none; }
+    .boot-vignette {
+      position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(120% 90% at 50% 50%, transparent 55%, rgba(0,0,0,.85) 100%);
+    }
+    .boot-grain {
+      position: absolute; inset: 0; pointer-events: none; opacity: .06;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+      animation: grain 1.2s steps(4) infinite;
+    }
+    @keyframes grain {
+      0% { transform: translate(0,0); } 25% { transform: translate(-2%,1%); }
+      50% { transform: translate(1%,-2%); } 75% { transform: translate(-1%,2%); } 100% { transform: translate(0,0); }
+    }
 
-    #screen-l1, #screen-l2 { background: #000; padding: 0; z-index: 200; }
-    .l-image { width: 80vw; max-width: 800px; max-height: 80vh; object-fit: contain; opacity: 0; transition: opacity 1.5s ease; }
-    .l-image.visible { opacity: 1; }
+    /* ---------- дисклеймер: оригинальная анимация ---------- */
+    #disclaimer { position: relative; width: min(78vw, 640px); cursor: pointer; }
+    #disclaimer .disc-img {
+      display: block; width: 100%; border-radius: 14px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.9);
+    }
+    #disclaimer .main { animation: disc-in 2.6s cubic-bezier(.2,.7,.2,1) both; }
+    #disclaimer .chr {
+      position: absolute; inset: 0; width: 100%; border-radius: 14px;
+      mix-blend-mode: screen; pointer-events: none; opacity: 0;
+    }
+    #disclaimer .chr.r { filter: grayscale(1) sepia(1) hue-rotate(-30deg) saturate(4); animation: chr-r 2.6s steps(12) both; }
+    #disclaimer .chr.c { filter: grayscale(1) sepia(1) hue-rotate(140deg) saturate(3); animation: chr-c 2.6s steps(12) both; }
+    #disclaimer .scanlines {
+      position: absolute; inset: 0; border-radius: 14px; pointer-events: none; opacity: .18;
+      background: repeating-linear-gradient(0deg, rgba(255,255,255,.14) 0 1px, transparent 1px 3px);
+      animation: scan 2.6s linear both;
+    }
+    @keyframes disc-in {
+      0%   { opacity: 0; transform: scale(1.14); filter: blur(16px) brightness(2); }
+      6%   { opacity: .55; } 8% { opacity: .1; } 11% { opacity: .8; } 13% { opacity: .25; }
+      17%  { opacity: 1; transform: scale(1.05); filter: blur(0) brightness(1.15); }
+      60%  { transform: scale(1.015); filter: blur(0) brightness(1); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    @keyframes chr-r {
+      0%,16% { opacity: 0; transform: none; }
+      20% { opacity: .5; transform: translate(3px,-1px); } 26% { opacity: .15; transform: translate(-2px,1px); }
+      34% { opacity: .4; transform: translate(2px,1px); } 46% { opacity: .12; transform: translate(-1px,-1px); }
+      60%,100% { opacity: 0; transform: none; }
+    }
+    @keyframes chr-c {
+      0%,16% { opacity: 0; transform: none; }
+      22% { opacity: .45; transform: translate(-3px,1px); } 28% { opacity: .12; transform: translate(2px,-1px); }
+      38% { opacity: .35; transform: translate(-2px,-1px); } 50% { opacity: .1; transform: translate(1px,1px); }
+      60%,100% { opacity: 0; transform: none; }
+    }
+    @keyframes scan { 0% { transform: translateY(-4%); opacity: .3; } 100% { transform: translateY(4%); opacity: .12; } }
+    #disclaimer.out .disc-img, #disclaimer.out .scanlines {
+      transition: opacity .48s ease, filter .48s ease, transform .48s ease;
+      opacity: 0 !important; filter: blur(10px); transform: scale(1.05);
+    }
 
-    #install-screen { background: radial-gradient(ellipse at center, #201020, #050407 75%); overflow-y: auto; justify-content: flex-start; padding-top: 5vh; z-index: 110; }
-    .install-content { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; max-width: 600px; margin: auto 0; gap: 15px; }
-    #install-screen > .install-content > img { width: min(80vw, 400px); max-height: 20vh; object-fit: contain; filter: drop-shadow(0 0 15px rgba(255,0,0,0.5)); }
-    #install-screen p { color: #aaa; font-size: clamp(12px, 1.8vh, 16px); line-height: 1.5; }
-    .install-card { width: 100%; padding: 15px; border: 1px solid #562323; border-radius: 8px; background: rgba(255,255,255,0.05); font-size: clamp(11px, 1.6vh, 14px); text-align: left; }
-    .install-card strong { color: #ff7777; display: block; margin-bottom: 4px; }
-    .lang-switch { display: flex; gap: 10px; margin-top: 20px; justify-content: center; flex-wrap: wrap; }
-    .lang-btn { background: transparent; color: #888; border: 1px solid #333; padding: 5px 10px; cursor: pointer; border-radius: 5px; transition: all 0.4s ease; }
-    .lang-btn.active { color: #fff; border-color: #f00; background: rgba(255,0,0,0.2); }
-    .btn { padding: 12px 30px; font-size: 16px; background: linear-gradient(135deg, #800000, #400000); color: #fff; border: 2px solid #f00; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(255,0,0,0.4); width: 100%; max-width: 300px; }
-    #footer-credit { position: absolute; bottom: 15px; width: 100%; text-align: center; font-size: 12px; color: #555; }
-    #install-btn { display: none; }
+    /* ---------- прогресс (только когда кэш неполный) ---------- */
+    #loadui {
+      position: absolute; left: 50%; bottom: 12vh; transform: translateX(-50%);
+      width: min(76vw, 360px); display: flex; flex-direction: column; gap: 10px;
+      opacity: 0; visibility: hidden; transition: opacity .3s ease, visibility .3s;
+    }
+    #loadui.show { opacity: 1; visibility: visible; }
+    .lu-title { text-align: center; font-size: 15px; letter-spacing: 2px; color: #cfcfd6; opacity: .85; }
+    .lu-bar {
+      position: relative; height: 10px; border-radius: 999px; overflow: hidden;
+      background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.16);
+      -webkit-backdrop-filter: blur(14px) saturate(1.5); backdrop-filter: blur(14px) saturate(1.5);
+      box-shadow: inset 0 1px 2px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.15);
+    }
+    .lu-fill {
+      position: absolute; inset: 0 auto 0 0; width: 0%;
+      background: linear-gradient(90deg, rgba(255,255,255,.55), rgba(255,255,255,.9));
+      border-radius: 999px; box-shadow: 0 0 12px rgba(255,255,255,.45);
+      transition: width .25s cubic-bezier(.32,.72,0,1);
+    }
+    .lu-fill i {
+      position: absolute; top: 0; bottom: 0; width: 40%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.85), transparent);
+      animation: lu-shine 1.4s ease-in-out infinite;
+    }
+    @keyframes lu-shine { 0% { left: -45%; } 100% { left: 105%; } }
+    .lu-row { display: flex; justify-content: space-between; font-size: 11px; color: #9a9aa4; }
+    #lu-pct { font-variant-numeric: tabular-nums; color: #e8e8ee; }
 
-    #disclaimer-screen { background: #000; cursor: pointer; z-index: 100; padding: 0; }
-    #disclaimer-img { width: 100vw; height: 100vh; object-fit: cover; display: block; }
+    /* ---------- ошибка ---------- */
+    #booterr {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+      width: min(88vw, 380px); padding: 20px; border-radius: 22px; text-align: center;
+      background: rgba(26,18,34,.88); border: 1px solid rgba(255,255,255,.18);
+      -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+      opacity: 0; visibility: hidden; transition: opacity .25s ease, visibility .25s;
+    }
+    #booterr.show { opacity: 1; visibility: visible; }
+    #booterr h3 { margin: 0 0 8px; font-size: 17px; }
+    #booterr p { margin: 0 0 14px; font-size: 13px; color: #cfcfd6; line-height: 1.45; }
+    #booterr button {
+      padding: 10px 26px; font-size: 14px; color: #fff; cursor: pointer;
+      background: rgba(255,20,20,.25); border: 1px solid rgba(255,80,80,.6); border-radius: 999px;
+      transition: transform .12s cubic-bezier(.34,1.56,.64,1), background .15s ease;
+    }
+    #booterr button:active { transform: scale(.94); }
 
-    #pixel-canvas { position: fixed; inset: 0; z-index: 150; display: none; width: 100%; height: 100%; background: transparent; }
-    #fade-overlay { position: fixed; inset: 0; background: #000; z-index: 50; pointer-events: none; opacity: 0; transition: opacity 1.5s ease-in-out; }
+    .hidden { display: none; }
 
-    #loading-screen { background: #050407; z-index: 90; padding: 0; overflow: hidden; opacity: 0; transition: opacity 0.9s linear; }
-    .loading-center { display: flex; flex-direction: column; align-items: center; gap: 15px; width: 90%; max-width: 600px; margin-top: -10vh; }
-    #loading-logo { width: min(80vw, 500px); max-height: 25vh; object-fit: contain; }
-    
-    .loader-title { display: flex; gap: 3px; font-size: clamp(20px, 4vh, 32px); text-shadow: 0 0 10px #f00; }
-    .loader-title span { display: inline-block; animation: wave-sequence 1.5s infinite linear; }
-    @keyframes wave-sequence { 0%, 60%, 100% { transform: translateY(0); opacity: 0.5; } 20% { transform: translateY(-10px); opacity: 1; color: #f00; } }
-
-    .progress { width: 80%; max-width: 400px; height: 10px; background: #222; border-radius: 10px; overflow: hidden; position: relative; box-shadow: inset 0 2px 5px rgba(0,0,0,0.8); display: none; }
-    #progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ff0000, #ff5500, #ffaa00, #ff5500, #ff0000); background-size: 200% 100%; animation: lava-flow 2s linear infinite; transition: width 0.2s ease; border-radius: 10px; box-shadow: 0 0 15px rgba(255, 50, 0, 0.8); position: relative; overflow: hidden; }
-    #progress-fill::after { content: ''; position: absolute; inset: 0; background-image: radial-gradient(circle at 20% 50%, rgba(255,255,255,0.6) 2px, transparent 3px), radial-gradient(circle at 60% 30%, rgba(255,255,255,0.4) 3px, transparent 4px); background-size: 50px 50px; animation: bubbles-move 3s linear infinite; }
-    @keyframes lava-flow { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
-    @keyframes bubbles-move { 0% { background-position: 0 0; } 100% { background-position: 100px 0; } }
-
-    #loading-size { font-size: 14px; color: #aaa; display: none; }
-    #loading-status { position: absolute; bottom: 25px; right: 25px; font-size: 14px; color: #666; text-align: right; max-width: 200px; }
-
-    #game-container { position: fixed; inset: 0; z-index: 10; display: none; }
-    #game-container.active { display: block; }
+    @media (prefers-reduced-motion: reduce) {
+      #disclaimer .main, #disclaimer .chr, #disclaimer .scanlines, .boot-grain, .lu-fill i { animation: none !important; }
+      #disclaimer .main { opacity: 1; transform: none; filter: none; }
+      #boot, #loadui, #booterr { transition-duration: .01s; }
+    }
   </style>
 </head>
 <body>
-
-  <section id="screen-l1" class="screen"><img id="img-l1" class="l-image" src="./Текстуры/Меню/L1.jpg" alt="L1" onerror="this.style.display='none';"></section>
-  <section id="screen-l2" class="screen"><img id="img-l2" class="l-image" src="./Текстуры/Меню/l2.jpg" alt="L2" onerror="this.style.display='none';"></section>
-
-  <section id="install-screen" class="screen">
-    <div class="install-content">
-      <img src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" onerror="this.hidden=true">
-      <p data-i18n="install_hint">Для комфортной игры на телефоне установите приложение.</p>
-      <div class="install-card"><strong>iPhone / iPad (Safari)</strong><span data-i18n="ios_text">Поделиться → На экран "Домой"</span></div>
-      <div class="install-card"><strong>Android (Chrome / Samsung)</strong><span data-i18n="android_text">Меню (⋮) → Установить приложение</span></div>
-      <button id="install-btn" class="btn" data-i18n="install_btn">Установить приложение</button>
-      <div class="lang-switch">
-        <button class="lang-btn active" data-lang="ru">RU</button><button class="lang-btn" data-lang="en">EN</button><button class="lang-btn" data-lang="fr">FR</button><button class="lang-btn" data-lang="es">ES</button><button class="lang-btn" data-lang="it">IT</button>
-      </div>
-    </div>
-    <div id="footer-credit">HTML Gaming 2026</div>
-  </section>
-
-  <section id="disclaimer-screen" class="screen">
-    <img id="disclaimer-img" src="./Текстуры/Меню/Дисклеймер.jpg" alt="Disclaimer" onerror="this.style.display='none';">
-  </section>
-
-  <canvas id="pixel-canvas"></canvas>
-
-  <section id="loading-screen" class="screen">
-    <div class="loading-center">
-      <img id="loading-logo" src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" onerror="this.hidden=true">
-      <div class="loader-title" id="loader-title"></div>
-      <div class="progress" id="progress-bar"><div id="progress-fill"></div></div>
-      <div id="loading-size">0.0 МБ / 0.0 МБ</div>
-    </div>
-    <div id="loading-status">Подготовка...</div>
-  </section>
-
   <div id="game-container"></div>
-  <div id="fade-overlay"></div>
+
+  <div id="boot">
+    <div id="disclaimer" aria-label="Дисклеймер">
+      <img class="disc-img main" src="./Текстуры/Меню/Дисклеймер.jpg" alt="Дисклеймер" draggable="false">
+      <img class="disc-img chr r" src="./Текстуры/Меню/Дисклеймер.jpg" alt="" aria-hidden="true" draggable="false">
+      <img class="disc-img chr c" src="./Текстуры/Меню/Дисклеймер.jpg" alt="" aria-hidden="true" draggable="false">
+      <div class="scanlines"></div>
+    </div>
+
+    <div id="loadui">
+      <div class="lu-title">WOLAND'S MANSION</div>
+      <div class="lu-bar"><div class="lu-fill" id="lu-fill"><i></i></div></div>
+      <div class="lu-row"><span id="lu-status">Проверка кэша…</span><span id="lu-pct">0%</span></div>
+    </div>
+
+    <div id="booterr">
+      <h3>Не удалось загрузиться</h3>
+      <p id="booterr-text">Проверь соединение и попробуй ещё раз.</p>
+      <button id="booterr-retry" type="button">Повторить</button>
+    </div>
+
+    <div class="boot-grain"></div>
+    <div class="boot-vignette"></div>
+  </div>
 
   <script type="module">
-    'use strict';
+    // ==================== КОНФИГ ====================
+    const DB = 'woland_db', STORE = 'media';
+    const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    document.addEventListener('contextmenu', e => e.preventDefault());
-    document.addEventListener('dragstart', e => e.preventDefault());
-    document.addEventListener('selectstart', e => e.preventDefault());
+    const TEXTURES = [
+      'Текстуры/Меню/Фон.jpg', 'Текстуры/Меню/Фон-молния.jpg', 'Текстуры/Меню/Название.jpg',
+      'Текстуры/Меню/Дисклеймер.jpg', 'Текстуры/Меню/L1.jpg', 'Текстуры/Меню/l2.jpg',
+      'Текстуры/Игра/Фон.png',
+      'Текстуры/Здоровье/Здоровье.png', 'Текстуры/Здоровье/Здоровье фон.png',
+      'Текстуры/Воланд/Воланд0.png', 'Текстуры/Воланд/Воланд45.png', 'Текстуры/Воланд/Воланд90.png',
+      'Текстуры/Воланд/Воланд135.png', 'Текстуры/Воланд/Воланд180.png',
+      'Текстуры/Воланд/Воланд_глаза_закрыты.png', 'Текстуры/Воланд/Воланд_глаза_открываются.png',
+      'Текстуры/Воланд/Воланд_глаза_открыты.png', 'Текстуры/Воланд/Воланд_глаза_поднимаются.png',
+      'Текстуры/Воланд/Воланд_рот_открывается1.png', 'Текстуры/Воланд/Воланд_рот_открывается2.png',
+      'Текстуры/Воланд/Воланд_рот_открыт.png'
+    ];
+    // ключи window.GameAssets, которые ждут блоки (menu.js и др.)
+    const ALIASES = {
+      'Текстуры/Меню/Фон.jpg': 'menu_bg',
+      'Текстуры/Меню/Фон-молния.jpg': 'menu_lightning',
+      'Текстуры/Меню/Название.jpg': 'menu_logo',
+      'Текстуры/Меню/Дисклеймер.jpg': 'menu_disclaimer',
+      'Текстуры/Меню/L1.jpg': 'menu_l1',
+      'Текстуры/Меню/l2.jpg': 'menu_l2'
+    };
+    // звуки вне load.json, нужные блокам (демо режима звука и т.п.)
+    const EXTRA_SOUNDS = { audio_demo: './Звуки/Эффекты/Звук.wav' };
 
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {});
-    }
+    const $ = (s) => document.querySelector(s);
+    window.GameAssets = window.GameAssets || {};
+    window.__booted = false;
 
-    const $ = id => document.getElementById(id);
-    const textContainer = $('loader-title');
-    [..."Загрузка..."].forEach((char, index) => {
-      const span = document.createElement('span');
-      span.textContent = char;
-      span.style.animationDelay = `${index * 0.1}s`;
-      textContainer.appendChild(span);
+    // ==================== INDEXEDDB ====================
+    let idb = null;
+    const openDB = () => new Promise((res, rej) => {
+      const rq = indexedDB.open(DB, 1);
+      rq.onupgradeneeded = () => { if (!rq.result.objectStoreNames.contains(STORE)) rq.result.createObjectStore(STORE); };
+      rq.onsuccess = () => res(rq.result);
+      rq.onerror = () => rej(rq.error);
+      rq.onblocked = () => rej(new Error('IDB blocked'));
+    });
+    const idbReq = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+    const idbTxDone = (tx) => new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); });
+    const idbKeys = () => idbReq(idb.transaction(STORE, 'readonly').objectStore(STORE).getAllKeys());
+    const idbGet  = (k) => idbReq(idb.transaction(STORE, 'readonly').objectStore(STORE).get(k));
+    const idbPut  = async (k, v) => { const tx = idb.transaction(STORE, 'readwrite'); tx.objectStore(STORE).put(v, k); return idbTxDone(tx); };
+    const idbClear = async () => { const tx = idb.transaction(STORE, 'readwrite'); tx.objectStore(STORE).clear(); return idbTxDone(tx); };
+
+    // ==================== УТИЛИТЫ ====================
+    const mapLimit = async (items, limit, fn) => {
+      const out = new Array(items.length); let i = 0;
+      const workers = Array.from({ length: Math.min(limit, items.length || 1) }, async () => {
+        while (i < items.length) { const idx = i++; out[idx] = await fn(items[idx], idx); }
+      });
+      await Promise.all(workers);
+      return out;
+    };
+    const setProgress = (p, text) => {
+      $('#lu-fill').style.width = Math.round(p * 100) + '%';
+      $('#lu-pct').textContent = Math.round(p * 100) + '%';
+      if (text) $('#lu-status').textContent = text;
+    };
+    const showLoadUI = () => $('#loadui').classList.add('show');
+    const fatal = (msg) => {
+      console.error('[Boot]', msg);
+      $('#booterr-text').textContent = String(msg || 'Неизвестная ошибка');
+      $('#booterr').classList.add('show');
+    };
+
+    // ==================== ДИСКЛЕЙМЕР ====================
+    const playDisclaimer = () => new Promise((res) => {
+      const d = $('#disclaimer');
+      let done = false;
+      const finish = () => {
+        if (done) return; done = true;
+        d.classList.add('out');
+        setTimeout(res, REDUCED ? 60 : 480);
+      };
+      d.addEventListener('pointerdown', finish);
+      setTimeout(finish, REDUCED ? 900 : 3200); // полная оригинальная анимация ≈3.2 c
     });
 
-    const translations = {
-      ru: { install_hint: "Для комфортной игры на телефоне установите приложение.", ios_text: "Поделиться → На экран 'Домой'", android_text: "Меню (⋮) → Установить приложение", install_btn: "Установить приложение" },
-      en: { install_hint: "For the best experience on mobile, install the app.", ios_text: "Share → Add to Home Screen", android_text: "Menu (⋮) → Install app", install_btn: "Install App" },
-      fr: { install_hint: "Pour une meilleure expérience, installez l'application.", ios_text: "Partager → Sur l'écran d'accueil", android_text: "Menu (⋮) → Installer l'application", install_btn: "Installer l'App" },
-      es: { install_hint: "Para una mejor experiencia, instala la aplicación.", ios_text: "Compartir → Añadir a pantalla de inicio", android_text: "Menú (⋮) → Instalar aplicación", install_btn: "Instalar App" },
-      it: { install_hint: "Per un'esperienza migliore, installa l'app.", ios_text: "Condividi → Aggiungi alla schermata Home", android_text: "Menu (⋮) → Installa app", install_btn: "Installa App" }
+    // ==================== ЗАГРУЗКА АССЕТОВ ====================
+    const buildRequired = (soundsMap) => {
+      const list = [];
+      for (const path of TEXTURES) list.push({ key: path, url: './' + path, kind: 'texture', path });
+      for (const [id, s] of Object.entries(soundsMap)) list.push({ key: 'sound:' + id, url: s.url, kind: 'sound', id });
+      return list;
     };
 
-    let currentLang = 'ru';
-    async function setLanguage(lang, force = false) {
-      if (currentLang === lang && !force) return;
-      currentLang = lang;
-      document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.lang === lang));
-      const elements = document.querySelectorAll('[data-i18n]');
-      elements.forEach(el => { el.style.opacity = '0'; });
-      await new Promise(r => setTimeout(r, 250));
-      elements.forEach(el => {
-        const key = el.dataset.i18n;
-        if (translations[lang][key]) el.innerHTML = translations[lang][key];
-        el.style.opacity = '1';
-      });
-    }
-    document.querySelectorAll('.lang-btn').forEach(btn => btn.addEventListener('click', () => setLanguage(btn.dataset.lang)));
-
-    function isPWA() { return window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches || window.navigator.standalone === true; }
-    function isMobile() { return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches); }
-
-    let deferredPrompt = null;
-    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; $('install-btn').style.display = 'inline-block'; });
-    $('install-btn').addEventListener('click', async () => { if (deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; $('install-btn').style.display = 'none'; } });
-
-    const activateScreen = (id) => {
-      document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
-      if (id) $(id).classList.add('active');
+    const applyTexture = (asset, blob) => {
+      const url = URL.createObjectURL(blob);
+      window.GameAssets[ALIASES[asset.path] || asset.path] = url;
+      window.GameAssets[asset.path] = url;
     };
 
-    // ★ ИНИЦИАЛИЗАЦИЯ НАСТРОЕК ★
-    let SettingsModule = null;
-    try {
-      const mod = await import('./Фон/settings-manager.js');
-      SettingsModule = mod.Settings;
-      SettingsModule.init();
-    } catch (e) {
-      console.warn('settings-manager.js не найден, используются стандартные настройки.');
-    }
+    const decodeSound = async (id, blob) => {
+      const eng = window.SoundsEngine;
+      if (!eng) return;
+      try { await eng.loadSound(id, blob); }
+      catch (e) { console.warn('[Boot] decode fail:', id, e); }
+    };
 
-    async function startApp() {
-      if (isMobile() && !isPWA()) {
-        activateScreen('install-screen'); setLanguage('ru', true); return;
-      }
-
-      const imgL1 = $('img-l1'), imgL2 = $('img-l2'), fade = $('fade-overlay');
-
-      activateScreen('screen-l1');
-      fade.style.transition = 'none'; fade.style.opacity = '0';
-      if (imgL1) imgL1.classList.add('visible');
-
-      await new Promise(r => setTimeout(r, 5000));
-
-      fade.style.transition = 'opacity 1.5s ease'; fade.style.opacity = '1';
-      await new Promise(r => setTimeout(r, 1500));
-
-      activateScreen('screen-l2');
-      if (imgL2) imgL2.classList.add('visible');
-      fade.style.opacity = '0';
-      
-      await new Promise(r => setTimeout(r, 2500));
-      if (imgL2) imgL2.classList.remove('visible');
-      await new Promise(r => setTimeout(r, 1500));
-
-      activateScreen('disclaimer-screen');
-    }
-
-    // ★ ОПТИМИЗИРОВАННЫЙ ПИКСЕЛЬНЫЙ ПЕРЕХОД (120 FPS) ★
-    async function pixelTransition() {
-      return new Promise(resolve => {
-        const canvas = $('pixel-canvas');
-        const ctx = canvas.getContext('2d', { alpha: false });
-        
-        const pixelSize = 30; // Увеличили размер пикселя для меньше нагрузки
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-
-        const cols = Math.ceil(canvas.width / pixelSize);
-        const rows = Math.ceil(canvas.height / pixelSize);
-
-        canvas.style.display = 'block';
-        ctx.fillStyle = '#050407'; // Заливаем фон
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        let startTime = performance.now();
-        let totalDuration = 1500;
-
-        const totalDiagonals = cols + rows - 1;
-        const timePerDiagonal = totalDuration / totalDiagonals;
-        const blurDuration = 150;
-
-        function animate(now) {
-          const elapsed = now - startTime;
-          
-          // Оптимизация: вместо перерисовки всего экрана, мы рисуем поверх
-          // Но для диагоналей все равно нужно рисовать прямоугольники
-
-          for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
-              const diagonalIndex = r + c;
-              const startDelay = diagonalIndex * timePerDiagonal;
-              const timeSinceStart = elapsed - startDelay;
-
-              if (timeSinceStart < 0) continue;
-              if (timeSinceStart > blurDuration + 50) continue; // Уже нарисован
-
-              if (timeSinceStart < blurDuration) {
-                // Рисуем полупрозрачный пиксель
-                const alpha = timeSinceStart / blurDuration;
-                ctx.fillStyle = `rgba(5, 4, 7, ${alpha})`;
-                ctx.fillRect(c * pixelSize, r * pixelSize, pixelSize + 1, pixelSize + 1);
-              }
-            }
-          }
-
-          if (elapsed > totalDuration + 150) { 
-            resolve();
-          } else {
-            requestAnimationFrame(animate);
-          }
-        }
-
-        requestAnimationFrame(animate);
-      });
-    }
-
-    $('disclaimer-screen').addEventListener('click', async () => {
-      await pixelTransition();
-
-      $('disclaimer-screen').classList.remove('active');
-      $('disclaimer-screen').style.display = 'none';
-      $('pixel-canvas').style.display = 'none';
-
-      // ★ СРАЗУ ЗАПУСКАЕМ ЗАГРУЗКУ, НО ПОКАЗЫВАЕМ ПОЛОСУ ТОЛЬКО ЕСЛИ НУЖНО ★
-      const loadingScreen = $('loading-screen');
-      loadingScreen.classList.add('active');
-      requestAnimationFrame(() => {
-        loadingScreen.style.opacity = '1';
-      });
-      
-      await new Promise(r => setTimeout(r, 900));
-
-      try {
-        if (SettingsModule) SettingsModule.apply();
-
-        await import('./Фон/sounds.js').catch(() => {});
-        if (window.SoundsEngine) window.SoundsEngine.init();
-
-        await loadAssets();
-
-        const menuModule = await import('./Блоки/menu.js');
-        if (menuModule && menuModule.Menu) {
-          await menuModule.Menu.start('title');
-        }
-
-        const fade = $('fade-overlay');
-        fade.style.transition = 'opacity 1s ease-in-out'; fade.style.opacity = '1';
-        await new Promise(r => setTimeout(r, 1000));
-        
-        activateScreen(null);
-        $('game-container').classList.add('active');
-        fade.style.opacity = '0';
-
-      } catch (err) {
-        console.error('Критическая ошибка:', err);
-        $('loading-status').textContent = 'Ошибка загрузки';
-      }
-    }, { once: true });
-
-    // ★ СИСТЕМА КЭШИРОВАНИЯ (IndexedDB) ★
-    const DB_NAME = 'woland_db';
-    const STORE_NAME = 'assets';
-    let db = null;
-
-    function initDB() {
-      return new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, 1);
-        req.onupgradeneeded = (e) => {
-          const d = e.target.result;
-          if (!d.objectStoreNames.contains(STORE_NAME)) d.createObjectStore(STORE_NAME);
-        };
-        req.onsuccess = () => { db = req.result; resolve(); };
-        req.onerror = () => reject(req.error);
-      });
-    }
-
-    function getAsset(key) {
-      return new Promise((resolve) => {
-        if (!db) return resolve(null);
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const req = tx.objectStore(STORE_NAME).get(key);
-        req.onsuccess = () => resolve(req.result || null);
-        req.onerror = () => resolve(null);
-      });
-    }
-
-    function putAsset(key, blob) {
-      return new Promise((resolve) => {
-        if (!db) return resolve();
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        tx.objectStore(STORE_NAME).put(blob, key);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => resolve();
-      });
-    }
-
-    async function loadAssets(forceUpdate = false) {
-      const status = $('loading-status');
-      const progressBar = $('progress-bar');
-      const progress = $('progress-fill');
-      const sizeText = $('loading-size');
-      
-      try {
-        await initDB();
-
-        const resp = await fetch('./load.json');
-        if (!resp.ok) throw new Error('load.json не найден');
-        const manifest = await resp.json();
-
-        const queue = [
-          ...Object.entries(manifest.sounds || {}).map(([id, data]) => ({ id, url: data.url, size: data.size, type: 'Звуки' })),
-          ...Object.entries(manifest.textures || {}).map(([id, data]) => ({ id, url: data.url, size: data.size, type: 'Текстуры' }))
-        ];
-
-        window.GameAssets = window.GameAssets || {};
-        let missingFiles = [];
-
-        status.textContent = 'Проверка...';
-        if (!forceUpdate) {
-          const checkPromises = queue.map(async (item) => {
-            const cachedBlob = await getAsset(item.url);
-            return { item, cachedBlob };
-          });
-
-          const results = await Promise.all(checkPromises);
-
-          for (const res of results) {
-            if (res.cachedBlob) {
-              if (res.item.type === 'Текстуры') {
-                window.GameAssets[res.item.id] = URL.createObjectURL(res.cachedBlob);
-              } else if (window.SoundsEngine) {
-                await window.SoundsEngine.loadSound(res.item.id, res.cachedBlob);
-              }
-            } else {
-              missingFiles.push(res.item);
-            }
-          }
-        } else {
-          missingFiles = queue;
-        }
-
-        // ★ ЕСЛИ КАЧАТЬ НЕЧЕГО — СКРЫВАЕМ ПРОГРЕСС-БАР ★
-        if (missingFiles.length === 0) {
-          status.textContent = 'Все файлы в кэше';
-          progressBar.style.display = 'none';
-          sizeText.style.display = 'none';
-          return;
-        }
-
-        status.textContent = 'Скачивание...';
-        progressBar.style.display = 'block';
-        sizeText.style.display = 'block';
-        
-        let totalBytes = queue.reduce((sum, item) => sum + (item.size || 0), 0);
-        let loadedBytes = 0;
-
-        for (let i = 0; i < missingFiles.length; i++) {
-          const item = missingFiles[i];
-          status.textContent = `Загрузка: ${item.type} [${i + 1}/${missingFiles.length}]`;
-          
-          try {
-            const res = await fetch(item.url);
-            if (!res.ok) throw new Error('404');
+    // полный кэш: тихо декодируем из IDB (без прогресс-бара)
+    const loadAllFromIDB = async (required) => {
+      await mapLimit(required, 3, async (a) => {
+        try {
+          const blob = await idbGet(a.key);
+          if (!blob) throw new Error('miss');
+          if (a.kind === 'texture') applyTexture(a, blob);
+          else await decodeSound(a.id, blob);
+        } catch (e) {
+          try { // страховка: докачать один пропавший файл
+            const res = await fetch(a.url, { cache: 'force-cache' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
             const blob = await res.blob();
-            
-            await putAsset(item.url, blob);
-            loadedBytes += (item.size || blob.size);
-            
-            if (item.type === 'Текстуры') {
-              window.GameAssets[item.id] = URL.createObjectURL(blob);
-            } else if (window.SoundsEngine) {
-              await window.SoundsEngine.loadSound(item.id, blob);
-            }
-          } catch (e) {
-            console.warn(`[Пропуск] ${item.url}`);
-          }
-          
-          const percent = Math.min(100, Math.round((loadedBytes / totalBytes) * 100));
-          progress.style.width = `${percent}%`;
-          sizeText.textContent = `${(loadedBytes / 1024 / 1024).toFixed(1)} МБ / ${(totalBytes / 1024 / 1024).toFixed(1)} МБ`;
+            if (idb) await idbPut(a.key, blob).catch(() => {});
+            if (a.kind === 'texture') applyTexture(a, blob); else await decodeSound(a.id, blob);
+          } catch (e2) { console.warn('[Boot] пропущен ассет:', a.url); }
         }
+      });
+    };
 
-        status.textContent = 'Готово!';
-        progress.style.width = '100%';
-        
-      } catch (e) {
-        console.warn('Ошибка загрузки:', e);
-        status.textContent = 'Ошибка';
+    // неполный кэш: докачиваем отсутствующее с прогрессом, остальное параллельно из IDB
+    const downloadAndCache = async (required, missing) => {
+      const missSet = new Set(missing.map(m => m.key));
+      const cached = required.filter(a => !missSet.has(a.key));
+      const cachedPromise = mapLimit(cached, 3, async (a) => {
+        try {
+          const blob = await idbGet(a.key);
+          if (!blob) { missing.push(a); return; }
+          if (a.kind === 'texture') applyTexture(a, blob); else await decodeSound(a.id, blob);
+        } catch (e) { missing.push(a); }
+      });
+
+      let done = 0;
+      const total = missing.length || 1;
+      setProgress(0, `Загрузка: 0/${missing.length}`);
+      const missPromise = mapLimit(missing, 3, async (a) => {
+        try {
+          const res = await fetch(a.url, { cache: 'force-cache' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const blob = await res.blob();
+          if (idb) await idbPut(a.key, blob).catch(() => {});
+          if (a.kind === 'texture') applyTexture(a, blob); else await decodeSound(a.id, blob);
+        } catch (e) { console.warn('[Boot] пропущен ассет:', a.url); }
+        done++;
+        setProgress(done / total * 0.9, `Загрузка: ${a.url.split('/').pop()} (${done}/${total})`);
+      });
+
+      await Promise.all([cachedPromise, missPromise]);
+      setProgress(1, 'Готово');
+      await new Promise(r => setTimeout(r, 150));
+    };
+
+    // ==================== BOOT ====================
+    const registerSW = () => {
+      if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+        navigator.serviceWorker.register('./sw.js').catch(e => console.warn('[Boot] SW:', e));
       }
+    };
+    const unlockAudioOnce = () => {
+      const un = () => { try { window.SoundsEngine?.init(); } catch (e) {} };
+      addEventListener('pointerdown', un, { once: true });
+      addEventListener('keydown', un, { once: true });
+    };
+
+    const startMenu = async () => {
+      if (window.__booted) return;
+      window.__booted = true;
+      const bootEl = $('#boot');
+      bootEl.classList.add('done');
+      setTimeout(() => bootEl.remove(), 600);
+      const mod = await import('./Блоки/menu.js');
+      mod.Menu.start('title');
+    };
+
+    async function boot() {
+      registerSW();
+      unlockAudioOnce();
+      await import('./Фон/sounds.js'); // window.SoundsEngine
+
+      const discPromise = playDisclaimer(); // анимация идёт параллельно подготовке
+
+      let version = null, soundsMap = {};
+      try {
+        const vres = await fetch('./version.json?t=' + Date.now(), { cache: 'no-store' });
+        if (vres.ok) version = (await vres.json()).version ?? null;
+      } catch (e) { console.warn('[Boot] version.json:', e); }
+      try {
+        const lres = await fetch('./load.json?t=' + Date.now(), { cache: 'no-store' });
+        if (lres.ok) soundsMap = (await lres.json()).sounds ?? {};
+      } catch (e) { console.warn('[Boot] load.json:', e); }
+      Object.assign(soundsMap, EXTRA_SOUNDS);
+
+      try { idb = await openDB(); } catch (e) { console.warn('[Boot] IndexedDB недоступна:', e); idb = null; }
+
+      const stored = localStorage.getItem('woland_version');
+      if (idb && version && stored && version !== stored) {
+        await idbClear().catch(() => {});
+        localStorage.removeItem('woland_version');
+      }
+
+      const required = buildRequired(soundsMap);
+      const have = idb ? new Set(await idbKeys().catch(() => [])) : new Set();
+      const missing = required.filter(a => !have.has(a.key));
+      const fullCache = !!idb && missing.length === 0 && (!version || version === stored);
+
+      const ready = fullCache
+        ? loadAllFromIDB(required)
+        : (async () => { await discPromise; showLoadUI(); await downloadAndCache(required, missing.slice()); })();
+
+      await discPromise;      // ждём конец оригинальной анимации
+      await ready;            // и готовность ассетов
+      if (version) localStorage.setItem('woland_version', version);
+      await startMenu();
     }
 
-    startApp();
+    $('#booterr-retry').onclick = () => location.reload();
+    boot().catch(e => fatal(e?.message || e));
   </script>
 </body>
 </html>

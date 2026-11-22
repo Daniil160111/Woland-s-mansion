@@ -1,17 +1,14 @@
 // Фон/settings-manager.js
 export const Settings = {
     defaults: {
-        // Звук
-        masterVolume: 100,   // 0-150 (множитель)
-        effectsVolume: 100,  // 0-150 (множитель)
+        masterVolume: 100,   // 0-150
+        effectsVolume: 100,  // 0-150
         audioMode: 'dolby',  // 'mono' | 'stereo' | 'dolby' (= Dolby Vertical)
-        dolbyIntensity: 100, // 0-100, интенсивность объёма Vertical Dolby
+        dolbyIntensity: 100, // всегда 100
 
-        // Яркость
-        brightness: 100,
-        minBrightness: 25,
+        brightness: 100,     // 0-150
+        minBrightness: 25,   // 0-50, нижняя граница яркости
 
-        // Графика
         aspectRatio: 'auto',
         shadows: 'medium',
         realisticLight: 'medium',
@@ -26,11 +23,13 @@ export const Settings = {
         const saved = localStorage.getItem('woland_settings');
         this.current = saved ? JSON.parse(saved) : { ...this.defaults };
         if (this.current.dolbyIntensity === undefined) this.current.dolbyIntensity = this.defaults.dolbyIntensity;
+        this.current.dolbyIntensity = 100;
         this.apply();
     },
 
     set(key, value) {
         this.current[key] = value;
+        if (key === 'dolbyIntensity') this.current.dolbyIntensity = 100;
         this.apply();
     },
 
@@ -60,33 +59,36 @@ export const Settings = {
     },
 
     apply() {
-        // 1. Яркость
-        const baseBrightness = this.current.brightness;
-        const minBrightness = this.current.minBrightness;
-        const finalBrightness = baseBrightness === 0 ? minBrightness : baseBrightness;
-        document.body.style.filter = `brightness(${(finalBrightness / 100).toFixed(2)})`;
+        // 1. Яркость: минимальный порог = НИЖНЯЯ граница диапазона.
+        //    Ползунок 0..150 линейно отображается в minBrightness..150,
+        //    шаг сжимается пропорционально (при min=10 → 1 пункт ≈ 0.93%).
+        const minB = clampNum(this.current.minBrightness ?? 25, 0, 50);
+        const base = clampNum(this.current.brightness ?? 100, 0, 150);
+        const effective = minB + (base / 150) * (150 - minB);
+        document.body.style.filter = `brightness(${(effective / 100).toFixed(3)})`;
 
-        // 2. Звук (множители)
+        // 2. Звук (множители шин)
         if (window.SoundsEngine) {
             const baseMusic = 0.32;
             const baseEffects = 0.8;
-            const musicMult = this.current.masterVolume / 100;
-            const effectsMult = this.current.effectsVolume / 100;
+            const musicMult = clampNum(this.current.masterVolume ?? 100, 0, 150) / 100;
+            const effectsMult = clampNum(this.current.effectsVolume ?? 100, 0, 150) / 100;
             window.SoundsEngine.setMasterVolume('music', baseMusic * musicMult);
             window.SoundsEngine.setMasterVolume('effects', baseEffects * effectsMult);
 
             if (this.current.audioMode === 'dolby') {
-                window.SoundsEngine.setAudioMode('surround'); // движок понимает как Vertical Dolby
+                window.SoundsEngine.setAudioMode('surround');
             } else if (this.current.audioMode === 'mono') {
                 window.SoundsEngine.setAudioMode('mono');
             } else {
                 window.SoundsEngine.setAudioMode('stereo');
             }
 
-            // Интенсивность Vertical Dolby
             if (window.SoundsEngine.setDolbyIntensity) {
-                window.SoundsEngine.setDolbyIntensity(this.current.dolbyIntensity ?? 100);
+                window.SoundsEngine.setDolbyIntensity(100);
             }
         }
     }
 };
+
+function clampNum(v, a, b) { return Math.max(a, Math.min(b, Number(v) || 0)); }

@@ -13,13 +13,12 @@ class SoundEngine {
 
         this.audioMode = 'stereo';
         this.volumes = { music: 0.32, effects: 0.8 };
-        this.dolbyIntensity = 100;
 
-        this.convolver = null;      // реверб ЭФФЕКТОВ (не трогается музыкой)
+        this.convolver = null;      // реверб ЭФФЕКТОВ
         this.reverbGain = null;
 
-        this._verticalImpulse = null;   // отдельный импульс Vertical Dolby
-        this._dolbyGraphs = new Set();  // живые графы для live-интенсивности
+        this._verticalImpulse = null;
+        this._dolbyGraphs = new Set();
     }
 
     init() {
@@ -72,18 +71,18 @@ class SoundEngine {
         }
     }
 
-    // ==================== VERTICAL DOLBY (1:1 из анализатора) ====================
-    _dolbyParams(intensity) {
-        const i = intensity / 100;
+    // ==================== VERTICAL DOLBY — ВСЕГДА 100% ====================
+    _dolbyParams() {
+        const i = 1; // мощность фиксирована на 100%
         return {
-            sideGain:   0.2 + i * 0.7,
-            midGain:    0.8 - i * 0.35,
-            topShelf:   2 + i * 10,
-            bottomShelf:1 + i * 7,
-            surround:   i * 0.4,
-            topDelay:   0.0001 + i * 0.0006,
-            bottomDelay:0.0001,
-            phaseQ:     0.3 + i * 1.2
+            sideGain:    0.2 + i * 0.7,   // 0.9
+            midGain:     0.8 - i * 0.35,  // 0.45
+            topShelf:    2 + i * 10,      // +12 дБ @4000
+            bottomShelf: 1 + i * 7,       // +8 дБ @250
+            surround:    i * 0.4,         // 0.4
+            topDelay:    0.0001 + i * 0.0006, // 0.7 мс
+            bottomDelay: 0.0001,          // 0.1 мс
+            phaseQ:      0.3 + i * 1.2    // 1.5
         };
     }
 
@@ -102,10 +101,9 @@ class SoundEngine {
         return imp;
     }
 
-    // Граф: input → splitter → [Mid/Side] → shelf → delay → gain → allpass → merger → output
     _buildVerticalDolby(input, output) {
         const ctx = this.ctx;
-        const p = this._dolbyParams(this.dolbyIntensity);
+        const p = this._dolbyParams();
 
         const splitter = ctx.createChannelSplitter(2);
         const merger = ctx.createChannelMerger(2);
@@ -134,7 +132,6 @@ class SoundEngine {
         apBot.type = 'allpass'; apBot.frequency.value = 1200; apBot.Q.value = p.phaseQ;
 
         input.connect(splitter);
-        // Mid = L+R → низ; Side = L−R → верх
         splitter.connect(midGain, 0);
         splitter.connect(midGain, 1);
         splitter.connect(sideGain, 0);
@@ -149,30 +146,17 @@ class SoundEngine {
         bottomShelf.connect(bottomDelay);
         bottomDelay.connect(bottomGain);
 
-        // Surround-посыл только в верхний канал, через СВОЙ конвольвер
         sideGain.connect(surroundSend);
         surroundSend.connect(convolver);
         convolver.connect(topGain);
 
-        topGain.connect(apTop);   apTop.connect(merger, 0, 0);   // канал 0 = верх
-        bottomGain.connect(apBot); apBot.connect(merger, 0, 1);  // канал 1 = низ
+        topGain.connect(apTop);    apTop.connect(merger, 0, 0);   // канал 0 = верх
+        bottomGain.connect(apBot); apBot.connect(merger, 0, 1);   // канал 1 = низ
         merger.connect(output);
 
         const nodes = [splitter, merger, midGain, sideGain, inv, topShelf, bottomShelf,
                        topDelay, bottomDelay, topGain, bottomGain, surroundSend, convolver, apTop, apBot];
         const graph = {
-            apply: (intensity) => {
-                const q = this._dolbyParams(intensity);
-                const t = ctx.currentTime, tau = 0.03;
-                sideGain.gain.setTargetAtTime(q.sideGain, t, tau);
-                midGain.gain.setTargetAtTime(q.midGain, t, tau);
-                topShelf.gain.setTargetAtTime(q.topShelf, t, tau);
-                bottomShelf.gain.setTargetAtTime(q.bottomShelf, t, tau);
-                surroundSend.gain.setTargetAtTime(q.surround, t, tau);
-                topDelay.delayTime.setTargetAtTime(q.topDelay, t, tau);
-                apTop.Q.setTargetAtTime(q.phaseQ, t, tau);
-                apBot.Q.setTargetAtTime(q.phaseQ, t, tau);
-            },
             destroy: () => {
                 nodes.forEach(n => { try { n.disconnect(); } catch (e) {} });
                 this._dolbyGraphs.delete(graph);
@@ -182,7 +166,6 @@ class SoundEngine {
         return graph;
     }
 
-    // Моно 1:1 из анализатора: (L+R)×0.5 в оба канала
     _buildMono(input, output) {
         const ctx = this.ctx;
         const splitter = ctx.createChannelSplitter(2);
@@ -195,7 +178,7 @@ class SoundEngine {
         mg.connect(merger, 0, 1);
         merger.connect(output);
         const nodes = [splitter, merger, mg];
-        return { apply() {}, destroy: () => nodes.forEach(n => { try { n.disconnect(); } catch (e) {} }) };
+        return { destroy: () => nodes.forEach(n => { try { n.disconnect(); } catch (e) {} }) };
     }
 
     // ==================== ВОСПРОИЗВЕДЕНИЕ ====================
@@ -206,13 +189,15 @@ class SoundEngine {
             loop = false,
             type = 'effects',
             volume = 1.0,
-            position = null,   // сохранён для совместимости вызовов
+            position = null,      // совместимость
             pan = 0,
             reverb = false,
-            dolby = false,     // ★ прежний способ вызова: dolby:true = Vertical Dolby (только музыка)
-            dolbyMode = 'none',// совместимость: 'vertical-dolby'/'vertical-stereo' → тот же граф
+            dolby = false,        // прежний вызов: dolby:true = Vertical Dolby (только музыка)
+            dolbyMode = 'none',   // совместимость
             loopEndOffset = 0,
-            offset = 0         // точка старта (бесшовная смена режима)
+            offset = 0,
+            mode = null,          // ★ явная обработка 'mono'|'stereo'|'dolby' (демо режима)
+            panSchedule = null    // ★ автоматизация панорамы [{t, v, ramp?}] от старта
         } = options;
 
         const source = this.ctx.createBufferSource();
@@ -230,46 +215,59 @@ class SoundEngine {
         const chain = [gainNode];
         let modeGraph = null;
 
-        if (type === 'music') {
-            const modeIsDolby = ['dolby', 'surround', 'dolby-vertical'].includes(this.audioMode);
-            const wantDolby = dolby === true || dolbyMode === 'vertical-dolby' || dolbyMode === 'vertical-stereo' || modeIsDolby;
+        const modeIsDolby = ['dolby', 'surround', 'dolby-vertical'].includes(this.audioMode);
+        const wantDolbyMusic = type === 'music' &&
+            (dolby === true || dolbyMode === 'vertical-dolby' || dolbyMode === 'vertical-stereo' || modeIsDolby);
+        // явный mode важнее; implicit dolby для эффектов ЗАПРЕЩЁН
+        const procMode = mode || (wantDolbyMusic ? 'dolby' : (type === 'music' ? this.audioMode : null));
 
-            if (wantDolby) {
-                modeGraph = this._buildVerticalDolby(source, gainNode);
-            } else if (this.audioMode === 'mono') {
-                modeGraph = this._buildMono(source, gainNode);
-            } else {
-                source.connect(gainNode); // стерео 1:1: L→канал 0 (верх), R→канал 1 (низ)
-            }
-            gainNode.connect(targetBus);
+        if (procMode === 'dolby') {
+            modeGraph = this._buildVerticalDolby(source, gainNode);
+        } else if (procMode === 'mono') {
+            modeGraph = this._buildMono(source, gainNode);
         } else {
-            // ЭФФЕКТЫ: dolby НИКОГДА (правило проекта). Пространство = pan + reverb.
             let lastNode = source;
-            if (pan !== 0 && this.ctx.createStereoPanner) {
-                const stereoPanner = this.ctx.createStereoPanner();
-                stereoPanner.pan.value = Math.max(-1, Math.min(1, pan));
-                lastNode.connect(stereoPanner);
-                lastNode = stereoPanner;
-                chain.push(stereoPanner);
+            if (type === 'effects' && pan !== 0 && !panSchedule && this.ctx.createStereoPanner) {
+                const sp = this.ctx.createStereoPanner();
+                sp.pan.value = Math.max(-1, Math.min(1, pan));
+                lastNode.connect(sp);
+                lastNode = sp;
+                chain.push(sp);
             }
             lastNode.connect(gainNode);
-            gainNode.connect(targetBus);
+        }
 
-            if (reverb) {
-                const delayNode = this.ctx.createDelay();
-                delayNode.delayTime.value = 0.28;
-                const feedbackGain = this.ctx.createGain();
-                feedbackGain.gain.value = 0.35;
-                const filterNode = this.ctx.createBiquadFilter();
-                filterNode.type = 'lowpass';
-                filterNode.frequency.value = 1200;
-                gainNode.connect(delayNode);
-                delayNode.connect(filterNode);
-                filterNode.connect(feedbackGain);
-                feedbackGain.connect(delayNode);
-                feedbackGain.connect(targetBus);
-                chain.push(delayNode, feedbackGain, filterNode);
-            }
+        // автоматизация панорамы (демо dolby: слева → быстро → справа)
+        if (panSchedule && this.ctx.createStereoPanner) {
+            const sp = this.ctx.createStereoPanner();
+            const t0 = this.ctx.currentTime;
+            panSchedule.forEach((p, i) => {
+                const val = Math.max(-1, Math.min(1, p.v));
+                if (i === 0) sp.pan.setValueAtTime(val, t0 + p.t);
+                else if (p.ramp) sp.pan.linearRampToValueAtTime(val, t0 + p.t);
+                else sp.pan.setValueAtTime(val, t0 + p.t);
+            });
+            gainNode.connect(sp);
+            sp.connect(targetBus);
+            chain.push(sp);
+        } else {
+            gainNode.connect(targetBus);
+        }
+
+        if (reverb && type === 'effects') {
+            const delayNode = this.ctx.createDelay();
+            delayNode.delayTime.value = 0.28;
+            const feedbackGain = this.ctx.createGain();
+            feedbackGain.gain.value = 0.35;
+            const filterNode = this.ctx.createBiquadFilter();
+            filterNode.type = 'lowpass';
+            filterNode.frequency.value = 1200;
+            gainNode.connect(delayNode);
+            delayNode.connect(filterNode);
+            filterNode.connect(feedbackGain);
+            feedbackGain.connect(delayNode);
+            feedbackGain.connect(targetBus);
+            chain.push(delayNode, feedbackGain, filterNode);
         }
 
         source.start(0, offset);
@@ -303,16 +301,9 @@ class SoundEngine {
         if (bus && bus.gain) bus.gain.setTargetAtTime(value, this.ctx.currentTime, 0.05);
     }
 
-    // Нормализация алиасов: 'surround' (из settings-manager), 'dolby-vertical' → 'dolby'
     setAudioMode(mode) {
         if (mode === 'surround' || mode === 'dolby-vertical') mode = 'dolby';
         this.audioMode = mode;
-    }
-
-    // Live-интенсивность объёма 0..100 (формулы анализатора), без перезапуска трека
-    setDolbyIntensity(value) {
-        this.dolbyIntensity = Math.max(0, Math.min(100, Number(value) || 0));
-        this._dolbyGraphs.forEach(g => g.apply(this.dolbyIntensity));
     }
 }
 

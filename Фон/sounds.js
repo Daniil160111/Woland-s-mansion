@@ -81,8 +81,8 @@ class SoundEngine {
             position = null,
             pan = 0,       
             reverb = false,
-            dolby = false,           // ★ СТАРЫЙ СПОСОБ (HRTF)
-            dolbyMode = 'none',      // ★ НОВЫЙ СПОСОБ: 'none' | 'vertical-dolby'
+            dolby = false,
+            dolbyMode = 'none', // ★ 'none', 'dolby', 'vertical-stereo', 'vertical-dolby'
             loopEndOffset = 0      
         } = options;
 
@@ -105,71 +105,55 @@ class SoundEngine {
 
         let lastNode = source;
 
-        // ★ VERTICAL DOLBY (ПОЛНАЯ КОПИЯ ИЗ АНАЛИЗАТОРА) ★
-        if (dolbyMode === 'vertical-dolby') {
+        // ★ DOLBY VERTICAL (из анализатора) ★
+        if (dolbyMode === 'vertical-stereo' || dolbyMode === 'vertical-dolby') {
             const splitter = this.ctx.createChannelSplitter(2);
             const merger = this.ctx.createChannelMerger(2);
             
+            // Mid = L+R (бас), Side = L-R (верх)
             const midGain = this.ctx.createGain();
+            midGain.gain.value = 0.5;
             const sideGain = this.ctx.createGain();
+            sideGain.gain.value = 0.5;
             const inv = this.ctx.createGain();
             inv.gain.value = -1;
 
-            // L и R разделяются
             lastNode.connect(splitter);
-            
-            // Mid = L + R
             splitter.connect(midGain, 0);
             splitter.connect(midGain, 1);
-            
-            // Side = L - R
             splitter.connect(sideGain, 0);
             splitter.connect(inv, 1);
             inv.connect(sideGain);
 
-            // Верхний канал: Side (L-R) + ВЧ
+            // Верхний канал (Left): Side + ВЧ
             const topFilter = this.ctx.createBiquadFilter();
             topFilter.type = 'highshelf';
             topFilter.frequency.value = 4000;
-            topFilter.gain.value = 8; // Подъем ВЧ
+            topFilter.gain.value = 6;
             sideGain.connect(topFilter);
-            topFilter.connect(merger, 0, 0); // Левый канал
+            topFilter.connect(merger, 0, 0); // Левый = Верх
 
-            // Нижний канал: Mid (L+R) + бас
+            // Нижний канал (Right): Mid + бас
             const bottomFilter = this.ctx.createBiquadFilter();
             bottomFilter.type = 'lowshelf';
             bottomFilter.frequency.value = 250;
-            bottomFilter.gain.value = 6; // Подъем баса
+            bottomFilter.gain.value = 4;
             midGain.connect(bottomFilter);
-            bottomFilter.connect(merger, 0, 1); // Правый канал
+            bottomFilter.connect(merger, 0, 1); // Правый = Низ
 
-            // Добавляем реверберацию (surround) в верхний канал
-            const surroundGain = this.ctx.createGain();
-            surroundGain.gain.value = 0.3;
-            sideGain.connect(surroundGain);
-            surroundGain.connect(this.convolver);
-            this.convolver.connect(merger, 0, 0);
-
-            // Allpass-фильтры для фазы (как в анализаторе)
-            const apTop = this.ctx.createBiquadFilter();
-            apTop.type = 'allpass';
-            apTop.frequency.value = 1200;
-            const apBot = this.ctx.createBiquadFilter();
-            apBot.type = 'allpass';
-            apBot.frequency.value = 1200;
-
-            topFilter.disconnect();
-            bottomFilter.disconnect();
-
-            topFilter.connect(apTop);
-            apTop.connect(merger, 0, 0);
-            bottomFilter.connect(apBot);
-            apBot.connect(merger, 0, 1);
+            // Для Vertical-Dolby добавляем реверберацию
+            if (dolbyMode === 'vertical-dolby') {
+                const surroundGain = this.ctx.createGain();
+                surroundGain.gain.value = 0.3;
+                sideGain.connect(surroundGain);
+                surroundGain.connect(this.convolver);
+                this.convolver.connect(merger, 0, 0);
+            }
 
             lastNode = merger;
-        } 
-        // ★ СТАРЫЙ DOLBY (HRTF) ★
-        else if (dolby && this.ctx.createPanner) {
+
+        } else if (dolby && this.ctx.createPanner) {
+            // Стандартный Dolby HRTF
             const panner = this.ctx.createPanner();
             panner.panningModel = 'HRTF'; 
             panner.distanceModel = 'inverse';
@@ -185,7 +169,6 @@ class SoundEngine {
             lastNode.connect(panner);
             lastNode = panner;
         } 
-        // ОБЫЧНОЕ СТЕРЕО
         else if (pan !== 0 && this.ctx.createStereoPanner) {
             const stereoPanner = this.ctx.createStereoPanner();
             stereoPanner.pan.value = Math.max(-1, Math.min(1, pan));

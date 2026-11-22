@@ -16,8 +16,8 @@ const TABS = [
 ];
 
 const UI_FALLBACK = { btn_click: 0.30, btn_select: 0.30, btn_back: 0.35, transition: 0.50, reset: 0.50 };
-const SPRING_RELEASE = { k: 260, c: 22 };
-const SPRING_DRAG    = { k: 900, c: 46 };
+const SPRING_RELEASE = { k: 300, c: 24 };
+const SPRING_DRAG    = { k: 1000, c: 50 };
 const BRAKE_MS = 80, BRAKE_DAMP = 55;
 const STRETCH_DIV = 2200, STRETCH_MAX = 0.42;
 const RUBBER = 0.35;
@@ -48,7 +48,8 @@ export const SettingsMenu = {
   currentTab: 'audio',
 
   _active: false, _uiLockUntil: 0, _musicSource: null, _demoSource: null,
-  _musicToken: 0, _musicStartedAt: 0, _busTimers: { music: null, effects: null },
+  _musicToken: 0, _musicStartedAt: 0, _musicLoading: null, _musicRetry: false,
+  _busTimers: { music: null, effects: null },
   _visHandler: null, _ro: null, _reducedMotion: false, _tip: null,
   _tipHandler: null, _tipHost: null, _dialogOpen: false, _pendingDemo: null,
   _snapshot: null, _saved: true, _canVib: false,
@@ -57,7 +58,6 @@ export const SettingsMenu = {
          vibAcc:0, lastVib:0, touchF:0,
          lastIdx:0, raf:null, lastT:0, centers:[], segW:0, pad:5, downX:0, downT:0, moved:false, downIdx:0 },
 
-  // вибрация ИЛИ замена на iOS/где нет: визуальный импульс + подсветка движением
   _buzz(ms, el) {
     if (this._canVib) { try { navigator.vibrate(ms); } catch (e) {} return; }
     if (el && el.classList) {
@@ -77,7 +77,6 @@ export const SettingsMenu = {
       st.lastVib = now; st.vibAcc = 0;
     }
   },
-  // давление: PointerEvent.pressure → touch.force (iOS) → базовое
   _pressFrom(e, st) {
     if (e.pointerType === 'mouse') return 0.5;
     if (e.pressure > 0.01) return clamp((e.pressure - 0.2) / 0.8, 0, 1);
@@ -97,6 +96,7 @@ export const SettingsMenu = {
     this._uiLockUntil = 0;
     this._saved = true;
     this._dialogOpen = false;
+    this._musicRetry = false;
     this._canVib = typeof navigator !== 'undefined' && !!navigator.vibrate;
     this._liq.clear();
     this._snapshot = JSON.parse(JSON.stringify(Settings.current));
@@ -120,7 +120,7 @@ export const SettingsMenu = {
       const eng = window.SoundsEngine;
       if (!this._active || !eng || !eng.ctx) return;
       if (document.hidden) { eng.ctx.suspend(); this._sleepPill(); this._sleepLiq(); }
-      else { eng.ctx.resume(); this._wakePill(); }
+      else { eng.ctx.resume(); this._wakePill(); this._tryMusicRetry(); }
     };
     document.addEventListener('visibilitychange', this._visHandler);
   },
@@ -150,7 +150,53 @@ export const SettingsMenu = {
     this._musicSource = null;
   },
 
-  // ==================== ДЕМО ====================
+  // ==================== МУЗЫКА: старт без ожидания очереди загрузчика ====================
+  _ensureMusicBuffer(eng) {
+    if (eng.loadedBuffers[MUSIC_ID] || this._musicLoading) return;
+    this._musicLoading = (async () => {
+      try {
+        const res = await fetch(new URL(MUSIC_PATH, document.baseURI).href, { cache: 'force-cache' });
+        if (!res.ok) throw new Error(res.status);
+        const buf = await eng.ctx.decodeAudioData(await res.arrayBuffer());
+        if (!eng.loadedBuffers[MUSIC_ID]) eng.loadedBuffers[MUSIC_ID] = buf;
+      } catch (e) { /* догрузит общий загрузчик */ }
+      finally { this._musicLoading = null; }
+    })();
+  },
+
+  async _startMusic() {
+    const eng = window.SoundsEngine;
+    if (!eng || this._musicSource) return;
+    const token = ++this._musicToken;
+    const t0 = performance.now();
+    this._ensureMusicBuffer(eng);
+    for (let i = 0; i < 600 && this._active; i++) {          // стартуем в момент готовности, а не через N сек
+      if (eng.loadedBuffers[MUSIC_ID]) break;
+      await new Promise(r => setTimeout(r, 80));
+    }
+    if (token !== this._musicToken || !this._active) return;
+    if (!eng.loadedBuffers[MUSIC_ID]) { this._musicRetry = true; console.warn('[Settings] музыка не готова, ретри по касанию'); return; }
+    try {
+      eng.setDolbyIntensity(100);
+      this._musicStartedAt = eng.ctx.currentTime;
+      eng.setMasterVolume('music', 0);
+      this._musicSource = eng.play(MUSIC_ID, { type: 'music', loop: true, volume: this._musicTrackVolume(), dolby: Settings.current.audioMode === 'dolby' });
+      console.info('[Settings] музыка запущена за', Math.round(performance.now() - t0), 'мс');
+      this._fadeBus('music', this._musicBusTarget(), 700);
+    } catch (e) { console.warn('[Settings] ошибка музыки:', e); }
+  },
+
+  _tryMusicRetry() {
+    if (this._musicRetry && this._active && !this._musicSource) {
+      this._musicRetry = false;
+      this._startMusic();
+    }
+  },
+
+  _stopDemo() {
+    if (this._demoSource && window.SoundsEngine) { try { window.SoundsEngine.stop(this._demoSource); } catch (e) {} }
+    this._demoSource = null;
+  },
   async _preloadDemo() {
     const eng = window.SoundsEngine;
     if (eng && !eng.loadedBuffers[DEMO_ID]) {
@@ -159,10 +205,6 @@ export const SettingsMenu = {
         if (this._pendingDemo) { const m = this._pendingDemo; this._pendingDemo = null; this._playDemoForMode(m); }
       } catch (e) {}
     }
-  },
-  _stopDemo() {
-    if (this._demoSource && window.SoundsEngine) { try { window.SoundsEngine.stop(this._demoSource); } catch (e) {} }
-    this._demoSource = null;
   },
   _playDemoForMode(mode) {
     const eng = window.SoundsEngine;
@@ -186,7 +228,7 @@ export const SettingsMenu = {
     if (now < this._uiLockUntil) return Promise.resolve(false);
     const eng = window.SoundsEngine;
     let sec = eng?.loadedBuffers?.[name]?.duration ?? UI_FALLBACK[name] ?? 0.30;
-    if (name === 'reset') sec = Math.min(sec, 0.5);           // Сброс: не длиннее 0.5 c
+    if (name === 'reset') sec = Math.min(sec, 0.5);
     const ms = Math.ceil(sec * 1000) + 40;
     this._uiLockUntil = now + ms;
     const layout = document.querySelector('.settings-layout');
@@ -196,7 +238,7 @@ export const SettingsMenu = {
     return new Promise(res => setTimeout(() => res(true), ms));
   },
 
-  // ==================== ГРОМКОСТЬ / МУЗЫКА ====================
+  // ==================== ГРОМКОСТЬ ====================
   _musicBusTarget() { return clamp(Settings.current.masterVolume ?? 100, 0, 150) / 100 * MUSIC_BASE; },
   _fxBusTarget()    { return clamp(Settings.current.effectsVolume ?? 100, 0, 150) / 100 * FX_BASE; },
   _musicTrackVolume() { return MUSIC_BASE * clamp(Settings.current.masterVolume ?? 100, 0, 150) / 100; },
@@ -217,25 +259,6 @@ export const SettingsMenu = {
       eng.setMasterVolume(bus, from + (to - from) * e);
       if (k >= 1) clearInterval(this._busTimers[bus]);
     }, 16);
-  },
-  async _startMusic() {
-    const eng = window.SoundsEngine;
-    if (!eng || this._musicSource) return;
-    const token = ++this._musicToken;
-    try {
-      if (!eng.loadedBuffers[MUSIC_ID]) eng.loadSound(MUSIC_ID, new URL(MUSIC_PATH, document.baseURI).href);
-      for (let i = 0; i < 15; i++) {
-        if (eng.loadedBuffers[MUSIC_ID] || token !== this._musicToken || !this._active) break;
-        await new Promise(r => setTimeout(r, 200));
-      }
-      if (token !== this._musicToken || !this._active) return;
-      if (!eng.loadedBuffers[MUSIC_ID]) { console.warn('[Settings] музыка не загружена:', MUSIC_PATH); return; }
-      eng.setDolbyIntensity(100);
-      this._musicStartedAt = eng.ctx.currentTime;
-      eng.setMasterVolume('music', 0);
-      this._musicSource = eng.play(MUSIC_ID, { type: 'music', loop: true, volume: this._musicTrackVolume(), dolby: Settings.current.audioMode === 'dolby' });
-      this._fadeBus('music', this._musicBusTarget(), 700);
-    } catch (e) { console.warn('[Settings] ошибка музыки:', e); }
   },
   async _stopMusic(fadeMs = 280) {
     const eng = window.SoundsEngine;
@@ -261,6 +284,7 @@ export const SettingsMenu = {
   // ==================== ВОЛНА: ТОЛЬКО КНОПКИ ====================
   _bindWobble(host) {
     host.addEventListener('pointerdown', (e) => {
+      this._tryMusicRetry();
       const el = e.target.closest('.g-btn');
       if (!el) return;
       const r = el.getBoundingClientRect();
@@ -318,22 +342,21 @@ export const SettingsMenu = {
 
   // ==================== КАРКАС ====================
   _renderShell(container) {
-    const saveVisible = this.hasUnsavedChanges ? 'show' : '';
     container.innerHTML = `
       <div class="settings-layout">
         <div class="wm-fog" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
         <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-          <filter id="wm-liquid" x="-20%" y="-20%" width="140%" height="140%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.012 0.028" numOctaves="2" seed="8" result="n"/>
-            <feGaussianBlur in="n" stdDeviation="1.2" result="ns"/>
-            <feDisplacementMap in="SourceGraphic" in2="ns" scale="16" xChannelSelector="R" yChannelSelector="G"/>
+          <filter id="wm-liquid" x="-25%" y="-25%" width="150%" height="150%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.011 0.026" numOctaves="2" seed="8" result="n"/>
+            <feGaussianBlur in="n" stdDeviation="1.1" result="ns"/>
+            <feDisplacementMap in="SourceGraphic" in2="ns" scale="22" xChannelSelector="R" yChannelSelector="G"/>
           </filter>
         </svg>
 
         <div class="settings-header">
           <button id="btn-settings-back" class="g-btn ghost">‹ Выйти</button>
           <div class="settings-title">Настройки</div>
-          <button id="btn-settings-save" class="g-btn primary save-btn ${saveVisible}">Сохранить</button>
+          <button id="btn-settings-save" class="g-btn primary save-btn ${this.hasUnsavedChanges ? 'show' : ''}">Сохранить</button>
         </div>
 
         <div class="settings-pages" id="settings-pages"></div>
@@ -367,11 +390,17 @@ export const SettingsMenu = {
     container.querySelector('#btn-settings-back').onclick = async () => {
       if (this.isLocked() || this._dialogOpen) return;
       if (this.hasUnsavedChanges) {
-        const save = await this.confirmDialog({
-          title: 'Несохранённые изменения', text: 'Сохранить изменения перед выходом?',
-          okText: 'Сохранить', cancelText: 'Не сохранять'
+        const r = await this.confirmDialog({
+          title: 'Несохранённые изменения',
+          text: 'Что сделать с изменениями перед выходом?',
+          buttons: [
+            { id: 'save',    label: 'Сохранить и выйти',   cls: 'primary' },
+            { id: 'discard', label: 'Выйти не сохраняя',   cls: 'ghost' },
+            { id: 'stay',    label: 'Отмена',              cls: 'ghost' }
+          ]
         });
-        if (save) await this.saveSettings();
+        if (r === 'stay') return;
+        if (r === 'save') await this.saveSettings();
       }
       if (!(await this.playUI('btn_back'))) return;
       await this.leave();
@@ -400,7 +429,6 @@ export const SettingsMenu = {
     });
   },
 
-  // iOS: давление пальца через Touch.force
   _bindTouchForce(el, st) {
     const read = (e) => {
       const t = e.touches && e.touches[0];
@@ -421,7 +449,7 @@ export const SettingsMenu = {
     ph.target = ph.centers[idx];
     ph.lastIdx = idx;
     this._wakePill();
-    this._commit(idx); // категории: БЕЗ звука
+    this._commit(idx);
   },
 
   _commit(idx) {
@@ -461,7 +489,6 @@ export const SettingsMenu = {
     if (cat === 'system')     this._pageSystem(page);
   },
 
-  // непрерывная шайба (громкость/яркость): тот же вид и физика
   _sliderHTML(id, label, min, max, val, tipKey) {
     return `
       <div class="setting-group glass" ${tipKey ? `data-tooltip="${TIPS[tipKey]}"` : ''}>
@@ -507,8 +534,8 @@ export const SettingsMenu = {
       idx: parseInt(line.dataset.idx, 10) || 0,
       x: 0, v: 0, target: 0, dragging: false, grab: false, brakeUntil: 0,
       press: 0, pressX: 0, downT: 0, downX: 0, moved: false, pop: 0, lastStop: -1,
-      vibAcc: 0, lastVib: 0, touchF: 0,
-      startVal: null, changed: false,
+      vibAcc: 0, lastVib: 0, touchF: 0, touched: false,
+      startVal: null, changed: false, lastV: null,
       min: 0, max: 0, pos: [], width: 0, measured: false,
       onLive: opts.onLive, onRelease: opts.onRelease
     };
@@ -520,6 +547,7 @@ export const SettingsMenu = {
       if (!st.measured) {
         if (cont) {
           const v0 = parseFloat(line.dataset.val) || st.cMin;
+          st.lastV = v0;
           const t = (v0 - st.cMin) / ((st.cMax - st.cMin) || 1);
           st.x = st.target = st.min + (st.max - st.min) * t;
         } else st.x = st.target = st.pos[st.idx];
@@ -530,25 +558,28 @@ export const SettingsMenu = {
     measure();
     this._bindTouchForce(line, st);
 
-    const valueFromX = () => Math.round(st.cMin + (clamp(st.x, st.min, st.max) - st.min) / ((st.max - st.min) || 1) * (st.cMax - st.cMin));
-
     line.addEventListener('pointerdown', (e) => {
       if (!this._active) return;
+      this._tryMusicRetry();
       line.setPointerCapture(e.pointerId);
       const r = line.getBoundingClientRect();
       const x = e.clientX - r.left;
       measure();
+      st.touched = true;
       st.downT = performance.now(); st.downX = x; st.moved = false; st.changed = false;
       st.press = this._pressFrom(e, st); st.pressX = x;
-      st.startVal = cont ? valueFromX() : st.idx;
+      st.startVal = cont ? st.lastV : st.idx;
       st.grab = Math.abs(x - st.x) < 30;
       if (st.grab) {
         if (Math.abs(st.v) > 40) st.brakeUntil = performance.now() + BRAKE_MS;
       } else {
-        const i = cont ? null : clamp(Math.round((x - st.min) / ((st.max - st.min) / (n - 1 || 1))), 0, n - 1);
         if (Math.abs(st.v) > 40) st.brakeUntil = performance.now() + BRAKE_MS;
-        st.target = cont ? clamp(x, st.min, st.max) : st.pos[i];
-        if (!cont) this._liqCommit(st, i, true); // тихо: звук на отпуск
+        if (cont) st.target = clamp(x, st.min, st.max);
+        else {
+          const i = clamp(Math.round((x - st.min) / ((st.max - st.min) / (n - 1 || 1))), 0, n - 1);
+          st.target = st.pos[i];
+          this._liqCommit(st, i);
+        }
       }
       this._wakeLiq();
     });
@@ -561,8 +592,7 @@ export const SettingsMenu = {
       if (!st.moved || !st.grab) return;
       st.dragging = true; st.brakeUntil = 0;
       st.target = rubber(x, st.min, st.max, RUBBER);
-      if (cont) st.changed = true;
-      else {
+      if (!cont) {
         const i = clamp(Math.round((st.target - st.min) / ((st.max - st.min) / (n - 1 || 1))), 0, n - 1);
         if (st.lastStop === -1) st.lastStop = i;
         if (i !== st.lastStop) { st.lastStop = i; st.pop = 1; }
@@ -575,17 +605,15 @@ export const SettingsMenu = {
       st.downT = 0; st.dragging = false; st.lastStop = -1;
       try { line.releasePointerCapture(e.pointerId); } catch (_) {}
       if (wasDrag) {
-        if (cont) {
-          st.target = clamp(st.x, st.min, st.max);
-          st.changed = true;
-        } else {
+        if (cont) { st.target = clamp(st.x, st.min, st.max); }
+        else {
           const i = clamp(Math.round((st.x - st.min) / ((st.max - st.min) / (n - 1 || 1))), 0, n - 1);
           st.target = st.pos[i];
-          this._liqCommit(st, i, true);
+          this._liqCommit(st, i);
         }
         this._wakeLiq();
       }
-      this._liqRelease(st); // звук ТОЛЬКО на отпуск
+      this._liqRelease(st);
     };
     line.addEventListener('pointerup', up);
     line.addEventListener('pointercancel', up);
@@ -593,69 +621,71 @@ export const SettingsMenu = {
       btn.onclick = (e) => {
         e.stopPropagation();
         if (this.isLocked()) return;
+        st.touched = true;
         if (Math.abs(st.v) > 40) st.brakeUntil = performance.now() + BRAKE_MS;
         st.target = st.pos[i];
         this._wakeLiq();
-        this._liqCommit(st, i, true);
-        this._liqRelease(st, true);
+        this._liqCommit(st, i);
+        this._liqRelease(st);
       };
     });
     line.addEventListener('keydown', (e) => {
       const step = e.shiftKey ? 10 : 1;
       let handled = true;
+      st.touched = true;
       if (cont) {
-        if (e.key === 'ArrowRight' || e.key === 'ArrowUp') st.target = clamp(st.target + (st.max - st.min) / (st.cMax - st.cMin) * step, st.min, st.max);
-        else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') st.target = clamp(st.target - (st.max - st.min) / (st.cMax - st.cMin) * step, st.min, st.max);
+        const px = (st.max - st.min) / ((st.cMax - st.cMin) || 1) * step;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowUp') st.target = clamp(st.target + px, st.min, st.max);
+        else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') st.target = clamp(st.target - px, st.min, st.max);
         else handled = false;
-        if (handled) { st.changed = true; this._wakeLiq(); this._liqRelease(st, true); }
+        if (handled) { st.changed = true; this._wakeLiq(); this._liqRelease(st); }
       } else {
         let i = st.idx;
         if (e.key === 'ArrowRight' || e.key === 'ArrowUp') i = clamp(i + 1, 0, n - 1);
         else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') i = clamp(i - 1, 0, n - 1);
         else handled = false;
-        if (handled) { st.target = st.pos[i]; this._wakeLiq(); this._liqCommit(st, i, true); this._liqRelease(st, true); }
+        if (handled) { st.target = st.pos[i]; this._wakeLiq(); this._liqCommit(st, i); this._liqRelease(st); }
       }
       if (handled) e.preventDefault();
     });
     this._renderLiq(st);
   },
 
-  // применяет значение дискретной линии (без звука)
-  _liqCommit(st, i, silent) {
+  _liqCommit(st, i) {
     const val = st.el.querySelectorAll('.liq-stop')[i]?.dataset.val;
     if (!val) return;
     st.el.querySelectorAll('.liq-stop').forEach((b, j) => {
       b.classList.toggle('on', j === i); b.setAttribute('aria-checked', j === i);
     });
     if (st.idx !== i) { st.idx = i; st.changed = true; }
-    if (silent) return;
-    if (Settings.current[st.key] === val) return;
-    Settings.set(st.key, val);
-    this.markChanged();
-    if (st.onRelease) st.onRelease(val);
   },
 
-  // звук/фидбек строго на отпуск
-  _liqRelease(st, force) {
-    if (!force && !st.moved && st.grab) { /* тап-коммит уже прошёл через stop/commit */ }
-    const isAudio = st.key === 'audioMode';
-    if (this.isLocked() && !isAudio) return;
-    if (isAudio) {
+  _liqRelease(st) {
+    const thumb = st.el.querySelector('.liq-thumb');
+    if (st.key === 'audioMode') {
       const val = st.el.querySelectorAll('.liq-stop')[st.idx]?.dataset.val;
-      if (val) { this._playDemoForMode(val); this._buzz(10, st.el.querySelector('.liq-thumb')); }
-      if (st.changed && Settings.current[st.key] !== val) { Settings.set(st.key, val); this.markChanged(); if (st.onRelease) st.onRelease(val); }
-      else if (!st.changed && Settings.current[st.key] === val && st.onRelease) { /* режим не менялся */ }
-      if (Settings.current[st.key] !== val) { Settings.set(st.key, val); this.markChanged(); if (st.onRelease) st.onRelease(val); }
+      if (!val) return;
+      this._playDemoForMode(val);                       // предпросмотр вместо звука выбора
+      this._buzz(this._canVib ? [10, 30, 14] : 10, thumb);
+      if (st.changed && Settings.current[st.key] !== val) {
+        Settings.set(st.key, val);
+        this.markChanged();
+        if (st.onRelease) st.onRelease(val);
+      }
+      st.changed = false;
       return;
     }
     if (!st.changed) return;
-    // непрерывные: значение уже применялось live; дискретные: применяем сейчас
     if (!st.cont) {
       const val = st.el.querySelectorAll('.liq-stop')[st.idx]?.dataset.val;
-      if (val && Settings.current[st.key] !== val) { Settings.set(st.key, val); this.markChanged(); if (st.onRelease) st.onRelease(val); }
+      if (val && Settings.current[st.key] !== val) {
+        Settings.set(st.key, val);
+        this.markChanged();
+        if (st.onRelease) st.onRelease(val);
+      }
     }
-    this.playUI('btn_select');
-    this._buzz(10, st.el.querySelector('.liq-thumb'));
+    if (!this.isLocked()) this.playUI('btn_select');    // звук выбора на отпуск
+    this._buzz(this._canVib ? [8, 24, 10] : 8, thumb);
     st.changed = false;
   },
 
@@ -707,20 +737,22 @@ export const SettingsMenu = {
     } else { st.x = st.target; st.v = 0; }
     thumb.style.left = st.x + 'px';
     thumb.style.transform = `translate(-50%,-50%) skewX(${skew}deg) scale(${sx},${sy})`;
-    thumb.style.setProperty('--pressx', (st.pressX - st.x + 19) + 'px');
+    thumb.style.setProperty('--pressx', (st.pressX - st.x + 17) + 'px');
     thumb.style.setProperty('--pressop', (st.downT ? st.press : 0).toFixed(2));
     thumb.style.setProperty('--spill', spill.toFixed(2));
     thumb.style.setProperty('--spilldir', overR ? 1 : overL ? -1 : 0);
     if (fill) fill.style.width = Math.max(0, clamp(st.x, st.min, st.max) - st.min) + 'px';
-    // непрерывные: значение живьём из позиции шайбы
     if (st.cont) {
       const v = Math.round(st.cMin + (clamp(st.x, st.min, st.max) - st.min) / ((st.max - st.min) || 1) * (st.cMax - st.cMin));
       if (v !== st.lastV) {
         st.lastV = v;
         const lab = document.getElementById('val-' + st.key);
         if (lab) lab.textContent = v;
-        if (st.onLive) st.onLive(v);
-        this.markChanged();
+        if (st.touched) {
+          if (v !== st.startVal) st.changed = true;
+          if (st.onLive) st.onLive(v);
+          this.markChanged();
+        }
       }
     }
   },
@@ -832,14 +864,18 @@ export const SettingsMenu = {
     this.hasUnsavedChanges = false;
     this._saved = true;
     this._snapshot = JSON.parse(JSON.stringify(Settings.current));
-    this._buzz(20);
+    this._buzz(this._canVib ? [12, 30, 18] : 14);
     document.querySelector('#btn-settings-save')?.classList.remove('show');
   },
 
-  confirmDialog({ title = 'Подтверждение', text = '', okText = 'Да', cancelText = 'Нет', danger = false } = {}) {
+  confirmDialog({ title = 'Подтверждение', text = '', okText = 'Да', cancelText = 'Нет', danger = false, buttons = null } = {}) {
     if (this._dialogOpen) return Promise.resolve(false);
     this._dialogOpen = true;
     this._buzz(10);
+    const btns = buttons || [
+      { id: false, label: cancelText, cls: 'ghost' },
+      { id: true,  label: okText,     cls: danger ? 'danger' : 'primary' }
+    ];
     return new Promise(resolve => {
       const host = document.querySelector('.settings-layout') || document.body;
       const overlay = document.createElement('div');
@@ -848,9 +884,8 @@ export const SettingsMenu = {
         <div class="wm-dialog glass" role="alertdialog" aria-modal="true" aria-label="${title}">
           <div class="wm-dialog-title">${title}</div>
           <div class="wm-dialog-text">${text}</div>
-          <div class="wm-dialog-buttons">
-            <button type="button" class="g-btn ghost wm-cancel">${cancelText}</button>
-            <button type="button" class="g-btn ${danger ? 'danger' : 'primary'} wm-ok">${okText}</button>
+          <div class="wm-dialog-buttons ${btns.length > 2 ? 'col' : ''}">
+            ${btns.map((b, i) => `<button type="button" data-i="${i}" class="g-btn ${b.cls} wm-b">${b.label}</button>`).join('')}
           </div>
         </div>`;
       host.appendChild(overlay);
@@ -869,23 +904,28 @@ export const SettingsMenu = {
       };
       const onKey = (e) => {
         if (!overlay.isConnected) { document.removeEventListener('keydown', onKey); return; }
-        if (e.key === 'Escape') { e.preventDefault(); close(false, 'btn_back'); }
-        if (e.key === 'Enter')  { e.preventDefault(); close(true, 'btn_select'); }
+        if (e.key === 'Escape') { e.preventDefault(); close(btns.length > 2 ? 'stay' : false, 'btn_back'); }
+        if (e.key === 'Enter')  { e.preventDefault(); close(btns[0].id, 'btn_select'); }
         if (e.key === 'Tab') {
           e.preventDefault();
-          const ok = overlay.querySelector('.wm-ok'), no = overlay.querySelector('.wm-cancel');
-          (document.activeElement === ok ? no : ok).focus();
+          const all = [...overlay.querySelectorAll('.wm-b')];
+          const i = all.indexOf(document.activeElement);
+          all[(i + 1) % all.length].focus();
         }
       };
       document.addEventListener('keydown', onKey);
-      overlay.querySelector('.wm-ok').onclick     = () => close(true,  'btn_select');
-      overlay.querySelector('.wm-cancel').onclick = () => close(false, 'btn_back');
-      overlay.onclick = (e) => { if (e.target === overlay) close(false, 'btn_back'); };
-      overlay.querySelector('.wm-ok').focus();
+      overlay.querySelectorAll('.wm-b').forEach(b => {
+        b.onclick = () => {
+          const def = btns[parseInt(b.dataset.i, 10)];
+          close(def.id, def.id === 'discard' || def.id === false ? 'btn_back' : 'btn_select');
+        };
+      });
+      overlay.onclick = (e) => { if (e.target === overlay) close(btns.length > 2 ? 'stay' : false, 'btn_back'); };
+      overlay.querySelector('.wm-b').focus();
     });
   },
 
-  // ==================== КАПЛЯ КАТЕГОРИЙ (БЕЗ ЗВУКА) ====================
+  // ==================== КАПЛЯ КАТЕГОРИЙ ====================
   _initPill() {
     const bar = document.getElementById('cat-bar');
     this._measurePill();
@@ -902,7 +942,7 @@ export const SettingsMenu = {
       this._liq.forEach(st => {
         if (!st.el.isConnected) return;
         st.measured = false; st.measure();
-        if (!st.cont) st.x = st.target = st.pos[st.idx];
+        if (!st.cont) { st.x = st.target = st.pos[st.idx]; }
         this._renderLiq(st);
       });
     };
@@ -922,6 +962,7 @@ export const SettingsMenu = {
   },
   _pillDown(e) {
     if (!this._active) return;
+    this._tryMusicRetry();
     const bar = document.getElementById('cat-bar');
     bar.setPointerCapture(e.pointerId);
     const rect = bar.getBoundingClientRect();
@@ -1032,16 +1073,17 @@ export const SettingsMenu = {
       background: #050308; color: #fff; overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
-    .wm-fog { position: absolute; inset: -25%; pointer-events: none; filter: blur(80px); opacity: .55; z-index: 0; }
-    .wm-fog i { position: absolute; display: block; border-radius: 50%; }
+    /* анимированный туман: синий / тёмно-синий / фиолетовый / почти чёрный */
+    .wm-fog { position: absolute; inset: -20%; pointer-events: none; filter: blur(60px); opacity: .85; z-index: 0; }
+    .wm-fog i { position: absolute; display: block; border-radius: 50%; will-change: transform; }
     .wm-fog i:nth-child(1) { width: 58%; height: 52%; left: 0%; top: 4%;
-      background: radial-gradient(circle, rgba(28,58,150,.30), transparent 65%); animation: fog1 26s ease-in-out infinite alternate; }
+      background: radial-gradient(circle, rgba(30,64,168,.42), transparent 65%); animation: fog1 26s ease-in-out infinite alternate; }
     .wm-fog i:nth-child(2) { width: 52%; height: 48%; right: 0%; top: 28%;
-      background: radial-gradient(circle, rgba(10,18,64,.36), transparent 65%); animation: fog2 31s ease-in-out infinite alternate; }
+      background: radial-gradient(circle, rgba(12,22,74,.46), transparent 65%); animation: fog2 31s ease-in-out infinite alternate; }
     .wm-fog i:nth-child(3) { width: 66%; height: 52%; left: 10%; bottom: -6%;
-      background: radial-gradient(circle, rgba(74,28,132,.28), transparent 70%); animation: fog3 23s ease-in-out infinite alternate; }
-    .wm-fog i:nth-child(4) { width: 40%; height: 40%; left: 40%; top: 40%;
-      background: radial-gradient(circle, rgba(18,10,40,.4), transparent 70%); animation: fog1 19s ease-in-out infinite alternate-reverse; }
+      background: radial-gradient(circle, rgba(84,32,148,.36), transparent 70%); animation: fog3 23s ease-in-out infinite alternate; }
+    .wm-fog i:nth-child(4) { width: 44%; height: 44%; left: 38%; top: 36%;
+      background: radial-gradient(circle, rgba(20,12,46,.5), transparent 70%); animation: fog1 19s ease-in-out infinite alternate-reverse; }
     @keyframes fog1 { to { transform: translate3d(6%,4%,0) scale(1.12); } }
     @keyframes fog2 { to { transform: translate3d(-7%,5%,0) scale(1.08); } }
     @keyframes fog3 { to { transform: translate3d(4%,-5%,0) scale(1.15); } }
@@ -1058,7 +1100,6 @@ export const SettingsMenu = {
       backdrop-filter: blur(18px) saturate(1.6) brightness(1.06);
       box-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -1px 0 rgba(255,255,255,.06), 0 10px 30px rgba(0,0,0,.45);
     }
-    /* замена стекла там, где backdrop-filter нет (старые iOS/Android) */
     @supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
       .glass, .g-btn, .cat-bar, .pill, .liq-thumb, .wm-dialog, .liq-track { background: rgba(30,24,42,.78); }
     }
@@ -1071,16 +1112,15 @@ export const SettingsMenu = {
       68%  { transform: scale(calc(1 + .015*var(--wamp,1)), calc(1 - .013*var(--wamp,1))); }
       100% { transform: none; }
     }
-    /* замена вибрации на iOS: короткий визуальный импульс */
     .hapt { animation: wm-hapt .1s ease; }
     @keyframes wm-hapt { 30% { transform: scale(1.07); } 60% { transform: scale(.97); } 100% { transform: scale(1); } }
     .liq-thumb.mov, .pill.mov { filter: brightness(1.14); }
 
     .settings-header { display: flex; align-items: center; justify-content: space-between; gap: 10px;
-      padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top)); }
-    .settings-title { font-size: 17px; font-weight: 700; letter-spacing: .3px; opacity: .92; }
+      padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top)); }
+    .settings-title { font-size: 16px; font-weight: 700; letter-spacing: .3px; opacity: .92; }
 
-    .g-btn { position: relative; padding: 10px 20px; font-size: 15px; color: #fff; cursor: pointer;
+    .g-btn { position: relative; padding: 9px 18px; font-size: 15px; color: #fff; cursor: pointer;
       border-radius: 999px; overflow: hidden;
       transition: transform .1s cubic-bezier(.34,1.56,.64,1), background .12s ease, border-color .12s ease, opacity .12s ease; }
     .g-btn::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
@@ -1089,22 +1129,28 @@ export const SettingsMenu = {
     .g-btn:active { transform: scale(.94); }
     .g-btn.primary { background: rgba(255,20,20,.22); border-color: rgba(255,70,70,.55); }
     .g-btn.danger { background: rgba(120,0,0,.45); border-color: rgba(255,0,0,.6); }
-    .g-btn.wide { width: 100%; max-width: 420px; padding: 14px 40px 14px 16px; text-align: left; }
+    .g-btn.wide { width: 100%; max-width: 400px; padding: 12px 36px 12px 14px; text-align: left; }
 
-    .save-btn { opacity: 0; transform: scale(.85); pointer-events: none; transition: all .12s cubic-bezier(.32,.72,0,1); }
-    .save-btn.show { opacity: 1; transform: none; pointer-events: auto; }
+    /* Сохранить: всегда видна. Полупрозрачная = неактивна (без анимаций), красная = активна */
+    .save-btn { opacity: .35; pointer-events: none; filter: saturate(.35) brightness(.8); transition: none; }
+    .save-btn.show {
+      opacity: 1; pointer-events: auto; filter: none;
+      background: rgba(255,20,20,.28); border-color: rgba(255,80,80,.75);
+      box-shadow: 0 0 18px rgba(255,0,0,.28), inset 0 1px 0 rgba(255,255,255,.25);
+      transition: transform .1s cubic-bezier(.34,1.56,.64,1), background .12s ease, border-color .12s ease, opacity .12s ease;
+    }
 
     .settings-pages { position: relative; flex: 1; overflow: hidden; }
     .pages-track { display: flex; width: 400%; height: 100%; will-change: transform; }
-    .settings-page { width: 25%; height: 100%; overflow-y: auto; padding: 16px 18px 24px;
-      display: flex; flex-direction: column; align-items: center; gap: 12px;
+    .settings-page { width: 25%; height: 100%; overflow-y: auto; padding: 12px 14px 20px;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
       scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.28) transparent; }
     .settings-page::-webkit-scrollbar { width: 6px; }
     .settings-page::-webkit-scrollbar-thumb { background: rgba(255,255,255,.22); border-radius: 3px; }
     .settings-page > * { flex: 0 0 auto; animation: wm-rise .18s cubic-bezier(.32,.72,0,1) both; }
     @keyframes wm-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
-    .setting-group { width: 100%; max-width: 420px; padding: 13px 16px; border-radius: 18px; display: flex; flex-direction: column; gap: 10px; }
+    .setting-group { width: 100%; max-width: 400px; padding: 10px 14px; border-radius: 16px; display: flex; flex-direction: column; gap: 8px; }
     .setting-group label { font-size: 14px; color: #d8d8dc; display: flex; justify-content: space-between; align-items: center; }
     .setting-group label b { color: #fff; font-weight: 600; }
 
@@ -1115,45 +1161,45 @@ export const SettingsMenu = {
     .tip-icon:hover { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.5); }
     .tip-icon.btn-tip { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); z-index: 2; }
 
-    .liq-line { position: relative; height: 66px; touch-action: none; user-select: none; -webkit-user-select: none; outline: none; }
+    .liq-line { position: relative; height: 54px; touch-action: none; user-select: none; -webkit-user-select: none; outline: none; }
     .liq-line:focus-visible .liq-track { box-shadow: 0 0 0 3px rgba(255,255,255,.25), inset 0 1px 2px rgba(0,0,0,.55); }
-    .liq-track { position: absolute; left: 26px; right: 26px; top: 45px; height: 5px; border-radius: 999px;
+    .liq-track { position: absolute; left: 26px; right: 26px; top: 38px; height: 5px; border-radius: 999px;
       background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.14);
       -webkit-backdrop-filter: blur(8px) saturate(1.4); backdrop-filter: blur(8px) saturate(1.4);
       box-shadow: inset 0 1px 2px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.12); }
-    .liq-fill { position: absolute; left: 27px; top: 46px; height: 4px; border-radius: 999px;
+    .liq-fill { position: absolute; left: 27px; top: 39px; height: 4px; border-radius: 999px;
       background: rgba(255,255,255,.65); box-shadow: 0 0 8px rgba(255,255,255,.35); pointer-events: none; }
-    .liq-thumb { position: absolute; top: 47px; left: 26px; width: 38px; height: 38px; border-radius: 50%;
+    .liq-thumb { position: absolute; top: 40px; left: 26px; width: 34px; height: 34px; border-radius: 50%;
       overflow: hidden; will-change: transform; pointer-events: none; z-index: 2;
       background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.35);
       -webkit-backdrop-filter: blur(4px) saturate(1.8) brightness(1.12);
       backdrop-filter: blur(4px) saturate(1.8) brightness(1.12);
-      box-shadow: inset 0 1px 1px rgba(255,255,255,.6), inset 0 -1px 1px rgba(255,255,255,.15), 0 6px 16px rgba(0,0,0,.45); }
+      box-shadow: inset 0 2px 2px rgba(255,255,255,.5), inset 0 -2px 3px rgba(255,255,255,.12), 0 8px 20px rgba(0,0,0,.5); }
     .liq-thumb::before { content: ''; position: absolute; inset: 0; border-radius: inherit; z-index: 2;
-      background: linear-gradient(180deg, rgba(255,255,255,.4), transparent 45%); }
-    .liq-thumb::after { content: ''; position: absolute; top: 15%; bottom: 15%; width: calc(var(--spill,0) * 26px);
+      background: linear-gradient(180deg, rgba(255,255,255,.45), transparent 45%, rgba(255,255,255,.08)); }
+    .liq-thumb::after { content: ''; position: absolute; top: 15%; bottom: 15%; width: calc(var(--spill,0) * 24px);
       border-radius: 50%; background: rgba(255,255,255,.28); filter: blur(3px); z-index: 1;
-      left: calc(var(--spilldir,0) * -1 * var(--spill,0) * 26px); opacity: var(--spill,0); }
+      left: calc(var(--spilldir,0) * -1 * var(--spill,0) * 24px); opacity: var(--spill,0); }
     .liq-lens { position: absolute; inset: 0; border-radius: inherit; z-index: 0;
       -webkit-backdrop-filter: url(#wm-liquid); backdrop-filter: url(#wm-liquid); }
-    .liq-shine { position: absolute; top: 50%; left: var(--pressx,50%); width: 42px; height: 42px; z-index: 3;
+    .liq-shine { position: absolute; top: 50%; left: var(--pressx,50%); width: 38px; height: 38px; z-index: 3;
       transform: translate(-50%,-50%); border-radius: 50%;
       background: radial-gradient(circle, rgba(255,255,255,.55), transparent 65%);
       opacity: var(--pressop,0); filter: blur(2px); transition: opacity .1s ease; }
-    .liq-stop { position: absolute; top: 47px; left: calc(26px + (100% - 52px) * var(--t));
+    .liq-stop { position: absolute; top: 40px; left: calc(26px + (100% - 52px) * var(--t));
       transform: translate(-50%,-50%); background: none; border: none; cursor: pointer;
       color: rgba(255,255,255,.5); padding: 6px; transition: color .12s ease, transform .1s ease; }
     .liq-stop:active { transform: translate(-50%,-50%) scale(.9); }
     .liq-stop.on { color: #fff; }
-    .liq-label { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+    .liq-label { position: absolute; bottom: calc(100% + 3px); left: 50%; transform: translateX(-50%);
       font-size: 10px; font-weight: 600; text-align: center; line-height: 1.1; white-space: nowrap; }
     .liq-dot { display: block; width: 9px; height: 9px; border-radius: 50%; border: 2px solid currentColor; opacity: .85; }
     .liq-stop.on .liq-dot { background: currentColor; box-shadow: 0 0 8px rgba(255,255,255,.5); }
 
-    .system-actions { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 420px; align-items: center; }
+    .system-actions { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 400px; align-items: center; }
 
-    .cat-bar-wrap { padding: 10px 14px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
-    .cat-bar { position: relative; display: flex; height: 58px; border-radius: 999px;
+    .cat-bar-wrap { padding: 8px 12px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
+    .cat-bar { position: relative; display: flex; height: 52px; border-radius: 999px;
       touch-action: none; user-select: none; -webkit-user-select: none; max-width: 560px; margin: 0 auto;
       box-shadow: inset 0 2px 6px rgba(0,0,0,.5), inset 0 -1px 0 rgba(255,255,255,.12), 0 10px 30px rgba(0,0,0,.45); }
     .cat-btn { flex: 1; position: relative; z-index: 2; background: none; border: none; cursor: pointer;
@@ -1168,7 +1214,7 @@ export const SettingsMenu = {
       background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.30);
       -webkit-backdrop-filter: blur(3px) saturate(1.8) brightness(1.1);
       backdrop-filter: blur(3px) saturate(1.8) brightness(1.1);
-      box-shadow: inset 0 1px 1px rgba(255,255,255,.55), inset 0 -1px 1px rgba(255,255,255,.15), 0 6px 18px rgba(0,0,0,.4); }
+      box-shadow: inset 0 2px 2px rgba(255,255,255,.5), inset 0 -2px 3px rgba(255,255,255,.12), 0 8px 20px rgba(0,0,0,.45); }
     .pill-lens { position: absolute; inset: 0; border-radius: inherit;
       -webkit-backdrop-filter: url(#wm-liquid); backdrop-filter: url(#wm-liquid); }
     .pill::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
@@ -1188,13 +1234,14 @@ export const SettingsMenu = {
       background: rgba(0,0,0,0); -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0);
       transition: background .14s ease, backdrop-filter .14s ease; }
     .wm-overlay.show { background: rgba(5,2,10,.6); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
-    .wm-dialog { width: min(92%, 380px); padding: 20px; border-radius: 24px; background: rgba(26,18,34,.85);
+    .wm-dialog { width: min(92%, 380px); padding: 18px; border-radius: 24px; background: rgba(26,18,34,.85);
       transform: translateY(12px) scale(.95); opacity: 0;
       transition: transform .14s cubic-bezier(.32,.72,0,1), opacity .12s ease; }
     .wm-overlay.show .wm-dialog { transform: none; opacity: 1; }
     .wm-dialog-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
-    .wm-dialog-text { font-size: 14px; color: #cfcfd4; line-height: 1.45; margin-bottom: 16px; }
+    .wm-dialog-text { font-size: 14px; color: #cfcfd4; line-height: 1.45; margin-bottom: 14px; }
     .wm-dialog-buttons { display: flex; gap: 10px; }
+    .wm-dialog-buttons.col { flex-direction: column; }
     .wm-dialog-buttons .g-btn { flex: 1; padding: 12px 10px; text-align: center; }
 
     .wm-tooltip { position: fixed; z-index: 120; padding: 10px 14px; max-width: 280px;

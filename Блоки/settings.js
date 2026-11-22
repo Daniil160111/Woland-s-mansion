@@ -21,8 +21,9 @@ const SPRING_RELEASE = { k: 260, c: 22 };
 const SPRING_DRAG    = { k: 900, c: 46 };
 const BRAKE_MS = 80, BRAKE_DAMP = 55;
 const STRETCH_DIV = 2200, STRETCH_MAX = 0.42;
-const RUBBER = 0.35;          // сопротивление за краем
-const EDGE_SPILL_MAX = 0.5;   // макс «перелив» жидкости
+const RUBBER = 0.35;
+const EDGE_SPILL_MAX = 0.5;
+const LINE_PAD = 26;
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rubber = (v, min, max, k) => v < min ? min - (min - v) * k : v > max ? max + (v - max) * k : v;
@@ -53,7 +54,7 @@ export const SettingsMenu = {
   _tipHandler: null, _tipHost: null, _dialogOpen: false, _pendingDemo: null,
   _snapshot: null, _saved: true,
   _liq: new Map(), _liqRaf: null,
-  _ph: { x:0, v:0, target:0, dragging:false, pop:0, press:0, pressX:0, brakeUntil:0, over:0,
+  _ph: { x:0, v:0, target:0, dragging:false, pop:0, press:0, pressX:0, brakeUntil:0,
          lastIdx:0, raf:null, lastT:0, centers:[], segW:0, pad:5, downX:0, downT:0, moved:false, downIdx:0 },
 
   _buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} },
@@ -68,7 +69,9 @@ export const SettingsMenu = {
     this._active = true;
     this._uiLockUntil = 0;
     this._saved = true;
-    this._snapshot = JSON.parse(JSON.stringify(Settings.current)); // для отката при выходе без сохранения
+    this._dialogOpen = false;
+    this._liq.clear();
+    this._snapshot = JSON.parse(JSON.stringify(Settings.current));
     this._reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     this.applyEngineVolumes(0);
@@ -82,7 +85,7 @@ export const SettingsMenu = {
     const layout = container.querySelector('.settings-layout');
     if (!this._reducedMotion && layout.animate) {
       layout.animate([{ opacity: 0, transform: 'scale(.985)' }, { opacity: 1, transform: 'none' }],
-        { duration: 180, easing: 'cubic-bezier(.32,.72,0,1)' });
+        { duration: 160, easing: 'cubic-bezier(.32,.72,0,1)' });
     }
 
     this._visHandler = () => {
@@ -98,16 +101,15 @@ export const SettingsMenu = {
     this._active = false;
     this._musicToken++;
     this._stopDemo();
-    // выход БЕЗ сохранения → откат к снимку
     if (!this._saved && this._snapshot) {
       Settings.current = JSON.parse(JSON.stringify(this._snapshot));
       Settings.apply();
     }
     const layout = document.querySelector('.settings-layout');
     const anim = (layout && layout.animate && !this._reducedMotion)
-      ? layout.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, easing: 'ease-in', fill: 'forwards' }).finished.catch(() => {})
+      ? layout.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, easing: 'ease-in', fill: 'forwards' }).finished.catch(() => {})
       : Promise.resolve();
-    await Promise.all([anim, this._stopMusic(300)]);
+    await Promise.all([anim, this._stopMusic(280)]);
     this._cleanup();
   },
 
@@ -206,7 +208,7 @@ export const SettingsMenu = {
       this._fadeBus('music', this._musicBusTarget(), 700);
     } catch (e) { console.warn('[Settings] ошибка музыки:', e); }
   },
-  async _stopMusic(fadeMs = 300) {
+  async _stopMusic(fadeMs = 280) {
     const eng = window.SoundsEngine;
     this._musicToken++;
     const src = this._musicSource; this._musicSource = null;
@@ -227,11 +229,11 @@ export const SettingsMenu = {
     this._musicSource = eng.play(MUSIC_ID, { type: 'music', loop: true, volume: this._musicTrackVolume(), offset, dolby: Settings.current.audioMode === 'dolby' });
   },
 
-  // ==================== ВОЛНА НА СТАТИЧНЫХ ЭЛЕМЕНТАХ ====================
+  // ==================== ВОЛНА НА СТЕКЛЕ ====================
   _bindWobble(host) {
     host.addEventListener('pointerdown', (e) => {
-      const el = e.target.closest('.glass, .g-btn');
-      if (!el || el.closest('.wm-dialog')) return;
+      const el = e.target.closest('.glass, .g-btn, .liq-line, .cat-bar, .wm-dialog');
+      if (!el || el.closest('.wm-overlay')) return;
       const r = el.getBoundingClientRect();
       const px = ((e.clientX - r.left) / r.width) * 100;
       const py = ((e.clientY - r.top) / r.height) * 100;
@@ -334,7 +336,7 @@ export const SettingsMenu = {
     });
 
     container.querySelector('#btn-settings-back').onclick = async () => {
-      if (this.isLocked()) return;
+      if (this.isLocked() || this._dialogOpen) return;
       if (this.hasUnsavedChanges) {
         const save = await this.confirmDialog({
           title: 'Несохранённые изменения', text: 'Сохранить изменения перед выходом?',
@@ -397,12 +399,17 @@ export const SettingsMenu = {
     });
   },
 
+  _pruneLiq() {
+    this._liq.forEach((st, el) => { if (!el.isConnected) this._liq.delete(el); });
+  },
+
   _rebuildPage(idx) {
     const track = document.getElementById('pages-track');
     const pg = track?.children[idx];
     if (!pg) return;
     pg.innerHTML = '';
     this._fillPage(pg, TABS[idx].id);
+    this._pruneLiq();
   },
 
   // ==================== КОНТЕНТ ====================
@@ -412,7 +419,6 @@ export const SettingsMenu = {
     if (cat === 'brightness') this._pageBrightness(page);
     if (cat === 'graphics')   this._pageGraphics(page);
     if (cat === 'system')     this._pageSystem(page);
-    page.querySelectorAll(':scope > *').forEach((el, i) => el.style.setProperty('--i', i));
   },
 
   _rangeHTML(id, label, min, max, val, tipKey) {
@@ -423,19 +429,19 @@ export const SettingsMenu = {
       </div>`;
   },
 
-  // линия с круглой шайбой и физикой капли
   _lineHTML(id, label, options, current, tipKey) {
     const idx = Math.max(0, options.findIndex(o => o[0] === current));
+    const n = options.length;
     return `
       <div class="setting-group glass" ${tipKey ? `data-tooltip="${TIPS[tipKey]}"` : ''}>
         <label><span>${label}:</span>${tipKey ? '<span class="tip-icon" aria-label="Справка">?</span>' : ''}</label>
         <div class="liq-line" id="set-${id}" data-key="${id}" data-idx="${idx}">
           <span class="liq-track"></span>
           <span class="liq-fill"></span>
-          <span class="liq-thumb"><span class="liq-shine"></span></span>
+          <span class="liq-thumb"><span class="liq-lens"></span><span class="liq-shine"></span></span>
           ${options.map(([v, t], i) => `
             <button type="button" class="liq-stop ${i === idx ? 'on' : ''}" data-i="${i}" data-val="${v}"
-              style="left:${(i + 0.5) / options.length * 100}%" role="radio" aria-checked="${i === idx}">
+              style="--t:${n > 1 ? i / (n - 1) : 0.5}" role="radio" aria-checked="${i === idx}">
               <span class="liq-label">${t}</span><span class="liq-dot"></span>
             </button>`).join('')}
         </div>
@@ -460,7 +466,7 @@ export const SettingsMenu = {
     });
   },
 
-  // физика шайбы: общая для всех линий
+  // ==================== ФИЗИКА ШАЙБ ====================
   _bindLine(page, id, key, onChange) {
     const line = page.querySelector('#set-' + id);
     if (!line) return;
@@ -468,18 +474,16 @@ export const SettingsMenu = {
     const n = stops.length;
     const st = {
       el: line, n, idx: parseInt(line.dataset.idx, 10) || 0,
-      x: 0, v: 0, target: 0, dragging: false, brakeUntil: 0, press: 0, pressX: 0,
-      downT: 0, downX: 0, moved: false, over: 0, key, onChange,
-      min: 0, max: 0, measured: false
+      x: 0, v: 0, target: 0, dragging: false, grab: false, brakeUntil: 0,
+      press: 0, pressX: 0, downT: 0, downX: 0, moved: false, pop: 0, lastStop: -1,
+      min: 0, max: 0, pos: [], width: 0, measured: false, key, onChange
     };
     this._liq.set(line, st);
     const measure = () => {
       const r = line.getBoundingClientRect();
-      const pad = 26;
-      st.min = pad; st.max = r.width - pad;
-      st.pos = stops.map((_, i) => pad + (st.max - st.min) * (i / (n - 1 || 1)));
+      st.min = LINE_PAD; st.max = r.width - LINE_PAD; st.width = r.width;
+      st.pos = stops.map((_, i) => st.min + (st.max - st.min) * (n > 1 ? i / (n - 1) : 0.5));
       if (!st.measured) { st.x = st.target = st.pos[st.idx]; st.measured = true; }
-      st.width = r.width;
     };
     st.measure = measure;
     measure();
@@ -493,16 +497,15 @@ export const SettingsMenu = {
       st.downT = performance.now(); st.downX = x; st.moved = false;
       st.press = e.pointerType === 'mouse' ? 0.5 : clamp(e.pressure || 0.5, 0, 1);
       st.pressX = x;
-      const near = Math.abs(x - st.x) < 30;
-      st.grab = near;
-      if (!near) { // тап по стопу
+      st.grab = Math.abs(x - st.x) < 30;
+      if (!this.isLocked()) { this.playUI('btn_click'); this._buzz(8); } // звук кнопки на захват
+      if (st.grab) {
+        if (Math.abs(st.v) > 40) st.brakeUntil = performance.now() + BRAKE_MS;
+      } else {
         const i = clamp(Math.round((x - st.min) / ((st.max - st.min) / (n - 1 || 1))), 0, n - 1);
         if (Math.abs(st.v) > 40) st.brakeUntil = performance.now() + BRAKE_MS;
         st.target = st.pos[i];
-        this._wakeLiq();
         this._liqCommit(st, i);
-      } else {
-        if (Math.abs(st.v) > 40) st.brakeUntil = performance.now() + BRAKE_MS;
       }
       this._wakeLiq();
     });
@@ -515,19 +518,22 @@ export const SettingsMenu = {
       if (!st.moved && Math.abs(x - st.downX) > 6) st.moved = true;
       if (!st.moved || !st.grab) return;
       st.dragging = true; st.brakeUntil = 0;
-      st.target = rubber(x, st.min, st.max, RUBBER); // резина за краями
+      st.target = rubber(x, st.min, st.max, RUBBER);
+      const i = clamp(Math.round((st.target - st.min) / ((st.max - st.min) / (n - 1 || 1))), 0, n - 1);
+      if (st.lastStop === -1) st.lastStop = i;
+      if (i !== st.lastStop) { st.lastStop = i; st.pop = 1; this._buzz(5); } // желе на точке
       this._wakeLiq();
     });
     const up = (e) => {
       if (!st.downT) return;
       const wasDrag = st.moved && st.grab;
-      st.downT = 0; st.dragging = false;
+      st.downT = 0; st.dragging = false; st.lastStop = -1;
       try { line.releasePointerCapture(e.pointerId); } catch (_) {}
       if (wasDrag) {
         const i = clamp(Math.round((st.x - st.min) / ((st.max - st.min) / (n - 1 || 1))), 0, n - 1);
         st.target = st.pos[i];
         this._wakeLiq();
-        this._liqCommit(st, i);
+        this._liqCommit(st, i); // звук выбора на отпуск
       }
     };
     line.addEventListener('pointerup', up);
@@ -551,10 +557,14 @@ export const SettingsMenu = {
     st.el.querySelectorAll('.liq-stop').forEach((b, j) => {
       b.classList.toggle('on', j === i); b.setAttribute('aria-checked', j === i);
     });
+    const changed = st.idx !== i;
     st.idx = i;
     if (this.isLocked()) return;
     this.playUI('btn_select'); this._buzz(10);
-    if (Settings.current[st.key] === val) return;
+    if (!changed || Settings.current[st.key] === val) {
+      if (st.key === 'audioMode') this._playDemoForMode(val); // демо даже при повторном тапе
+      return;
+    }
     Settings.set(st.key, val);
     this.markChanged();
     if (st.onChange) st.onChange(val);
@@ -570,6 +580,7 @@ export const SettingsMenu = {
       last = t;
       let any = false;
       this._liq.forEach(st => {
+        if (!st.el.isConnected) return;
         const braking = !st.dragging && t < st.brakeUntil;
         const s = st.dragging ? SPRING_DRAG : SPRING_RELEASE;
         const nn = Math.max(1, Math.ceil(dt / (1 / 120)));
@@ -578,6 +589,7 @@ export const SettingsMenu = {
           const a = braking ? -BRAKE_DAMP * st.v : s.k * (st.target - st.x) - s.c * st.v;
           st.v += a * h; st.x += st.v * h;
         }
+        st.pop *= Math.exp(-7 * dt);
         this._renderLiq(st);
         if (st.dragging || Math.abs(st.v) > 1 || Math.abs(st.target - st.x) > 0.25 || st.downT) any = true;
       });
@@ -594,21 +606,25 @@ export const SettingsMenu = {
     const overL = Math.max(0, st.min - st.x);
     const overR = Math.max(0, st.x - st.max);
     const over = Math.max(overL, overR);
-    const s = Math.min(Math.abs(st.v) / STRETCH_DIV, STRETCH_MAX);
-    const spill = Math.min(over / 60, EDGE_SPILL_MAX);          // перелив жидкости в углы
-    const bulge = st.press * 0.3;                                // 3D touch
-    const sx = 1 + s + bulge + spill * 0.8;
-    const sy = 1 - s * 0.5 + bulge * 0.5 - spill * 0.35;
-    const skew = clamp(-st.v / 160, -9, 9) + (overR ? 6 : overL ? -6 : 0) * spill;
+    const spill = Math.min(over / 60, EDGE_SPILL_MAX);
+    let sx = 1, sy = 1, skew = 0;
+    if (!this._reducedMotion) {
+      const s = Math.min(Math.abs(st.v) / STRETCH_DIV, STRETCH_MAX);
+      const bulge = st.press * 0.3;
+      sx = 1 + s + bulge + spill * 0.8 - st.pop * 0.05;
+      sy = 1 - s * 0.5 + bulge * 0.5 - spill * 0.35 + st.pop * 0.14;
+      skew = clamp(-st.v / 160, -9, 9) + (overR ? 6 : overL ? -6 : 0) * spill;
+    } else { st.x = st.target; st.v = 0; }
     thumb.style.left = st.x + 'px';
     thumb.style.transform = `translate(-50%,-50%) skewX(${skew}deg) scale(${sx},${sy})`;
-    thumb.style.setProperty('--pressx', (st.pressX - st.x + 17) + 'px');
+    thumb.style.setProperty('--pressx', (st.pressX - st.x + 19) + 'px');
     thumb.style.setProperty('--pressop', (st.downT ? st.press : 0).toFixed(2));
     thumb.style.setProperty('--spill', spill.toFixed(2));
     thumb.style.setProperty('--spilldir', overR ? 1 : overL ? -1 : 0);
-    if (fill) fill.style.width = clamp(st.x, st.min, st.max) + 'px';
+    if (fill) fill.style.width = Math.max(0, clamp(st.x, st.min, st.max) - st.min) + 'px';
   },
 
+  // ==================== СТРАНИЦЫ ====================
   _pageAudio(page) {
     const c = Settings.current;
     page.innerHTML = `
@@ -682,11 +698,10 @@ export const SettingsMenu = {
         okText: 'Сбросить всё', cancelText: 'Отмена', danger: true
       });
       if (!ok) return;
-      console.info('[Settings] полный сброс → перезагрузка');
       await this.playUI('reset');
       Settings.reset();
       this._saved = true;
-      setTimeout(() => location.reload(), 450); // даём хвосту звука дотлеть
+      setTimeout(() => location.reload(), 450);
     };
     page.querySelector('#btn-clear-cache').onclick = async () => {
       if (this.isLocked() || this._dialogOpen) return;
@@ -695,12 +710,11 @@ export const SettingsMenu = {
         okText: 'Очистить', cancelText: 'Отмена', danger: true
       });
       if (!ok) return;
-      console.info('[Settings] очистка кэша → перезагрузка');
       await this.playUI('reset');
       await this._stopMusic(200);
       this._cleanup();
       const reload = () => { localStorage.removeItem('woland_version'); location.reload(); };
-      setTimeout(reload, 1200); // гарантия даже если IndexedDB завис
+      setTimeout(reload, 1200);
       try {
         const req = indexedDB.deleteDatabase('woland_db');
         req.onsuccess = req.onerror = req.onblocked = reload;
@@ -725,7 +739,7 @@ export const SettingsMenu = {
   },
 
   confirmDialog({ title = 'Подтверждение', text = '', okText = 'Да', cancelText = 'Нет', danger = false } = {}) {
-    if (this._dialogOpen) return Promise.resolve(false); // окно не может удваиваться
+    if (this._dialogOpen) return Promise.resolve(false);
     this._dialogOpen = true;
     this._buzz(10);
     return new Promise(resolve => {
@@ -753,7 +767,7 @@ export const SettingsMenu = {
         if (wait > 0) await new Promise(r => setTimeout(r, wait));
         await this.playUI(sound);
         overlay.classList.remove('show');
-        setTimeout(() => { overlay.remove(); done(result); }, 130);
+        setTimeout(() => { overlay.remove(); done(result); }, 120);
       };
       const onKey = (e) => {
         if (!overlay.isConnected) { document.removeEventListener('keydown', onKey); return; }
@@ -787,7 +801,12 @@ export const SettingsMenu = {
       this._ph.x = this._ph.target = this._ph.centers[i];
       this._ph.v = 0;
       this._renderPill();
-      this._liq.forEach(st => { st.measured = false; st.measure && st.measure(); st.x = st.target = st.pos[st.idx]; this._renderLiq(st); });
+      this._liq.forEach(st => {
+        if (!st.el.isConnected) return;
+        st.measured = false; st.measure();
+        st.x = st.target = st.pos[st.idx];
+        this._renderLiq(st);
+      });
     });
     this._ro.observe(bar);
   },
@@ -902,7 +921,6 @@ export const SettingsMenu = {
     pill.style.setProperty('--spill', spill.toFixed(2));
     pill.style.setProperty('--spilldir', overR ? 1 : overL ? -1 : 0);
     if (track) {
-      // резина на краях: энергия затухает туда-сюда даже на первой/последней странице
       const f = clamp((ph.x - c0) / ph.segW, -0.22, TABS.length - 1 + 0.22);
       track.style.transform = `translate3d(${-f * 25}%,0,0)`;
     }
@@ -932,9 +950,10 @@ export const SettingsMenu = {
       content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .05; z-index: 0;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
     }
-    .settings-layout > *:not(.wm-fog) { position: relative; z-index: 1; }
+    /* ВАЖНО: оверлей окна исключён, иначе position:absolute перебивался */
+    .settings-layout > *:not(.wm-fog):not(.wm-overlay) { position: relative; z-index: 1; }
 
-    .glass, .g-btn, .cat-bar, .pill, .liq-thumb, .wm-dialog {
+    .glass, .g-btn, .cat-bar, .pill, .liq-thumb, .wm-dialog, .liq-track {
       background: rgba(255,255,255,.06);
       border: 1px solid rgba(255,255,255,.16);
       -webkit-backdrop-filter: blur(18px) saturate(1.6) brightness(1.06);
@@ -942,7 +961,7 @@ export const SettingsMenu = {
       box-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -1px 0 rgba(255,255,255,.06), 0 10px 30px rgba(0,0,0,.45);
     }
 
-    .wob { animation: wm-wob .5s cubic-bezier(.36,.07,.19,.97); }
+    .wob { animation: wm-wob .45s cubic-bezier(.36,.07,.19,.97); }
     @keyframes wm-wob {
       0%   { transform: scale(1,1); }
       18%  { transform: scale(calc(1 + .05*var(--wamp,1)), calc(1 - .045*var(--wamp,1))) rotate(calc(.5deg*var(--wamp,1))); }
@@ -957,7 +976,7 @@ export const SettingsMenu = {
 
     .g-btn { position: relative; padding: 10px 20px; font-size: 15px; color: #fff; cursor: pointer;
       border-radius: 999px; overflow: hidden;
-      transition: transform .12s cubic-bezier(.34,1.56,.64,1), background .15s ease, border-color .15s ease, opacity .15s ease; }
+      transition: transform .1s cubic-bezier(.34,1.56,.64,1), background .12s ease, border-color .12s ease, opacity .12s ease; }
     .g-btn::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
       background: linear-gradient(180deg, rgba(255,255,255,.25), transparent 45%); }
     .g-btn:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.35); }
@@ -966,7 +985,7 @@ export const SettingsMenu = {
     .g-btn.danger { background: rgba(120,0,0,.45); border-color: rgba(255,0,0,.6); }
     .g-btn.wide { width: 100%; max-width: 420px; padding: 14px 40px 14px 16px; text-align: left; }
 
-    .save-btn { opacity: 0; transform: scale(.85); pointer-events: none; transition: all .15s cubic-bezier(.32,.72,0,1); }
+    .save-btn { opacity: 0; transform: scale(.85); pointer-events: none; transition: all .12s cubic-bezier(.32,.72,0,1); }
     .save-btn.show { opacity: 1; transform: none; pointer-events: auto; }
 
     .settings-pages { position: relative; flex: 1; overflow: hidden; }
@@ -976,8 +995,8 @@ export const SettingsMenu = {
       scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.28) transparent; }
     .settings-page::-webkit-scrollbar { width: 6px; }
     .settings-page::-webkit-scrollbar-thumb { background: rgba(255,255,255,.22); border-radius: 3px; }
-    .settings-page > * { flex: 0 0 auto; animation: wm-rise .3s cubic-bezier(.32,.72,0,1) both; animation-delay: calc(var(--i,0) * 25ms); }
-    @keyframes wm-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    .settings-page > * { flex: 0 0 auto; animation: wm-rise .18s cubic-bezier(.32,.72,0,1) both; }
+    @keyframes wm-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
     .setting-group { width: 100%; max-width: 420px; padding: 13px 16px; border-radius: 18px; display: flex; flex-direction: column; gap: 10px; }
     .setting-group label { font-size: 14px; color: #d8d8dc; display: flex; justify-content: space-between; align-items: center; }
@@ -986,7 +1005,7 @@ export const SettingsMenu = {
     .tip-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
       border-radius: 50%; font-size: 11px; font-weight: 700; background: rgba(255,255,255,.07);
       border: 1px solid rgba(255,255,255,.22); color: rgba(255,255,255,.8); cursor: help; flex-shrink: 0;
-      transition: background .15s ease, border-color .15s ease, transform .1s ease; }
+      transition: background .12s ease, border-color .12s ease, transform .1s ease; }
     .tip-icon:hover { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.5); }
     .tip-icon.btn-tip { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); z-index: 2; }
 
@@ -996,41 +1015,45 @@ export const SettingsMenu = {
     input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%;
       background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.98), rgba(255,255,255,.4) 40%, rgba(210,210,220,.28));
       border: 1px solid rgba(255,255,255,.6); box-shadow: 0 2px 8px rgba(0,0,0,.55), inset 0 1px 1px rgba(255,255,255,.8);
-      transition: transform .12s cubic-bezier(.34,1.56,.64,1); }
+      transition: transform .1s cubic-bezier(.34,1.56,.64,1); }
     input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.18); }
     input[type="range"]::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%;
       background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.98), rgba(255,255,255,.4) 40%, rgba(210,210,220,.28));
       border: 1px solid rgba(255,255,255,.6); }
 
-    /* линия с круглой шайбой */
-    .liq-line { position: relative; height: 64px; touch-action: none; user-select: none; -webkit-user-select: none; }
-    .liq-track { position: absolute; left: 26px; right: 26px; top: 44px; height: 5px; border-radius: 3px;
-      background: rgba(255,255,255,.14); box-shadow: inset 0 1px 2px rgba(0,0,0,.5); }
-    .liq-fill { position: absolute; left: 26px; top: 44px; height: 5px; border-radius: 3px;
-      background: rgba(255,255,255,.65); box-shadow: 0 0 8px rgba(255,255,255,.35); }
-    .liq-thumb { position: absolute; top: 46px; left: 26px; width: 34px; height: 34px; border-radius: 50%;
+    /* линия: стеклянная плоскость + круглая шайба с полной физикой */
+    .liq-line { position: relative; height: 66px; touch-action: none; user-select: none; -webkit-user-select: none; }
+    .liq-track { position: absolute; left: 26px; right: 26px; top: 45px; height: 5px; border-radius: 999px;
+      background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.14);
+      -webkit-backdrop-filter: blur(8px) saturate(1.4); backdrop-filter: blur(8px) saturate(1.4);
+      box-shadow: inset 0 1px 2px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.12); }
+    .liq-fill { position: absolute; left: 27px; top: 46px; height: 4px; border-radius: 999px;
+      background: rgba(255,255,255,.65); box-shadow: 0 0 8px rgba(255,255,255,.35); pointer-events: none; }
+    .liq-thumb { position: absolute; top: 47px; left: 26px; width: 38px; height: 38px; border-radius: 50%;
       overflow: hidden; will-change: transform; pointer-events: none; z-index: 2;
       background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.35);
       -webkit-backdrop-filter: blur(4px) saturate(1.8) brightness(1.12);
       backdrop-filter: blur(4px) saturate(1.8) brightness(1.12);
       box-shadow: inset 0 1px 1px rgba(255,255,255,.6), inset 0 -1px 1px rgba(255,255,255,.15), 0 6px 16px rgba(0,0,0,.45); }
-    .liq-thumb::before { content: ''; position: absolute; inset: 0; border-radius: inherit;
+    .liq-thumb::before { content: ''; position: absolute; inset: 0; border-radius: inherit; z-index: 2;
       background: linear-gradient(180deg, rgba(255,255,255,.4), transparent 45%); }
-    /* перелив жидкости за предел: капля тянется в незанятый угол */
     .liq-thumb::after { content: ''; position: absolute; top: 15%; bottom: 15%; width: calc(var(--spill,0) * 26px);
-      ${''}border-radius: 50%; background: rgba(255,255,255,.28); filter: blur(3px);
-      left: calc(calc(var(--spilldir,0) * -1) * calc(var(--spill,0) * 26px)); opacity: var(--spill,0); }
-    .liq-shine { position: absolute; top: 50%; left: var(--pressx,50%); width: 40px; height: 40px;
+      border-radius: 50%; background: rgba(255,255,255,.28); filter: blur(3px); z-index: 1;
+      left: calc(var(--spilldir,0) * -1 * var(--spill,0) * 26px); opacity: var(--spill,0); }
+    .liq-lens { position: absolute; inset: 0; border-radius: inherit; z-index: 0;
+      -webkit-backdrop-filter: url(#wm-liquid); backdrop-filter: url(#wm-liquid); }
+    .liq-shine { position: absolute; top: 50%; left: var(--pressx,50%); width: 42px; height: 42px; z-index: 3;
       transform: translate(-50%,-50%); border-radius: 50%;
       background: radial-gradient(circle, rgba(255,255,255,.55), transparent 65%);
-      opacity: var(--pressop,0); filter: blur(2px); transition: opacity .12s ease; }
-    .liq-stop { position: absolute; top: 0; transform: translateX(-50%); background: none; border: none;
-      display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 4px 2px; cursor: pointer;
-      color: rgba(255,255,255,.5); transition: color .15s ease, transform .1s ease; }
-    .liq-stop:active { transform: translateX(-50%) scale(.94); }
+      opacity: var(--pressop,0); filter: blur(2px); transition: opacity .1s ease; }
+    .liq-stop { position: absolute; top: 47px; left: calc(26px + (100% - 52px) * var(--t));
+      transform: translate(-50%,-50%); background: none; border: none; cursor: pointer;
+      color: rgba(255,255,255,.5); padding: 6px; transition: color .12s ease, transform .1s ease; }
+    .liq-stop:active { transform: translate(-50%,-50%) scale(.9); }
     .liq-stop.on { color: #fff; }
-    .liq-label { font-size: 10px; font-weight: 600; text-align: center; line-height: 1.1; max-width: 64px; }
-    .liq-dot { width: 9px; height: 9px; border-radius: 50%; border: 2px solid currentColor; opacity: .85; }
+    .liq-label { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+      font-size: 10px; font-weight: 600; text-align: center; line-height: 1.1; white-space: nowrap; }
+    .liq-dot { display: block; width: 9px; height: 9px; border-radius: 50%; border: 2px solid currentColor; opacity: .85; }
     .liq-stop.on .liq-dot { background: currentColor; box-shadow: 0 0 8px rgba(255,255,255,.5); }
 
     .system-actions { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 420px; align-items: center; }
@@ -1041,7 +1064,7 @@ export const SettingsMenu = {
       box-shadow: inset 0 2px 6px rgba(0,0,0,.5), inset 0 -1px 0 rgba(255,255,255,.12), 0 10px 30px rgba(0,0,0,.45); }
     .cat-btn { flex: 1; position: relative; z-index: 2; background: none; border: none; cursor: pointer;
       color: rgba(255,255,255,.55); font-size: 14px; font-weight: 600; border-radius: 999px;
-      transition: color .15s ease, transform .1s ease; }
+      transition: color .12s ease, transform .1s ease; }
     .cat-btn:active { transform: scale(.94); }
     .cat-btn.active { color: #fff; text-shadow: 0 0 12px rgba(255,255,255,.45); }
     .cat-btn:focus-visible { outline: 2px solid rgba(255,255,255,.6); outline-offset: -4px; }
@@ -1057,12 +1080,12 @@ export const SettingsMenu = {
     .pill::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
       background: linear-gradient(180deg, rgba(255,255,255,.35), transparent 42%, rgba(255,255,255,.06)); }
     .pill::before { content: ''; position: absolute; top: 12%; bottom: 12%; width: calc(var(--spill,0) * 40px);
-      border-radius: 50%; background: rgba(255,255,255,.3); filter: blur(4px);
-      left: calc(calc(var(--spilldir,0) * -1) * calc(var(--spill,0) * 40px)); opacity: var(--spill,0); z-index: 3; }
+      border-radius: 50%; background: rgba(255,255,255,.3); filter: blur(4px); z-index: 3;
+      left: calc(var(--spilldir,0) * -1 * var(--spill,0) * 40px); opacity: var(--spill,0); }
     .pill-press { position: absolute; top: 50%; left: var(--pressx,50%); width: 46px; height: 46px;
       transform: translate(-50%,-50%); border-radius: 50%; pointer-events: none;
       background: radial-gradient(circle, rgba(255,255,255,.5), transparent 65%);
-      opacity: var(--pressop,0); filter: blur(2px); transition: opacity .12s ease; }
+      opacity: var(--pressop,0); filter: blur(2px); transition: opacity .1s ease; }
 
     .settings-layout.sound-locked button:not(.cat-btn):not(.liq-stop), .settings-layout.sound-locked select,
     .settings-layout.sound-locked input[type="range"] { pointer-events: none; }
@@ -1070,11 +1093,11 @@ export const SettingsMenu = {
 
     .wm-overlay { position: absolute; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center;
       background: rgba(0,0,0,0); -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0);
-      transition: background .16s ease, backdrop-filter .16s ease; }
-    .wm-overlay.show { background: rgba(5,2,10,.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+      transition: background .14s ease, backdrop-filter .14s ease; }
+    .wm-overlay.show { background: rgba(5,2,10,.6); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
     .wm-dialog { width: min(92%, 380px); padding: 20px; border-radius: 24px; background: rgba(26,18,34,.85);
-      transform: translateY(14px) scale(.95); opacity: 0;
-      transition: transform .16s cubic-bezier(.32,.72,0,1), opacity .14s ease; }
+      transform: translateY(12px) scale(.95); opacity: 0;
+      transition: transform .14s cubic-bezier(.32,.72,0,1), opacity .12s ease; }
     .wm-overlay.show .wm-dialog { transform: none; opacity: 1; }
     .wm-dialog-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
     .wm-dialog-text { font-size: 14px; color: #cfcfd4; line-height: 1.45; margin-bottom: 16px; }
@@ -1086,7 +1109,7 @@ export const SettingsMenu = {
       border: 1px solid rgba(255,255,255,.18); border-radius: 12px;
       -webkit-backdrop-filter: blur(10px) saturate(1.4); backdrop-filter: blur(10px) saturate(1.4);
       box-shadow: 0 8px 24px rgba(0,0,0,.6); opacity: 0; transform: translateY(4px);
-      transition: opacity .12s ease, transform .12s ease; pointer-events: none; }
+      transition: opacity .1s ease, transform .1s ease; pointer-events: none; }
     .wm-tooltip.show { opacity: 1; transform: none; }
 
     @media (prefers-reduced-motion: reduce) {

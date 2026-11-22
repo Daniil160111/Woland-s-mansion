@@ -32,8 +32,8 @@ const TIPS = {
   masterVol: 'Громкость музыки настроек и всего, кроме звуков эффектов.',
   effectsVol: 'Громкость игровых эффектов: шаги, двери, предметы, демо-звук.',
   audioMode: 'Режим воспроизведения. При смене играет демо-звук в новом режиме.',
-  brightness: 'Общая яркость изображения в игре.',
-  minBrightness: 'Минимальная яркость при нулевом значении основной настройки.',
+  brightness: 'Общая яркость: от минимального порога до 150%.',
+  minBrightness: 'Нижняя граница яркости: при 0% основной яркости экран не темнее этого порога.',
   shadows: 'Качество теней. Выше — реалистичнее, но тяжелее для устройства.',
   realisticLight: 'Качество и реалистичность освещения сцен.',
   render3D: 'Качество 3D-рендеринга объектов и окружения.',
@@ -55,9 +55,23 @@ export const SettingsMenu = {
   _snapshot: null, _saved: true,
   _liq: new Map(), _liqRaf: null,
   _ph: { x:0, v:0, target:0, dragging:false, pop:0, press:0, pressX:0, brakeUntil:0,
-         lastIdx:0, raf:null, lastT:0, centers:[], segW:0, pad:5, downX:0, downT:0, moved:false, downIdx:0 },
+         lastIdx:0, raf:null, lastT:0, vibAcc:0, lastVib:0, centers:[], segW:0, pad:5,
+         downX:0, downT:0, moved:false, downIdx:0 },
 
   _buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} },
+
+  // микровибрация во время движения шайбы/капли: зависит от скорости и силы нажатия
+  _vibMove(st, dt) {
+    const speed = Math.abs(st.v);
+    if (!st.downT && speed < 60) return;
+    st.vibAcc = (st.vibAcc || 0) + speed * dt;
+    const now = performance.now();
+    if (st.vibAcc > 16 && now - (st.lastVib || 0) > 45) {
+      this._buzz(Math.round(clamp(4 + (st.press ?? 0.5) * 6 + speed / 500, 4, 16)));
+      st.lastVib = now;
+      st.vibAcc = 0;
+    }
+  },
 
   // ==================== ВХОД / ВЫХОД ====================
   start() {
@@ -229,10 +243,10 @@ export const SettingsMenu = {
     this._musicSource = eng.play(MUSIC_ID, { type: 'music', loop: true, volume: this._musicTrackVolume(), offset, dolby: Settings.current.audioMode === 'dolby' });
   },
 
-  // ==================== ВОЛНА НА СТЕКЛЕ ====================
+  // ==================== ВОЛНА: ТОЛЬКО КНОПКИ ====================
   _bindWobble(host) {
     host.addEventListener('pointerdown', (e) => {
-      const el = e.target.closest('.glass, .g-btn, .liq-line, .cat-bar, .wm-dialog');
+      const el = e.target.closest('.g-btn');           // только кнопки: Выйти, Сохранить и т.п.
       if (!el || el.closest('.wm-overlay')) return;
       const r = el.getBoundingClientRect();
       const px = ((e.clientX - r.left) / r.width) * 100;
@@ -399,9 +413,7 @@ export const SettingsMenu = {
     });
   },
 
-  _pruneLiq() {
-    this._liq.forEach((st, el) => { if (!el.isConnected) this._liq.delete(el); });
-  },
+  _pruneLiq() { this._liq.forEach((st, el) => { if (!el.isConnected) this._liq.delete(el); }); },
 
   _rebuildPage(idx) {
     const track = document.getElementById('pages-track');
@@ -476,6 +488,7 @@ export const SettingsMenu = {
       el: line, n, idx: parseInt(line.dataset.idx, 10) || 0,
       x: 0, v: 0, target: 0, dragging: false, grab: false, brakeUntil: 0,
       press: 0, pressX: 0, downT: 0, downX: 0, moved: false, pop: 0, lastStop: -1,
+      vibAcc: 0, lastVib: 0,
       min: 0, max: 0, pos: [], width: 0, measured: false, key, onChange
     };
     this._liq.set(line, st);
@@ -498,7 +511,7 @@ export const SettingsMenu = {
       st.press = e.pointerType === 'mouse' ? 0.5 : clamp(e.pressure || 0.5, 0, 1);
       st.pressX = x;
       st.grab = Math.abs(x - st.x) < 30;
-      if (!this.isLocked()) { this.playUI('btn_click'); this._buzz(8); } // звук кнопки на захват
+      if (!this.isLocked()) { this.playUI('btn_click'); this._buzz(8); }
       if (st.grab) {
         if (Math.abs(st.v) > 40) st.brakeUntil = performance.now() + BRAKE_MS;
       } else {
@@ -521,7 +534,7 @@ export const SettingsMenu = {
       st.target = rubber(x, st.min, st.max, RUBBER);
       const i = clamp(Math.round((st.target - st.min) / ((st.max - st.min) / (n - 1 || 1))), 0, n - 1);
       if (st.lastStop === -1) st.lastStop = i;
-      if (i !== st.lastStop) { st.lastStop = i; st.pop = 1; this._buzz(5); } // желе на точке
+      if (i !== st.lastStop) { st.lastStop = i; st.pop = 1; this._buzz(5); }
       this._wakeLiq();
     });
     const up = (e) => {
@@ -533,7 +546,7 @@ export const SettingsMenu = {
         const i = clamp(Math.round((st.x - st.min) / ((st.max - st.min) / (n - 1 || 1))), 0, n - 1);
         st.target = st.pos[i];
         this._wakeLiq();
-        this._liqCommit(st, i); // звук выбора на отпуск
+        this._liqCommit(st, i);
       }
     };
     line.addEventListener('pointerup', up);
@@ -560,11 +573,16 @@ export const SettingsMenu = {
     const changed = st.idx !== i;
     st.idx = i;
     if (this.isLocked()) return;
-    this.playUI('btn_select'); this._buzz(10);
-    if (!changed || Settings.current[st.key] === val) {
-      if (st.key === 'audioMode') this._playDemoForMode(val); // демо даже при повторном тапе
-      return;
+    const isAudio = st.key === 'audioMode';
+    if (isAudio) {
+      // превью режима: только демо-звук, без звука выбора
+      this._playDemoForMode(val);
+      this._buzz(10);
+    } else {
+      this.playUI('btn_select');
+      this._buzz(10);
     }
+    if (!changed || Settings.current[st.key] === val) return;
     Settings.set(st.key, val);
     this.markChanged();
     if (st.onChange) st.onChange(val);
@@ -590,6 +608,7 @@ export const SettingsMenu = {
           st.v += a * h; st.x += st.v * h;
         }
         st.pop *= Math.exp(-7 * dt);
+        this._vibMove(st, dt);
         this._renderLiq(st);
         if (st.dragging || Math.abs(st.v) > 1 || Math.abs(st.target - st.x) > 0.25 || st.downT) any = true;
       });
@@ -635,9 +654,8 @@ export const SettingsMenu = {
     `;
     this._bindRange(page, 'masterVol', 'masterVolume', () => this._fadeBus('music', this._musicBusTarget(), 100));
     this._bindRange(page, 'effectsVol', 'effectsVolume', () => this._fadeBus('effects', this._fxBusTarget(), 100));
-    this._bindLine(page, 'audioMode', 'audioMode', (v) => {
-      this._restartMusicWithMode();
-      this._playDemoForMode(v);
+    this._bindLine(page, 'audioMode', 'audioMode', () => {
+      this._restartMusicWithMode(); // демо играет в _liqCommit
     });
     this._bindRecommended(page, 'audio', 'Сброс звука', 'Вернуть рекомендуемые настройки звука?');
   },
@@ -889,6 +907,7 @@ export const SettingsMenu = {
         ph.v += a * h; ph.x += ph.v * h;
       }
       ph.pop *= Math.exp(-7 * dt);
+      this._vibMove(ph, dt);
       this._renderPill();
       if (!ph.dragging && Math.abs(ph.v) < 1 && Math.abs(ph.target - ph.x) < 0.25 && !ph.downT) {
         ph.x = ph.target; ph.v = 0; this._renderPill(); return;
@@ -950,7 +969,6 @@ export const SettingsMenu = {
       content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .05; z-index: 0;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
     }
-    /* ВАЖНО: оверлей окна исключён, иначе position:absolute перебивался */
     .settings-layout > *:not(.wm-fog):not(.wm-overlay) { position: relative; z-index: 1; }
 
     .glass, .g-btn, .cat-bar, .pill, .liq-thumb, .wm-dialog, .liq-track {
@@ -961,7 +979,8 @@ export const SettingsMenu = {
       box-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -1px 0 rgba(255,255,255,.06), 0 10px 30px rgba(0,0,0,.45);
     }
 
-    .wob { animation: wm-wob .45s cubic-bezier(.36,.07,.19,.97); }
+    /* волна ТОЛЬКО у кнопок */
+    .g-btn.wob { animation: wm-wob .45s cubic-bezier(.36,.07,.19,.97); }
     @keyframes wm-wob {
       0%   { transform: scale(1,1); }
       18%  { transform: scale(calc(1 + .05*var(--wamp,1)), calc(1 - .045*var(--wamp,1))) rotate(calc(.5deg*var(--wamp,1))); }
@@ -1021,7 +1040,6 @@ export const SettingsMenu = {
       background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.98), rgba(255,255,255,.4) 40%, rgba(210,210,220,.28));
       border: 1px solid rgba(255,255,255,.6); }
 
-    /* линия: стеклянная плоскость + круглая шайба с полной физикой */
     .liq-line { position: relative; height: 66px; touch-action: none; user-select: none; -webkit-user-select: none; }
     .liq-track { position: absolute; left: 26px; right: 26px; top: 45px; height: 5px; border-radius: 999px;
       background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.14);
@@ -1115,7 +1133,7 @@ export const SettingsMenu = {
     @media (prefers-reduced-motion: reduce) {
       .settings-page > * { animation: none; }
       .wm-fog i { animation: none; }
-      .g-btn, .cat-btn, .wm-dialog, .wm-tooltip, .wob { transition: none; animation: none; }
+      .g-btn, .cat-btn, .wm-dialog, .wm-tooltip, .g-btn.wob { transition: none; animation: none; }
     }
   `; }
 };

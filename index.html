@@ -7,7 +7,6 @@
   <meta name="description" content="Woland's Mansion — HTML horror game">
   <meta name="theme-color" content="#050308">
 
-  <!-- ===== PWA / ИКОНКА ===== -->
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" type="image/jpeg" href="./icon/Иконка.jpg" sizes="512x512">
   <link rel="apple-touch-icon" href="./icon/Иконка.jpg">
@@ -39,16 +38,15 @@
     /* ================= BOOT ================= */
     #boot {
       position: fixed; inset: 0; z-index: 9999; background: #000;
-      display: flex; align-items: center; justify-content: center;
-      transition: opacity .5s cubic-bezier(.4,0,.2,1); will-change: opacity;
+      transition: opacity .55s cubic-bezier(.4,0,.2,1); will-change: opacity;
     }
     #boot.done { opacity: 0; pointer-events: none; }
     .boot-vignette {
-      position: absolute; inset: 0; pointer-events: none;
+      position: absolute; inset: 0; pointer-events: none; z-index: 5;
       background: radial-gradient(120% 90% at 50% 50%, transparent 52%, rgba(0,0,0,.88) 100%);
     }
     .boot-grain {
-      position: absolute; inset: -4%; pointer-events: none; opacity: .055;
+      position: absolute; inset: -4%; pointer-events: none; opacity: .05; z-index: 6;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
       animation: grain 1.1s steps(4) infinite;
     }
@@ -57,30 +55,42 @@
       50% { transform: translate(1%,-2%); } 75% { transform: translate(-1%,2%); } 100% { transform: translate(0,0); }
     }
 
-    /* ---------- дисклеймер: оригинальная анимация ---------- */
-    #disclaimer { position: relative; width: min(78vw, 640px); cursor: pointer; }
-    #disclaimer .disc-img {
-      display: block; width: 100%; border-radius: 14px;
-      box-shadow: 0 20px 60px rgba(0,0,0,.9);
+    .stage {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      opacity: 0; visibility: hidden; transition: opacity .6s ease, visibility .6s;
     }
-    #disclaimer .main { animation: disc-in 2.6s cubic-bezier(.2,.7,.2,1) both; }
+    .stage.on { opacity: 1; visibility: visible; }
+
+    /* ---------- логотипы: по центру, без растяжения ---------- */
+    #stage-logos img {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+      max-width: min(72vw, 560px); max-height: 54vh; width: auto; height: auto;
+      object-fit: contain; opacity: 0; border-radius: 10px;
+      box-shadow: 0 24px 70px rgba(0,0,0,.85);
+    }
+
+    /* ---------- дисклеймер: появление с помехами, уход по клику ---------- */
+    #disclaimer { position: relative; width: min(78vw, 640px); cursor: pointer; }
+    #disclaimer .disc-img { display: block; width: 100%; border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.9); }
+    #stage-disc.on #disclaimer .main { animation: disc-in 2.6s cubic-bezier(.2,.7,.2,1) both; }
     #disclaimer .chr {
       position: absolute; inset: 0; width: 100%; border-radius: 14px;
       mix-blend-mode: screen; pointer-events: none; opacity: 0;
     }
-    #disclaimer .chr.r { filter: grayscale(1) sepia(1) hue-rotate(-30deg) saturate(4); animation: chr-r 2.6s steps(12) both; }
-    #disclaimer .chr.c { filter: grayscale(1) sepia(1) hue-rotate(140deg) saturate(3); animation: chr-c 2.6s steps(12) both; }
+    #stage-disc.on #disclaimer .chr.r { filter: grayscale(1) sepia(1) hue-rotate(-30deg) saturate(4); animation: chr-r 2.6s steps(12) both; }
+    #stage-disc.on #disclaimer .chr.c { filter: grayscale(1) sepia(1) hue-rotate(140deg) saturate(3); animation: chr-c 2.6s steps(12) both; }
     #disclaimer .scanlines {
       position: absolute; inset: 0; border-radius: 14px; pointer-events: none; opacity: .18;
       background: repeating-linear-gradient(0deg, rgba(255,255,255,.14) 0 1px, transparent 1px 3px);
-      animation: scan 2.6s linear both;
     }
+    #stage-disc.on #disclaimer .scanlines { animation: scan 2.6s linear both; }
     #disclaimer .skip-hint {
-      position: absolute; left: 50%; bottom: -34px; transform: translateX(-50%);
-      font-size: 11px; letter-spacing: 1.5px; color: #6a6a76; white-space: nowrap;
-      opacity: 0; animation: hint-in .6s ease 1.4s both;
+      position: absolute; left: 50%; bottom: -36px; transform: translateX(-50%);
+      font-size: 11px; letter-spacing: 2px; color: #8a8a96; white-space: nowrap;
+      opacity: 0;
     }
-    @keyframes hint-in { to { opacity: .8; } }
+    #stage-disc.on #disclaimer .skip-hint { animation: hint-pulse 2.2s ease-in-out 2.4s infinite; }
+    @keyframes hint-pulse { 0%,100% { opacity: .35; } 50% { opacity: .95; } }
     @keyframes disc-in {
       0%   { opacity: 0; transform: scale(1.14); filter: blur(16px) brightness(2); }
       6%   { opacity: .55; } 8% { opacity: .1; } 11% { opacity: .8; } 13% { opacity: .25; }
@@ -101,24 +111,31 @@
       60%,100% { opacity: 0; transform: none; }
     }
     @keyframes scan { 0% { transform: translateY(-4%); opacity: .3; } 100% { transform: translateY(4%); opacity: .12; } }
-    #disclaimer.out .disc-img, #disclaimer.out .scanlines, #disclaimer.out .skip-hint {
-      transition: opacity .48s ease, filter .48s ease, transform .48s ease;
-      opacity: 0 !important; filter: blur(10px); transform: scale(1.05);
+    /* оригинальный уход: разъезд хроматики + blur + scale */
+    #disclaimer.out .main {
+      transition: opacity .5s ease, filter .5s ease, transform .5s cubic-bezier(.4,0,.2,1);
+      opacity: 0 !important; filter: blur(12px) brightness(1.6); transform: scale(1.08);
     }
-    #disclaimer.out .skip-hint { transform: translateX(-50%) scale(1); }
+    #disclaimer.out .chr.r { animation: chr-out-r .5s ease both; }
+    #disclaimer.out .chr.c { animation: chr-out-c .5s ease both; }
+    #disclaimer.out .scanlines, #disclaimer.out .skip-hint { transition: opacity .3s ease; opacity: 0 !important; }
+    @keyframes chr-out-r { 0% { opacity: .5; transform: none; } 100% { opacity: 0; transform: translate(26px,-6px) scale(1.06); } }
+    @keyframes chr-out-c { 0% { opacity: .5; transform: none; } 100% { opacity: 0; transform: translate(-26px,6px) scale(1.06); } }
 
-    /* ---------- прогресс: только когда чего-то реально не хватает ---------- */
-    #loadui {
-      position: absolute; left: 50%; bottom: 11vh; transform: translateX(-50%);
-      width: min(76vw, 360px); display: flex; flex-direction: column; gap: 10px;
-      opacity: 0; visibility: hidden;
-      transition: opacity .35s ease, visibility .35s, transform .35s cubic-bezier(.32,.72,0,1);
+    /* ---------- загрузка: вращающийся Воланд + чистый логотип x2 + байты по разделам ---------- */
+    #loadui { flex-direction: column; gap: 14px; }
+    .ld-woland {
+      width: min(30vw, 150px); height: min(30vw, 150px); object-fit: contain;
+      animation: spin 9s linear infinite; opacity: .9;
+      filter: drop-shadow(0 10px 30px rgba(0,0,0,.8));
     }
-    #loadui.show { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
-    #loadui:not(.show) { transform: translateX(-50%) translateY(10px); }
-    .lu-title { text-align: center; font-size: 15px; letter-spacing: 2px; color: #cfcfd6; opacity: .85; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .ld-logo { width: min(64vw, 440px); height: auto; object-fit: contain; }
+    .ld-sections { display: flex; flex-direction: column; gap: 4px; width: min(76vw, 360px); }
+    .ld-sec { display: flex; justify-content: space-between; font-size: 11px; color: #9a9aa4; }
+    .ld-sec b { color: #e8e8ee; font-weight: 600; font-variant-numeric: tabular-nums; }
     .lu-bar {
-      position: relative; height: 10px; border-radius: 999px; overflow: hidden;
+      position: relative; height: 10px; border-radius: 999px; overflow: hidden; width: min(76vw, 360px);
       background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.16);
       -webkit-backdrop-filter: blur(14px) saturate(1.5); backdrop-filter: blur(14px) saturate(1.5);
       box-shadow: inset 0 1px 2px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.15);
@@ -135,15 +152,15 @@
       animation: lu-shine 1.4s ease-in-out infinite;
     }
     @keyframes lu-shine { 0% { left: -45%; } 100% { left: 105%; } }
-    .lu-row { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; color: #9a9aa4; }
+    .lu-row { display: flex; justify-content: space-between; gap: 12px; width: min(76vw, 360px); font-size: 11px; color: #9a9aa4; }
     #lu-status { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     #lu-pct { font-variant-numeric: tabular-nums; color: #e8e8ee; flex-shrink: 0; }
 
     /* ---------- ошибка ---------- */
     #booterr {
-      position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%) scale(.96);
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%) scale(.96); z-index: 20;
       width: min(88vw, 380px); padding: 20px; border-radius: 22px; text-align: center;
-      background: rgba(26,18,34,.9); border: 1px solid rgba(255,255,255,.18);
+      background: rgba(26,18,34,.92); border: 1px solid rgba(255,255,255,.18);
       -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
       box-shadow: 0 20px 60px rgba(0,0,0,.7);
       opacity: 0; visibility: hidden;
@@ -161,11 +178,11 @@
     #booterr button:active { transform: scale(.94); }
 
     @media (prefers-reduced-motion: reduce) {
-      #disclaimer .main, #disclaimer .chr, #disclaimer .scanlines,
-      .boot-grain, .lu-fill i, #disclaimer .skip-hint { animation: none !important; }
-      #disclaimer .main { opacity: 1; transform: none; filter: none; }
-      #disclaimer .skip-hint { opacity: .8; }
-      #boot, #loadui, #booterr { transition-duration: .01s; }
+      #disclaimer .main, #disclaimer .chr, #disclaimer .scanlines, #disclaimer .skip-hint,
+      .boot-grain, .lu-fill i, .ld-woland { animation: none !important; }
+      #stage-disc.on #disclaimer .main { opacity: 1; transform: none; filter: none; }
+      #stage-disc.on #disclaimer .skip-hint { opacity: .8; }
+      #boot, .stage, #booterr { transition-duration: .01s; }
     }
   </style>
 </head>
@@ -173,16 +190,31 @@
   <div id="game-container"></div>
 
   <div id="boot">
-    <div id="disclaimer" aria-label="Дисклеймер">
-      <img class="disc-img main" src="./Текстуры/Меню/Дисклеймер.jpg" alt="Дисклеймер" draggable="false">
-      <img class="disc-img chr r" src="./Текстуры/Меню/Дисклеймер.jpg" alt="" aria-hidden="true" draggable="false">
-      <img class="disc-img chr c" src="./Текстуры/Меню/Дисклеймер.jpg" alt="" aria-hidden="true" draggable="false">
-      <div class="scanlines"></div>
-      <div class="skip-hint">НАЖМИТЕ, ЧТОБЫ ПРОПУСТИТЬ</div>
+    <!-- логотипы: L1 5с → затемнение 1.5с → L2 1с + 1.5с + 1.5с -->
+    <div class="stage" id="stage-logos">
+      <img id="logo1" src="./Текстуры/Меню/L1.jpg" alt="" draggable="false">
+      <img id="logo2" src="./Текстуры/Меню/l2.jpg" alt="" draggable="false">
     </div>
 
-    <div id="loadui">
-      <div class="lu-title">WOLAND'S MANSION</div>
+    <!-- дисклеймер: появление с помехами, уход ТОЛЬКО по нажатию -->
+    <div class="stage" id="stage-disc">
+      <div id="disclaimer" aria-label="Дисклеймер">
+        <img class="disc-img main" src="./Текстуры/Меню/Дисклеймер.jpg" alt="Дисклеймер" draggable="false">
+        <img class="disc-img chr r" src="./Текстуры/Меню/Дисклеймер.jpg" alt="" aria-hidden="true" draggable="false">
+        <img class="disc-img chr c" src="./Текстуры/Меню/Дисклеймер.jpg" alt="" aria-hidden="true" draggable="false">
+        <div class="scanlines"></div>
+        <div class="skip-hint">НАЖМИТЕ, ЧТОБЫ ПРОДОЛЖИТЬ</div>
+      </div>
+    </div>
+
+    <!-- загрузка: только если чего-то не хватает -->
+    <div class="stage" id="loadui">
+      <img class="ld-woland" src="./Текстуры/Воланд/Воланд0.png" alt="" draggable="false">
+      <img class="ld-logo" src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" draggable="false">
+      <div class="ld-sections">
+        <div class="ld-sec"><span>Текстуры</span><b id="sec-tex">0 Б</b></div>
+        <div class="ld-sec"><span>Звуки</span><b id="sec-snd">0 Б</b></div>
+      </div>
       <div class="lu-bar"><div class="lu-fill" id="lu-fill"><i></i></div></div>
       <div class="lu-row"><span id="lu-status">Проверка кэша…</span><span id="lu-pct">0%</span></div>
     </div>
@@ -201,6 +233,7 @@
     // ==================== КОНФИГ ====================
     const DB = 'woland_db';
     const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const IS_MOBILE = matchMedia('(pointer: coarse)').matches;
 
     const TEXTURES = [
       'Текстуры/Меню/Фон.jpg', 'Текстуры/Меню/Фон-молния.jpg', 'Текстуры/Меню/Название.jpg',
@@ -214,7 +247,6 @@
       'Текстуры/Воланд/Воланд_рот_открывается1.png', 'Текстуры/Воланд/Воланд_рот_открывается2.png',
       'Текстуры/Воланд/Воланд_рот_открыт.png'
     ];
-    // ключи window.GameAssets, которые ждут игровые блоки
     const ALIASES = {
       'Текстуры/Меню/Фон.jpg': 'menu_bg',
       'Текстуры/Меню/Фон-молния.jpg': 'menu_lightning',
@@ -226,116 +258,101 @@
     const EXTRA_SOUNDS = { audio_demo: './Звуки/Эффекты/Звук.wav' };
 
     const $ = (s) => document.querySelector(s);
+    const wait = (ms) => new Promise(r => setTimeout(r, ms));
     window.GameAssets = window.GameAssets || {};
     let booted = false;
 
-    // ==================== INDEXEDDB (совместимо со СТАРОЙ базой) ====================
-    // Базу НЕ апгрейдим и НЕ чистим: старый кэш остаётся рабочим.
-    // Используем любой существующий object store; 'media' создаём только если база пустая.
-    let idb = null;
-    let stores = [];
-    let writeStore = null;
-
+    // ==================== INDEXEDDB: старая база остаётся рабочей ====================
+    let idb = null, stores = [], writeStore = null;
     const openDB = () => new Promise((res, rej) => {
       let rq;
       try { rq = indexedDB.open(DB); } catch (e) { rej(e); return; }
-      rq.onupgradeneeded = () => {
-        const d = rq.result;
-        if (!d.objectStoreNames.length) d.createObjectStore('media');
-      };
-      rq.onsuccess = () => {
-        const db = rq.result;
-        db.onversionchange = () => { try { db.close(); } catch (e) {} };
-        res(db);
-      };
+      rq.onupgradeneeded = () => { const d = rq.result; if (!d.objectStoreNames.length) d.createObjectStore('media'); };
+      rq.onsuccess = () => { const db = rq.result; db.onversionchange = () => { try { db.close(); } catch (e) {} }; res(db); };
       rq.onerror = () => rej(rq.error);
       rq.onblocked = () => rej(new Error('IDB blocked'));
     });
-
     const idbReq = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
     const txDone = (tx) => new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); });
-
     const getAllKeys = async () => {
       const out = [];
       for (const s of stores) {
-        try { out.push(...await idbReq(idb.transaction(s, 'readonly').objectStore(s).getAllKeys())); }
-        catch (e) { /* store мог исчезнуть — пропускаем */ }
+        try { out.push(...await idbReq(idb.transaction(s, 'readonly').objectStore(s).getAllKeys())); } catch (e) {}
       }
       return out.filter(k => typeof k === 'string');
     };
     const getAny = async (keys) => {
-      for (const k of keys) {
-        for (const s of stores) {
-          try {
-            const v = await idbReq(idb.transaction(s, 'readonly').objectStore(s).get(k));
-            if (v instanceof Blob && v.size > 0) return v;
-          } catch (e) { /* ignore */ }
-        }
+      for (const k of keys) for (const s of stores) {
+        try {
+          const v = await idbReq(idb.transaction(s, 'readonly').objectStore(s).get(k));
+          if (v instanceof Blob && v.size > 0) return v;
+        } catch (e) {}
       }
       return null;
     };
     const putAny = async (key, blob) => {
       if (!idb || !writeStore) return;
-      try {
-        const tx = idb.transaction(writeStore, 'readwrite');
-        tx.objectStore(writeStore).put(blob, key);
-        await txDone(tx);
-      } catch (e) { /* квота/abort — не фатально */ }
+      try { const tx = idb.transaction(writeStore, 'readwrite'); tx.objectStore(writeStore).put(blob, key); await txDone(tx); } catch (e) {}
     };
 
-    // ==================== УТИЛИТЫ ====================
-    const mapLimit = async (items, limit, fn) => {
-      const out = new Array(items.length); let i = 0;
-      const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
-        while (i < items.length) { const idx = i++; out[idx] = await fn(items[idx], idx); }
-      });
-      await Promise.all(workers);
-      return out;
+    // ==================== БАЙТЫ / ПРОГРЕСС ====================
+    const sec = { tex: { loaded: 0, total: 0 }, snd: { loaded: 0, total: 0 } };
+    const fmtB = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + ' МБ' : n >= 1024 ? (n / 1024).toFixed(0) + ' КБ' : n + ' Б';
+    const paintSections = () => {
+      $('#sec-tex').textContent = sec.tex.total ? `${fmtB(sec.tex.loaded)} / ${fmtB(sec.tex.total)}` : fmtB(sec.tex.loaded);
+      $('#sec-snd').textContent = sec.snd.total ? `${fmtB(sec.snd.loaded)} / ${fmtB(sec.snd.total)}` : fmtB(sec.snd.loaded);
+      const L = sec.tex.loaded + sec.snd.loaded, T = sec.tex.total + sec.snd.total;
+      const p = T > 0 ? Math.min(1, L / T) : 0;
+      $('#lu-fill').style.width = Math.round(p * 100) + '%';
+      $('#lu-pct').textContent = Math.round(p * 100) + '%';
     };
-    const fetchBlob = async (url, ms = 25000) => {
+    const setStatus = (t) => { $('#lu-status').textContent = t; };
+
+    const fetchBlobProgress = async (url, bucket, ms = 30000) => {
       const ctl = new AbortController();
       const t = setTimeout(() => ctl.abort(), ms);
       try {
         const res = await fetch(url, { signal: ctl.signal, cache: 'force-cache' });
         if (!res.ok) throw new Error('HTTP ' + res.status);
-        return await res.blob();
+        const len = parseInt(res.headers.get('Content-Length') || '0', 10);
+        if (len > 0) bucket.total += len;
+        if (!res.body || !res.body.getReader) {
+          const b = await res.blob();
+          bucket.loaded += b.size;
+          if (!len) bucket.total += b.size;
+          paintSections();
+          return b;
+        }
+        const reader = res.body.getReader();
+        const chunks = [];
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          bucket.loaded += value.byteLength;
+          paintSections();
+        }
+        const blob = new Blob(chunks);
+        if (!len) bucket.total += blob.size;
+        paintSections();
+        return blob;
       } finally { clearTimeout(t); }
     };
-    const setProgress = (p, text) => {
-      $('#lu-fill').style.width = Math.round(p * 100) + '%';
-      $('#lu-pct').textContent = Math.round(p * 100) + '%';
-      if (text) $('#lu-status').textContent = text;
-    };
-    const showLoadUI = () => $('#loadui').classList.add('show');
-    const fatal = (msg) => {
-      console.error('[Boot]', msg);
-      $('#booterr-text').textContent = String(msg || 'Неизвестная ошибка');
-      $('#booterr').classList.add('show');
-    };
-
-    // ==================== ДИСКЛЕЙМЕР ====================
-    const playDisclaimer = () => new Promise((res) => {
-      const d = $('#disclaimer');
-      let done = false;
-      const finish = () => {
-        if (done) return; done = true;
-        d.classList.add('out');
-        setTimeout(res, REDUCED ? 60 : 480);
-      };
-      d.addEventListener('pointerdown', finish);
-      setTimeout(finish, REDUCED ? 900 : 3200);
-    });
 
     // ==================== АССЕТЫ ====================
+    const mapLimit = async (items, limit, fn) => {
+      let i = 0;
+      const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+        while (i < items.length) { const idx = i++; await fn(items[idx], idx); }
+      });
+      await Promise.all(workers);
+    };
     const buildRequired = (soundsMap) => {
       const list = [];
       for (const path of TEXTURES) list.push({ key: path, url: './' + path, kind: 'texture', path });
-      for (const [id, s] of Object.entries(soundsMap)) {
-        if (s && s.url) list.push({ key: 'sound:' + id, url: s.url, kind: 'sound', id });
-      }
+      for (const [id, s] of Object.entries(soundsMap)) if (s && s.url) list.push({ key: 'sound:' + id, url: s.url, kind: 'sound', id, size: s.size || 0 });
       return list;
     };
-    // ключи-кандидаты: новый формат + любые старые форматы прежнего загрузчика
     const candidateKeys = (a) => {
       const bare = a.url.replace(/^\.\//, '');
       const base = bare.split('/').pop();
@@ -351,47 +368,95 @@
       for (const k of keySet) if (k.endsWith(base) || k.endsWith('/' + base)) return k;
       return null;
     };
-
     const applyTexture = (a, blob) => {
       const url = URL.createObjectURL(blob);
-      const bare = a.path;
-      const base = bare.split('/').pop();
+      const base = a.path.split('/').pop();
       const noExt = base.replace(/\.[^.]+$/, '');
-      const keys = [ALIASES[a.path], a.path, bare, base, noExt].filter(Boolean);
-      for (const k of keys) window.GameAssets[k] = url;
+      for (const k of [ALIASES[a.path], a.path, base, noExt].filter(Boolean)) window.GameAssets[k] = url;
     };
     const decodeSound = async (id, blob) => {
-      const eng = window.SoundsEngine;
-      if (!eng) return;
-      try { await eng.loadSound(id, blob); }
-      catch (e) { console.warn('[Boot] decode fail:', id, e); }
+      try { await window.SoundsEngine?.loadSound(id, blob); } catch (e) { console.warn('[Boot] decode fail:', id, e); }
     };
 
-    // полный кэш: тихо, без бара; неполный: бар только на реально отсутствующее
-    const ensureAssets = async (resolved, missingCount, report) => {
-      let done = 0;
-      const total = Math.max(1, missingCount);
+    const ensureAssets = async (resolved) => {
       await mapLimit(resolved, 3, async (r) => {
         const a = r.asset;
-        let blob = null;
-        if (r.key) blob = await getAny([r.key, ...candidateKeys(a)]);
-        if (!blob) {
+        const bucket = a.kind === 'sound' ? sec.snd : sec.tex;
+        let blob = r.key ? await getAny([r.key, ...candidateKeys(a)]) : null;
+        if (blob) {
+          bucket.loaded += blob.size; bucket.total += blob.size;
+          paintSections();
+        } else {
+          setStatus('Загрузка: ' + a.url.split('/').pop());
           try {
-            blob = await fetchBlob(a.url);
+            blob = await fetchBlobProgress(a.url, bucket);
             await putAny(a.key, blob);
           } catch (e) {
             console.warn('[Boot] пропущен ассет:', a.url, e?.message || e);
             blob = null;
           }
-          done++;
-          report(done / total * 0.92, `Загрузка: ${a.url.split('/').pop()} (${Math.min(done, total)}/${total})`);
         }
         if (!blob) return;
         if (a.kind === 'texture') applyTexture(a, blob);
         else await decodeSound(a.id, blob);
       });
-      report(1, 'Готово');
+      paintSections();
+      setStatus('Готово');
     };
+
+    // ==================== ПЕРВЫЙ КЛИК: звук + fullscreen/ориентация (только мобильные) ====================
+    let unlocked = false;
+    const firstGesture = async () => {
+      if (unlocked) return;
+      unlocked = true;
+      try { window.SoundsEngine?.init(); } catch (e) {}
+      if (IS_MOBILE) {
+        try { await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }); } catch (e) {}
+        try { await screen.orientation?.lock?.('landscape'); } catch (e) {}
+      }
+    };
+
+    // ==================== ИНТРО: логотипы → дисклеймер по клику ====================
+    const imgsReady = (els) => Promise.all(els.map(el => el.decode ? el.decode().catch(() => {}) : Promise.resolve()));
+
+    const logoSequence = async () => {
+      const stage = $('#stage-logos'), l1 = $('#logo1'), l2 = $('#logo2');
+      await imgsReady([l1, l2]);
+      stage.classList.add('on');
+      l1.style.transition = 'none'; l1.style.opacity = '1';       // L1 без анимации
+      let skipped = false;
+      const onSkip = () => { skipped = true; firstGesture(); };
+      $('#boot').addEventListener('pointerdown', onSkip, { once: true });
+      await wait(REDUCED ? 600 : 5000);
+      if (!skipped) {
+        l1.style.transition = 'opacity 1.5s ease'; l1.style.opacity = '0';   // затемнение 1.5с
+        await wait(1500);
+        l2.style.transition = 'opacity 1s ease'; l2.style.opacity = '1';     // L2 за 1с
+        await wait(1000 + 1500);                                            // держим 1.5с
+        l2.style.transition = 'opacity 1.5s ease'; l2.style.opacity = '0';   // скрываем 1.5с
+        await wait(1500);
+      } else {
+        l1.style.transition = 'opacity .4s ease'; l1.style.opacity = '0';
+        l2.style.transition = 'opacity .4s ease'; l2.style.opacity = '0';
+        await wait(400);
+      }
+      $('#boot').removeEventListener('pointerdown', onSkip);
+      stage.classList.remove('on');
+    };
+
+    const disclaimerStage = () => new Promise((res) => {
+      const stage = $('#stage-disc'), d = $('#disclaimer');
+      stage.classList.add('on');
+      const onClick = async () => {
+        d.removeEventListener('pointerdown', onClick);
+        await firstGesture();                       // первый клик = разблокировка звука
+        d.classList.add('out');                     // оригинальный плавный уход
+        await wait(REDUCED ? 60 : 500);
+        stage.classList.remove('on');
+        res();
+      };
+      d.addEventListener('pointerdown', onClick);
+    });
 
     // ==================== BOOT ====================
     const registerSW = () => {
@@ -399,27 +464,24 @@
         navigator.serviceWorker.register('./sw.js').catch(e => console.warn('[Boot] SW:', e));
       }
     };
-    const unlockAudioOnce = () => {
-      const un = () => { try { window.SoundsEngine?.init(); } catch (e) {} };
-      addEventListener('pointerdown', un, { once: true });
-      addEventListener('keydown', un, { once: true });
+    const fatal = (msg) => {
+      console.error('[Boot]', msg);
+      $('#booterr-text').textContent = String(msg || 'Неизвестная ошибка');
+      $('#booterr').classList.add('show');
     };
     const startMenu = async () => {
       if (booted) return;
       booted = true;
       const bootEl = $('#boot');
       bootEl.classList.add('done');
-      setTimeout(() => bootEl.remove(), 650);
+      setTimeout(() => bootEl.remove(), 700);
       const mod = await import('./Блоки/menu.js');
       mod.Menu.start('title');
     };
 
     async function boot() {
       registerSW();
-      unlockAudioOnce();
       await import('./Фон/sounds.js');
-
-      const discPromise = playDisclaimer();
 
       let version = null, soundsMap = {};
       try {
@@ -442,28 +504,30 @@
       }
 
       const required = buildRequired(soundsMap);
+      for (const a of required) if (a.kind === 'sound' && a.size) sec.snd.total += a.size;
       const keySet = new Set(idb ? await getAllKeys() : []);
       const resolved = required.map(a => ({ asset: a, key: resolveKey(a, keySet) }));
-      const missingCount = resolved.filter(r => !r.key).length;
-      const fullCache = !!idb && missingCount === 0;
-      console.info('[Boot] кэш:', fullCache ? 'полный' : `не хватает ${missingCount}/${required.length}`);
+      const missing = resolved.filter(r => !r.key).length;
+      const fullCache = !!idb && missing === 0;
+      console.info('[Boot] кэш:', fullCache ? 'полный' : `не хватает ${missing}/${required.length}`);
 
-      let barShown = false;
-      const report = (p, text) => {
-        if (!barShown) { barShown = true; showLoadUI(); }
-        setProgress(p, text);
-      };
+      // подготовка идёт фоном во время логотипов и дисклеймера
+      let assetsDone = false;
+      const ready = ensureAssets(resolved).then(() => { assetsDone = true; });
 
-      const ready = (async () => {
-        if (!fullCache) await discPromise;      // бар показываем только после дисклеймера
-        await ensureAssets(resolved, missingCount, fullCache ? () => {} : report);
-        if (!fullCache) await new Promise(r => setTimeout(r, 160));
-      })();
+      await logoSequence();          // L1 → затемнение → L2 (как было)
+      await disclaimerStage();       // уход ТОЛЬКО по нажатию
 
-      await discPromise;
-      await ready;
+      if (!assetsDone) {
+        $('#loadui').classList.add('on');   // бар только если реально ещё грузим
+        await ready;
+        await wait(220);
+        $('#loadui').classList.remove('on');
+        await wait(350);
+      } else {
+        await ready;
+      }
 
-      // версию только фиксируем: старый кэш НЕ инвалидируем и НЕ перекачиваем
       try { localStorage.setItem('woland_version', version || localStorage.getItem('woland_version') || '1'); } catch (e) {}
       await startMenu();
     }

@@ -17,26 +17,27 @@ const TABS = [
 
 const UI_FALLBACK = { btn_click: 0.30, btn_select: 0.30, btn_back: 0.35, transition: 0.50, reset: 0.50 };
 
-const SPRING_RELEASE = { k: 170, c: 16 };
-const SPRING_DRAG    = { k: 620, c: 38 };
+// физика капли: мгновенный отклик + торможение 80 мс при перехвате
+const SPRING_RELEASE = { k: 260, c: 22 };
+const SPRING_DRAG    = { k: 900, c: 46 };
+const BRAKE_MS = 80, BRAKE_DAMP = 55;
 const STRETCH_DIV = 2200, STRETCH_MAX = 0.42;
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-// Тексты подсказок
 const TIPS = {
-  masterVol:      'Громкость музыки и всего, кроме звуков эффектов.',
-  effectsVol:     'Громкость игровых эффектов: шаги, двери, предметы.',
-  audioMode:      'Режим воспроизведения аудио. При изменении играет демо-звук.',
-  brightness:     'Общая яркость изображения в игре.',
-  minBrightness:  'Минимальная яркость при нулевом значении основной настройки.',
-  shadows:        'Качество теней. Чем выше — тем реалистичнее, но тяжелее для устройства.',
+  masterVol: 'Громкость музыки настроек и всего, кроме звуков эффектов.',
+  effectsVol: 'Громкость игровых эффектов: шаги, двери, предметы, демо-звук.',
+  audioMode: 'Режим воспроизведения. При смене играет демо-звук в новом режиме.',
+  brightness: 'Общая яркость изображения в игре.',
+  minBrightness: 'Минимальная яркость при нулевом значении основной настройки.',
+  shadows: 'Качество теней. Выше — реалистичнее, но тяжелее для устройства.',
   realisticLight: 'Качество и реалистичность освещения сцен.',
-  render3D:       'Качество 3D-рендеринга объектов и окружения.',
+  render3D: 'Качество 3D-рендеринга объектов и окружения.',
   textureQuality: 'Детализация текстур поверхностей.',
-  drawDistance:   'Насколько далеко видны объекты. Влияет на производительность.',
-  resetAll:       'Вернуть все настройки игры к заводским значениям.',
-  clearCache:     'Очистить кэшированные файлы. Игра перезапустится.'
+  drawDistance: 'Как далеко видны объекты. Влияет на производительность.',
+  resetAll: 'Вернуть все настройки игры к заводским значениям.',
+  clearCache: 'Очистить кэшированные файлы. Игра перезапустится.'
 };
 
 export const SettingsMenu = {
@@ -44,33 +45,22 @@ export const SettingsMenu = {
   hasUnsavedChanges: false,
   currentTab: 'audio',
 
-  _active: false,
-  _uiLockUntil: 0,
-  _pageBusy: false,
-  _musicSource: null,
-  _demoSource: null,
-  _musicToken: 0,
-  _musicStartedAt: 0,
-  _busTimers: { music: null, effects: null },
-  _visHandler: null,
-  _ro: null,
-  _reducedMotion: false,
-  _tip: null,
-  _tipBoundHandler: null,
-  _ph: { x: 0, v: 0, target: 0, dragging: false, pop: 0, lastIdx: 0, raf: null, lastT: 0,
-         centers: [], segW: 0, pad: 5, downX: 0, downT: 0, moved: false, downIdx: 0 },
+  _active: false, _uiLockUntil: 0, _musicSource: null, _demoSource: null,
+  _musicToken: 0, _musicStartedAt: 0, _busTimers: { music: null, effects: null },
+  _visHandler: null, _ro: null, _reducedMotion: false, _tip: null,
+  _tipHandler: null, _tipHost: null, _enterAnim: null,
+  _ph: { x:0, v:0, target:0, dragging:false, pop:0, press:0, pressX:0, brakeUntil:0,
+         lastIdx:0, raf:null, lastT:0, centers:[], segW:0, pad:5, downX:0, downT:0, moved:false, downIdx:0 },
 
   // ==================== ВХОД / ВЫХОД ====================
   start() {
     const container = document.getElementById('game-container');
     if (!container) throw new Error('game-container not found');
-
     Settings.init();
     if (window.SoundsEngine) window.SoundsEngine.init();
 
     this._active = true;
     this._uiLockUntil = 0;
-    this._pageBusy = false;
     this._reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     this.applyEngineVolumes(0);
@@ -82,9 +72,9 @@ export const SettingsMenu = {
 
     const layout = container.querySelector('.settings-layout');
     if (!this._reducedMotion && layout.animate) {
-      layout.animate(
-        [{ opacity: 0, transform: 'translateY(14px) scale(.985)' }, { opacity: 1, transform: 'none' }],
-        { duration: 320, easing: 'cubic-bezier(.32,.72,0,1)' }
+      this._enterAnim = layout.animate(
+        [{ opacity: 0, transform: 'scale(.985)' }, { opacity: 1, transform: 'none' }],
+        { duration: 180, easing: 'cubic-bezier(.32,.72,0,1)' }
       );
     }
 
@@ -103,12 +93,9 @@ export const SettingsMenu = {
     this._stopDemo();
     const layout = document.querySelector('.settings-layout');
     const anim = (layout && layout.animate && !this._reducedMotion)
-      ? layout.animate(
-          [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(10px) scale(.985)' }],
-          { duration: 240, easing: 'ease-in', fill: 'forwards' }
-        ).finished.catch(() => {})
+      ? layout.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, easing: 'ease-in', fill: 'forwards' }).finished.catch(() => {})
       : Promise.resolve();
-    await Promise.all([anim, this._stopMusic(380)]);
+    await Promise.all([anim, this._stopMusic(300)]);
     this._cleanup();
   },
 
@@ -117,50 +104,40 @@ export const SettingsMenu = {
     this._unbindTooltips();
     if (this._ro) { this._ro.disconnect(); this._ro = null; }
     if (this._visHandler) { document.removeEventListener('visibilitychange', this._visHandler); this._visHandler = null; }
-    clearInterval(this._busTimers.music);
-    clearInterval(this._busTimers.effects);
+    clearInterval(this._busTimers.music); clearInterval(this._busTimers.effects);
     this._musicSource = null;
   },
 
-  // ==================== ДЕМО-ЗВУК ====================
+  // ==================== ДЕМО-ЗВУК РЕЖИМА ====================
   async _preloadDemo() {
     const eng = window.SoundsEngine;
-    if (!eng) return;
-    if (!eng.loadedBuffers[DEMO_ID]) {
+    if (eng && !eng.loadedBuffers[DEMO_ID]) {
       try { await eng.loadSound(DEMO_ID, new URL(DEMO_PATH, document.baseURI).href); } catch (e) {}
     }
   },
 
   _stopDemo() {
-    if (this._demoSource) {
-      const eng = window.SoundsEngine;
-      if (eng) {
-        try { eng.stop(this._demoSource); } catch (e) {}
-      }
-      this._demoSource = null;
+    if (this._demoSource && window.SoundsEngine) {
+      try { window.SoundsEngine.stop(this._demoSource); } catch (e) {}
     }
+    this._demoSource = null;
   },
 
   _playDemoForMode(mode) {
     const eng = window.SoundsEngine;
     if (!eng || !eng.loadedBuffers[DEMO_ID]) return;
-    this._stopDemo();
-    const vol = clamp(Settings.current.effectsVolume ?? 100, 0, 150) / 100 * FX_BASE;
-    const src = eng.play(DEMO_ID, {
-      type: 'music',           // чтобы режим звука применился
-      volume: vol,
-      dolby: mode === 'dolby',
-      modeOverride: mode       // ★ применяет режим к этому звуку
-    });
+    this._stopDemo(); // резко обрываем предыдущий
+    const opts = { type: 'effects', modeOverride: mode, volume: 1 };
+    if (mode === 'stereo') opts.channelGains = [0.4, 0.6];   // моно-файл → честное стерео 40/60
+    if (mode === 'dolby')  opts.panSweep = true;             // панорама L→R на весь трек
+    const src = eng.play(DEMO_ID, opts);
     if (src) {
       this._demoSource = src;
-      src.addEventListener('ended', () => {
-        if (this._demoSource === src) this._demoSource = null;
-      });
+      src.addEventListener('ended', () => { if (this._demoSource === src) this._demoSource = null; });
     }
   },
 
-  // ==================== ЗВУКОВОЙ ЗАМОК ====================
+  // ==================== ЗАМОК ====================
   isLocked() { return performance.now() < this._uiLockUntil; },
 
   playUI(name) {
@@ -168,14 +145,14 @@ export const SettingsMenu = {
     if (now < this._uiLockUntil) return Promise.resolve(false);
     const eng = window.SoundsEngine;
     const sec = eng?.loadedBuffers?.[name]?.duration ?? UI_FALLBACK[name] ?? 0.30;
-    const ms = Math.ceil(sec * 1000) + 50;
+    const ms = Math.ceil(sec * 1000) + 40;
     this._uiLockUntil = now + ms;
     const layout = document.querySelector('.settings-layout');
     layout?.classList.add('sound-locked');
     setTimeout(() => {
       if (!this.isLocked()) document.querySelector('.settings-layout')?.classList.remove('sound-locked');
     }, ms);
-    if (eng) eng.play(name, { type: 'effects', dolby: false });
+    if (eng) eng.play(name, { type: 'effects', dolby: false, tailFade: name === 'reset' ? 0.3 : 0 });
     return new Promise(res => setTimeout(() => res(true), ms));
   },
 
@@ -184,7 +161,7 @@ export const SettingsMenu = {
   _fxBusTarget()    { return clamp(Settings.current.effectsVolume ?? 100, 0, 150) / 100 * FX_BASE; },
   _musicTrackVolume() { return MUSIC_BASE * clamp(Settings.current.masterVolume ?? 100, 0, 150) / 100; },
 
-  applyEngineVolumes(ms = 150) {
+  applyEngineVolumes(ms = 120) {
     this._fadeBus('music', this._musicBusTarget(), ms);
     this._fadeBus('effects', this._fxBusTarget(), ms);
   },
@@ -209,8 +186,11 @@ export const SettingsMenu = {
     if (!eng || this._musicSource) return;
     const token = ++this._musicToken;
     try {
-      if (!eng.loadedBuffers[MUSIC_ID]) {
-        await eng.loadSound(MUSIC_ID, new URL(MUSIC_PATH, document.baseURI).href);
+      // запускаем загрузку и терпеливо ждём буфер (до 3 c)
+      if (!eng.loadedBuffers[MUSIC_ID]) eng.loadSound(MUSIC_ID, new URL(MUSIC_PATH, document.baseURI).href);
+      for (let i = 0; i < 15; i++) {
+        if (eng.loadedBuffers[MUSIC_ID] || token !== this._musicToken || !this._active) break;
+        await new Promise(r => setTimeout(r, 200));
       }
       if (token !== this._musicToken || !this._active) return;
       if (!eng.loadedBuffers[MUSIC_ID]) { console.warn('[Settings] музыка не загружена:', MUSIC_PATH); return; }
@@ -221,18 +201,19 @@ export const SettingsMenu = {
         type: 'music', loop: true, volume: this._musicTrackVolume(),
         dolby: Settings.current.audioMode === 'dolby'
       });
-      this._fadeBus('music', this._musicBusTarget(), 900);
+      console.info('[Settings] музыка настроек запущена');
+      this._fadeBus('music', this._musicBusTarget(), 700);
     } catch (e) { console.warn('[Settings] ошибка музыки:', e); }
   },
 
-  async _stopMusic(fadeMs = 400) {
+  async _stopMusic(fadeMs = 300) {
     const eng = window.SoundsEngine;
     this._musicToken++;
     const src = this._musicSource;
     this._musicSource = null;
     if (!eng || !src) return;
     this._fadeBus('music', 0, fadeMs);
-    await new Promise(r => setTimeout(r, fadeMs + 40));
+    await new Promise(r => setTimeout(r, fadeMs + 30));
     eng.stop(src);
     eng.setMasterVolume('music', this._musicBusTarget());
   },
@@ -256,70 +237,52 @@ export const SettingsMenu = {
     this._unbindTooltips();
     const handler = (e) => {
       const icon = e.target.closest('.tip-icon');
-      if (e.type === 'pointerenter') {
-        if (icon) this._showTip(icon);
-      } else if (e.type === 'pointerleave') {
-        if (icon) this._hideTip();
-      } else if (e.type === 'click') {
-        if (icon) {
-          e.preventDefault();
-          e.stopPropagation();
-          if (this._tip && this._tip.classList.contains('show')) this._hideTip();
-          else this._showTip(icon);
-        } else if (this._tip && !this._tip.contains(e.target)) {
-          this._hideTip();
-        }
+      if (e.type === 'pointerenter') { if (icon) this._showTip(icon); }
+      else if (e.type === 'pointerleave') { if (icon) this._hideTip(); }
+      else if (e.type === 'click') {
+        if (icon) { e.preventDefault(); e.stopPropagation();
+          if (this._tip?.classList.contains('show')) this._hideTip(); else this._showTip(icon); }
+        else if (this._tip && !this._tip.contains(e.target)) this._hideTip();
       }
     };
     host.addEventListener('pointerenter', handler, true);
     host.addEventListener('pointerleave', handler, true);
     host.addEventListener('click', handler, true);
-    this._tipBoundHandler = handler;
-    this._tipBoundHost = host;
+    this._tipHandler = handler; this._tipHost = host;
   },
-
   _unbindTooltips() {
-    if (this._tipBoundHost && this._tipBoundHandler) {
-      this._tipBoundHost.removeEventListener('pointerenter', this._tipBoundHandler, true);
-      this._tipBoundHost.removeEventListener('pointerleave', this._tipBoundHandler, true);
-      this._tipBoundHost.removeEventListener('click', this._tipBoundHandler, true);
+    if (this._tipHost && this._tipHandler) {
+      this._tipHost.removeEventListener('pointerenter', this._tipHandler, true);
+      this._tipHost.removeEventListener('pointerleave', this._tipHandler, true);
+      this._tipHost.removeEventListener('click', this._tipHandler, true);
     }
-    this._hideTip();
-    this._tipBoundHandler = null;
-    this._tipBoundHost = null;
+    this._hideTip(); this._tipHandler = null; this._tipHost = null;
   },
-
   _showTip(icon) {
     const group = icon.closest('[data-tooltip]');
-    if (!group) return;
-    const text = group.dataset.tooltip;
+    const text = group?.dataset.tooltip;
     if (!text) return;
     this._hideTip();
     const tip = document.createElement('div');
-    tip.className = 'wm-tooltip';
-    tip.textContent = text;
+    tip.className = 'wm-tooltip'; tip.textContent = text;
     document.body.appendChild(tip);
     this._tip = tip;
     requestAnimationFrame(() => {
       const r = icon.getBoundingClientRect();
       const tr = tip.getBoundingClientRect();
-      const top = Math.max(8, r.top - tr.height - 8);
-      const left = Math.max(8, Math.min(window.innerWidth - tr.width - 8, r.left + r.width / 2 - tr.width / 2));
-      tip.style.left = left + 'px';
-      tip.style.top  = top  + 'px';
+      tip.style.left = Math.max(8, Math.min(window.innerWidth - tr.width - 8, r.left + r.width / 2 - tr.width / 2)) + 'px';
+      tip.style.top  = Math.max(8, r.top - tr.height - 8) + 'px';
       tip.classList.add('show');
     });
   },
-
-  _hideTip() {
-    if (this._tip) { this._tip.remove(); this._tip = null; }
-  },
+  _hideTip() { if (this._tip) { this._tip.remove(); this._tip = null; } },
 
   // ==================== КАРКАС ====================
   _renderShell(container) {
     const saveVisible = this.hasUnsavedChanges ? 'show' : '';
     container.innerHTML = `
       <div class="settings-layout">
+        <div class="wm-fog" aria-hidden="true"><i></i><i></i><i></i></div>
         <svg width="0" height="0" style="position:absolute" aria-hidden="true">
           <filter id="wm-liquid" x="-20%" y="-20%" width="140%" height="140%">
             <feTurbulence type="fractalNoise" baseFrequency="0.012 0.028" numOctaves="2" seed="8" result="n"/>
@@ -338,7 +301,10 @@ export const SettingsMenu = {
 
         <div class="cat-bar-wrap">
           <div class="cat-bar" id="cat-bar" role="tablist" aria-label="Категории настроек">
-            <div class="pill" id="cat-pill" aria-hidden="true"><div class="pill-lens"></div></div>
+            <div class="pill" id="cat-pill" aria-hidden="true">
+              <div class="pill-lens"></div>
+              <span class="pill-press"></span>
+            </div>
             ${TABS.map(t => `
               <button class="cat-btn ${this.currentTab === t.id ? 'active' : ''}" role="tab"
                 aria-selected="${this.currentTab === t.id}" tabindex="${this.currentTab === t.id ? 0 : -1}"
@@ -351,15 +317,22 @@ export const SettingsMenu = {
       </div>
     `;
 
+    // все 4 страницы сразу: трек следует за каплей пропорционально
     const pages = container.querySelector('#settings-pages');
-    pages.appendChild(this._buildPage(this.currentTab));
+    pages.innerHTML = '<div class="pages-track" id="pages-track"></div>';
+    const track = pages.firstElementChild;
+    TABS.forEach((t, i) => {
+      const pg = document.createElement('div');
+      pg.className = 'settings-page'; pg.dataset.idx = i;
+      this._fillPage(pg, t.id);
+      track.appendChild(pg);
+    });
 
     container.querySelector('#btn-settings-back').onclick = async () => {
       if (this.isLocked()) return;
       if (this.hasUnsavedChanges) {
         const save = await this.confirmDialog({
-          title: 'Несохранённые изменения',
-          text: 'Сохранить изменения перед выходом?',
+          title: 'Несохранённые изменения', text: 'Сохранить изменения перед выходом?',
           okText: 'Сохранить', cancelText: 'Не сохранять'
         });
         if (save) await this.saveSettings();
@@ -369,7 +342,6 @@ export const SettingsMenu = {
       const mod = await import('./menu.js');
       if (mod?.Menu) mod.Menu.start('menu');
     };
-
     container.querySelector('#btn-settings-save').onclick = () => this.saveSettings();
 
     const bar = container.querySelector('#cat-bar');
@@ -378,7 +350,7 @@ export const SettingsMenu = {
     bar.addEventListener('pointerup',   (e) => this._pillUp(e));
     bar.addEventListener('pointercancel', () => this._pillCancel());
     bar.querySelectorAll('.cat-btn').forEach(btn => {
-      btn.onclick = (e) => { if (e.detail === 0) this.switchTab(btn.dataset.cat); };
+      btn.onclick = (e) => { if (e.detail === 0) this._tapTo(btn.dataset.cat); };
     });
     bar.addEventListener('keydown', (e) => {
       const idx = TABS.findIndex(t => t.id === this.currentTab);
@@ -387,33 +359,29 @@ export const SettingsMenu = {
       if (e.key === 'ArrowLeft')  to = clamp(idx - 1, 0, TABS.length - 1);
       if (e.key === 'Home') to = 0;
       if (e.key === 'End')  to = TABS.length - 1;
-      if (to !== null) {
-        e.preventDefault();
-        bar.querySelectorAll('.cat-btn')[to].focus();
-        this.switchTab(TABS[to].id);
-      }
+      if (to !== null) { e.preventDefault(); bar.querySelectorAll('.cat-btn')[to].focus(); this._tapTo(TABS[to].id); }
     });
   },
 
-  // ==================== ПЕРЕКЛЮЧЕНИЕ СТРАНИЦ ====================
-  async switchTab(cat) {
-    if (!this._active || this._pageBusy) return;
-    if (cat === this.currentTab) { this.playUI('btn_select'); return; }
-    if (!(await this.playUI('btn_click'))) return;
-
-    this._stopDemo();
-
-    const from = TABS.findIndex(t => t.id === this.currentTab);
-    const to   = TABS.findIndex(t => t.id === cat);
-    const dir  = to > from ? 1 : -1;
-
-    this.currentTab = cat;
-    this.activeCategory = cat;
-    this._ph.target = this._ph.centers[to];
-    this._ph.lastIdx = to;
+  _tapTo(cat) {
+    const idx = TABS.findIndex(t => t.id === cat);
+    if (idx < 0) return;
+    const ph = this._ph;
+    if (Math.abs(ph.v) > 40) ph.brakeUntil = performance.now() + BRAKE_MS; // перехват: тормоз 80 мс
+    ph.target = ph.centers[idx];
+    ph.lastIdx = idx;
     this._wakePill();
-    this._updateTabsAria();
-    await this._swapPage(cat, dir);
+    this._commit(idx, true);
+  },
+
+  _commit(idx, sound) {
+    const cat = TABS[idx].id;
+    if (cat !== this.currentTab) {
+      this.currentTab = cat;
+      this.activeCategory = cat;
+      this._updateTabsAria();
+    }
+    if (sound && !this.isLocked()) this.playUI('btn_click');
   },
 
   _updateTabsAria() {
@@ -425,72 +393,54 @@ export const SettingsMenu = {
     });
   },
 
-  async _swapPage(cat, dir) {
-    const pages = document.getElementById('settings-pages');
-    if (!pages) return;
-    this._pageBusy = true;
-    const old = pages.firstElementChild;
-    const D = this._reducedMotion ? 0 : 1;
-    if (old && old.animate && D) {
-      await old.animate(
-        [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `translateX(${-26 * dir}px)` }],
-        { duration: 170, easing: 'ease-in', fill: 'forwards' }
-      ).finished.catch(() => {});
-    }
-    old?.remove();
-    const page = this._buildPage(cat);
-    pages.appendChild(page);
-    if (page.animate && D) {
-      await page.animate(
-        [{ opacity: 0, transform: `translateX(${26 * dir}px)` }, { opacity: 1, transform: 'none' }],
-        { duration: 230, easing: 'cubic-bezier(.32,.72,0,1)' }
-      ).finished.catch(() => {});
-    }
-    this._pageBusy = false;
+  _rebuildPage(idx) {
+    const track = document.getElementById('pages-track');
+    if (!track) return;
+    const pg = track.children[idx];
+    if (!pg) return;
+    pg.innerHTML = '';
+    this._fillPage(pg, TABS[idx].id);
   },
 
-  _refreshPage() {
-    const pages = document.getElementById('settings-pages');
-    if (!pages) return;
-    pages.firstElementChild?.remove();
-    const page = this._buildPage(this.currentTab);
-    pages.appendChild(page);
-    if (page.animate && !this._reducedMotion) {
-      page.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
-    }
-  },
-
-  // ==================== КОНТЕНТ СТРАНИЦ ====================
-  _buildPage(cat) {
-    const page = document.createElement('div');
-    page.className = 'settings-page';
+  // ==================== КОНТЕНТ ====================
+  _fillPage(page, cat) {
     page.setAttribute('role', 'tabpanel');
     if (cat === 'audio')      this._pageAudio(page);
     if (cat === 'brightness') this._pageBrightness(page);
     if (cat === 'graphics')   this._pageGraphics(page);
     if (cat === 'system')     this._pageSystem(page);
     page.querySelectorAll(':scope > *').forEach((el, i) => el.style.setProperty('--i', i));
-    return page;
   },
 
   _rangeHTML(id, label, min, max, val, tipKey) {
     return `
       <div class="setting-group glass" ${tipKey ? `data-tooltip="${TIPS[tipKey]}"` : ''}>
-        <label>
-          <span>${label}: <span id="val-${id}">${val}</span></span>
-          ${tipKey ? '<span class="tip-icon" aria-label="Справка">?</span>' : ''}
-        </label>
+        <label><span>${label}: <b id="val-${id}">${val}</b></span>${tipKey ? '<span class="tip-icon" aria-label="Справка">?</span>' : ''}</label>
         <input type="range" id="set-${id}" min="${min}" max="${max}" value="${val}">
+      </div>`;
+  },
+
+  _stripHTML(id, label, options, current, tipKey) {
+    const idx = Math.max(0, options.findIndex(o => o[0] === current));
+    const w = 100 / options.length;
+    return `
+      <div class="setting-group glass" ${tipKey ? `data-tooltip="${TIPS[tipKey]}"` : ''}>
+        <label><span>${label}:</span>${tipKey ? '<span class="tip-icon" aria-label="Справка">?</span>' : ''}</label>
+        <div class="seg-strip" id="set-${id}" role="radiogroup" aria-label="${label}">
+          <span class="seg-thumb" style="width:${w}%; transform:translateX(${idx * 100}%)"></span>
+          ${options.map(([v, t], i) => `
+            <button type="button" class="seg-item ${i === idx ? 'on' : ''}" data-val="${v}"
+              role="radio" aria-checked="${i === idx}">
+              <span class="seg-label">${t}</span><span class="seg-dot"></span>
+            </button>`).join('')}
+        </div>
       </div>`;
   },
 
   _bindRange(page, id, key, onChange) {
     const input = page.querySelector('#set-' + id);
     const val = page.querySelector('#val-' + id);
-    const paint = () => {
-      const p = (input.value - input.min) / (input.max - input.min) * 100;
-      input.style.setProperty('--p', p + '%');
-    };
+    const paint = () => input.style.setProperty('--p', (input.value - input.min) / (input.max - input.min) * 100 + '%');
     paint();
     input.addEventListener('pointerdown', () => this.playUI('btn_select'));
     input.addEventListener('keydown', (e) => {
@@ -498,24 +448,29 @@ export const SettingsMenu = {
     });
     input.addEventListener('input', () => {
       const v = parseInt(input.value, 10);
-      val.textContent = v;
-      paint();
+      val.textContent = v; paint();
       Settings.set(key, v);
       if (onChange) onChange(v);
       this.markChanged();
     });
   },
 
-  // Для всех селектов, КРОМЕ audioMode: с замком и btn_select
-  _bindSelectLocked(page, id, key, onChange) {
-    const sel = page.querySelector('#set-' + id);
-    sel.addEventListener('change', () => {
-      if (this.isLocked()) { sel.value = Settings.current[key]; return; }
-      Settings.set(key, sel.value);
-      this.playUI('btn_select');
-      sel.classList.remove('pulse'); void sel.offsetWidth; sel.classList.add('pulse');
-      if (onChange) onChange(sel.value);
-      this.markChanged();
+  _bindStrip(page, id, key, onChange) {
+    const strip = page.querySelector('#set-' + id);
+    const thumb = strip.querySelector('.seg-thumb');
+    const items = [...strip.querySelectorAll('.seg-item')];
+    items.forEach((btn, i) => {
+      btn.onclick = () => {
+        if (this.isLocked()) return;
+        const val = btn.dataset.val;
+        this.playUI('btn_select');
+        if (Settings.current[key] === val) return;
+        Settings.set(key, val);
+        items.forEach((b, j) => { b.classList.toggle('on', j === i); b.setAttribute('aria-checked', j === i); });
+        thumb.style.transform = `translateX(${i * 100}%)`;
+        this.markChanged();
+        if (onChange) onChange(val);
+      };
     });
   },
 
@@ -524,33 +479,16 @@ export const SettingsMenu = {
     page.innerHTML = `
       ${this._rangeHTML('masterVol', 'Общая громкость', 0, 150, c.masterVolume, 'masterVol')}
       ${this._rangeHTML('effectsVol', 'Громкость эффектов', 0, 150, c.effectsVolume, 'effectsVol')}
-      <div class="setting-group glass" data-tooltip="${TIPS.audioMode}">
-        <label>
-          <span>Режим звука:</span>
-          <span class="tip-icon" aria-label="Справка">?</span>
-        </label>
-        <select id="set-audioMode">
-          <option value="mono"   ${c.audioMode === 'mono'   ? 'selected' : ''}>Моно</option>
-          <option value="stereo" ${c.audioMode === 'stereo' ? 'selected' : ''}>Стерео</option>
-          <option value="dolby"  ${c.audioMode === 'dolby'  ? 'selected' : ''}>Dolby Vertical</option>
-        </select>
-      </div>
+      ${this._stripHTML('audioMode', 'Режим звука',
+          [['mono','Моно'],['stereo','Стерео'],['dolby','Dolby Vertical']], c.audioMode, 'audioMode')}
       <button id="btn-recommended" class="g-btn ghost wide">Рекомендуемые значения</button>
     `;
-    this._bindRange(page, 'masterVol', 'masterVolume', () => this._fadeBus('music', this._musicBusTarget(), 120));
-    this._bindRange(page, 'effectsVol', 'effectsVolume', () => this._fadeBus('effects', this._fxBusTarget(), 120));
-
-    // ★ Специальный обработчик: без замка, с демо-звуком
-    const sel = page.querySelector('#set-audioMode');
-    sel.addEventListener('change', () => {
-      // Применяем режим (без блокировки)
-      Settings.set('audioMode', sel.value);
-      this.markChanged();
+    this._bindRange(page, 'masterVol', 'masterVolume', () => this._fadeBus('music', this._musicBusTarget(), 100));
+    this._bindRange(page, 'effectsVol', 'effectsVolume', () => this._fadeBus('effects', this._fxBusTarget(), 100));
+    this._bindStrip(page, 'audioMode', 'audioMode', (v) => {
       this._restartMusicWithMode();
-      // Играем демо в этом режиме (обрывает предыдущий)
-      this._playDemoForMode(sel.value);
+      this._playDemoForMode(v); // демо на шине эффектов, без замка
     });
-
     this._bindRecommended(page, 'audio', 'Сброс звука', 'Вернуть рекомендуемые настройки звука?');
   },
 
@@ -574,18 +512,9 @@ export const SettingsMenu = {
       { id: 'textureQuality', label: 'Качество текстур',     tip: 'textureQuality', options: [['ultra','Ультра'],['high','Высокий'],['medium','Средний'],['low','Низкий']] },
       { id: 'drawDistance',   label: 'Дальность прорисовки', tip: 'drawDistance',   options: [['no_simplification','Без упрощений'],['far','Дальний'],['near','Недалёкий'],['close','Ближний']] }
     ];
-    page.innerHTML = defs.map(d => `
-      <div class="setting-group glass" data-tooltip="${TIPS[d.tip]}">
-        <label>
-          <span>${d.label}:</span>
-          <span class="tip-icon" aria-label="Справка">?</span>
-        </label>
-        <select id="set-${d.id}">
-          ${d.options.map(([v, t]) => `<option value="${v}" ${Settings.current[d.id] === v ? 'selected' : ''}>${t}</option>`).join('')}
-        </select>
-      </div>
-    `).join('') + `<button id="btn-recommended" class="g-btn ghost wide">Рекомендуемые значения</button>`;
-    defs.forEach(d => this._bindSelectLocked(page, d.id, d.id));
+    page.innerHTML = defs.map(d => this._stripHTML(d.id, d.label, d.options, Settings.current[d.id], d.tip)).join('') +
+      `<button id="btn-recommended" class="g-btn ghost wide">Рекомендуемые значения</button>`;
+    defs.forEach(d => this._bindStrip(page, d.id, d.id));
     this._bindRecommended(page, 'graphics', 'Сброс графики', 'Вернуть рекомендуемые настройки графики?');
   },
 
@@ -596,11 +525,9 @@ export const SettingsMenu = {
       if (!ok) return;
       if (!(await this.playUI('reset'))) return;
       Settings.resetCategory(category);
-      if (category === 'audio') {
-        this.applyEngineVolumes(200);
-        this._restartMusicWithMode();
-      }
-      this._refreshPage();
+      if (category === 'audio') { this.applyEngineVolumes(150); this._restartMusicWithMode(); }
+      const idx = TABS.findIndex(t => t.id === category || (category === 'audio' && t.id === 'audio'));
+      this._rebuildPage(TABS.findIndex(t => t.id === this.currentTab));
     };
   },
 
@@ -608,40 +535,35 @@ export const SettingsMenu = {
     page.innerHTML = `
       <div class="system-actions">
         <button id="btn-reset-settings" class="g-btn danger wide" data-tooltip="${TIPS.resetAll}">
-          <span class="tip-icon btn-tip" aria-label="Справка">?</span>
-          Сбросить все настройки
+          <span class="tip-icon btn-tip" aria-label="Справка">?</span>Сбросить все настройки
         </button>
         <button id="btn-clear-cache" class="g-btn danger wide" data-tooltip="${TIPS.clearCache}">
-          <span class="tip-icon btn-tip" aria-label="Справка">?</span>
-          Сбросить кэш медиа и кода
+          <span class="tip-icon btn-tip" aria-label="Справка">?</span>Сбросить кэш медиа и кода
         </button>
       </div>
     `;
     page.querySelector('#btn-reset-settings').onclick = async () => {
       if (this.isLocked()) return;
       const ok = await this.confirmDialog({
-        title: 'Сброс всех настроек',
-        text: 'Вернуть ВСЕ настройки к заводским? Это нельзя отменить.',
+        title: 'Сброс всех настроек', text: 'Вернуть ВСЕ настройки к заводским? Это нельзя отменить.',
         okText: 'Сбросить всё', cancelText: 'Отмена', danger: true
       });
       if (!ok) return;
       if (!(await this.playUI('reset'))) return;
       Settings.reset();
-      this.applyEngineVolumes(200);
+      this.applyEngineVolumes(150);
       this._restartMusicWithMode();
-      this._refreshPage();
+      TABS.forEach((t, i) => this._rebuildPage(i));
     };
-
     page.querySelector('#btn-clear-cache').onclick = async () => {
       if (this.isLocked()) return;
       const ok = await this.confirmDialog({
-        title: 'Очистка кэша',
-        text: 'Очистить кэш медиа и кода? Игра перезапустится.',
+        title: 'Очистка кэша', text: 'Очистить кэш медиа и кода? Игра перезапустится.',
         okText: 'Очистить', cancelText: 'Отмена', danger: true
       });
       if (!ok) return;
       await this.playUI('reset');
-      await this._stopMusic(250);
+      await this._stopMusic(200);
       this._cleanup();
       const reload = () => { localStorage.removeItem('woland_version'); location.reload(); };
       try {
@@ -651,7 +573,7 @@ export const SettingsMenu = {
     };
   },
 
-  // ==================== СОХРАНЕНИЕ ====================
+  // ==================== СОХРАНЕНИЕ / МОДАЛКА ====================
   markChanged() {
     this.hasUnsavedChanges = true;
     document.querySelector('#btn-settings-save')?.classList.add('show');
@@ -664,7 +586,6 @@ export const SettingsMenu = {
     document.querySelector('#btn-settings-save')?.classList.remove('show');
   },
 
-  // ==================== СВОЁ МОДАЛЬНОЕ ОКНО ====================
   confirmDialog({ title = 'Подтверждение', text = '', okText = 'Да', cancelText = 'Нет', danger = false } = {}) {
     return new Promise(resolve => {
       const host = document.querySelector('.settings-layout') || document.body;
@@ -681,7 +602,6 @@ export const SettingsMenu = {
         </div>`;
       host.appendChild(overlay);
       requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('show')));
-
       let closing = false;
       const close = async (result, sound) => {
         if (closing) return;
@@ -691,7 +611,7 @@ export const SettingsMenu = {
         if (wait > 0) await new Promise(r => setTimeout(r, wait));
         await this.playUI(sound);
         overlay.classList.remove('show');
-        setTimeout(() => { overlay.remove(); resolve(result); }, 240);
+        setTimeout(() => { overlay.remove(); resolve(result); }, 130);
       };
       const onKey = (e) => {
         if (!overlay.isConnected) { document.removeEventListener('keydown', onKey); return; }
@@ -711,7 +631,7 @@ export const SettingsMenu = {
     });
   },
 
-  // ==================== КАПСУЛА-КАПЛЯ: ФИЗИКА ====================
+  // ==================== КАПЛЯ: ФИЗИКА + 3D TOUCH ====================
   _initPill() {
     const bar = document.getElementById('cat-bar');
     this._measurePill();
@@ -735,26 +655,37 @@ export const SettingsMenu = {
     if (!bar || !pill) return;
     const r = bar.getBoundingClientRect();
     const pad = this._ph.pad;
-    const innerW = r.width - pad * 2;
-    this._ph.segW = innerW / TABS.length;
+    this._ph.segW = (r.width - pad * 2) / TABS.length;
     this._ph.centers = TABS.map((_, i) => pad + this._ph.segW * (i + 0.5));
     pill.style.width  = (this._ph.segW - 8) + 'px';
     pill.style.height = (r.height - 10) + 'px';
   },
 
+  _pressFrom(e) {
+    if (e.pointerType === 'mouse') return 0.35;
+    return clamp((e.pressure - 0.25) / 0.75, 0, 1);
+  },
+
   _pillDown(e) {
-    if (!this._active || this.isLocked() || this._pageBusy) return;
+    if (!this._active || this._pageBusyGuard()) return;
     const bar = document.getElementById('cat-bar');
     bar.setPointerCapture(e.pointerId);
     const rect = bar.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    this._ph.dragging = false;
-    this._ph.moved = false;
-    this._ph.downX = x;
-    this._ph.downT = performance.now();
-    this._ph.downIdx = clamp(Math.floor((x - this._ph.pad) / this._ph.segW), 0, TABS.length - 1);
+    const ph = this._ph;
+    ph.dragging = false; ph.moved = false;
+    ph.downX = x; ph.downT = performance.now();
+    ph.downIdx = clamp(Math.floor((x - ph.pad) / ph.segW), 0, TABS.length - 1);
+    ph.press = this._pressFrom(e);
+    ph.pressX = x;
+    // МГНОВЕННЫЙ отклик: цель ставится сразу на нажатие
+    if (Math.abs(ph.v) > 40) ph.brakeUntil = performance.now() + BRAKE_MS;
+    ph.target = ph.centers[ph.downIdx];
+    ph.lastIdx = ph.downIdx;
     this._wakePill();
   },
+
+  _pageBusyGuard() { return false; }, // страницы больше не блокируют: трек едет всегда
 
   _pillMove(e) {
     const ph = this._ph;
@@ -762,12 +693,13 @@ export const SettingsMenu = {
     const bar = document.getElementById('cat-bar');
     const rect = bar.getBoundingClientRect();
     const x = e.clientX - rect.left;
+    ph.press = this._pressFrom(e);
+    ph.pressX = x;
     if (!ph.moved && Math.abs(x - ph.downX) > 8) ph.moved = true;
     if (!ph.moved) return;
     ph.dragging = true;
+    ph.brakeUntil = 0;
     ph.target = clamp(x, ph.centers[0], ph.centers[TABS.length - 1]);
-    const idx = clamp(Math.round((ph.target - ph.pad) / ph.segW - 0.5), 0, TABS.length - 1);
-    if (idx !== ph.lastIdx) { ph.lastIdx = idx; ph.pop = 1; }
     this._wakePill();
   },
 
@@ -776,25 +708,21 @@ export const SettingsMenu = {
     if (ph.downT === 0) return;
     const wasDrag = ph.moved;
     const downIdx = ph.downIdx;
-    ph.downT = 0;
-    ph.dragging = false;
+    ph.downT = 0; ph.dragging = false;
     try { document.getElementById('cat-bar').releasePointerCapture(e.pointerId); } catch (_) {}
-
     if (!wasDrag) {
-      this.switchTab(TABS[downIdx].id);
+      this._commit(downIdx, true); // тап: цель уже стоит с pointerdown
       return;
     }
     const idx = clamp(Math.round((ph.x - ph.pad) / ph.segW - 0.5), 0, TABS.length - 1);
     ph.target = ph.centers[idx];
     this._wakePill();
-    if (TABS[idx].id !== this.currentTab) this.switchTab(TABS[idx].id);
-    else this.playUI('btn_select');
+    this._commit(idx, true);
   },
 
   _pillCancel() {
     const ph = this._ph;
-    ph.downT = 0;
-    ph.dragging = false;
+    ph.downT = 0; ph.dragging = false;
     const i = TABS.findIndex(t => t.id === this.currentTab);
     ph.target = ph.centers[i];
     this._wakePill();
@@ -809,17 +737,19 @@ export const SettingsMenu = {
       if (!this._active) return;
       const dt = clamp((t - ph.lastT) / 1000, 0, 1 / 30);
       ph.lastT = t;
+      const braking = !ph.dragging && t < ph.brakeUntil;
       const s = ph.dragging ? SPRING_DRAG : SPRING_RELEASE;
       const n = Math.max(1, Math.ceil(dt / (1 / 120)));
       const h = dt / n;
       for (let i = 0; i < n; i++) {
-        const a = s.k * (ph.target - ph.x) - s.c * ph.v;
+        const a = braking ? -BRAKE_DAMP * ph.v : s.k * (ph.target - ph.x) - s.c * ph.v;
         ph.v += a * h;
         ph.x += ph.v * h;
       }
       ph.pop *= Math.exp(-7 * dt);
+      ph.press += ((ph.downT ? ph.press : 0) - ph.press) * 0; // press обновляется в событиях
       this._renderPill();
-      if (!ph.dragging && Math.abs(ph.v) < 1 && Math.abs(ph.target - ph.x) < 0.25) {
+      if (!ph.dragging && Math.abs(ph.v) < 1 && Math.abs(ph.target - ph.x) < 0.25 && !ph.downT) {
         ph.x = ph.target; ph.v = 0;
         this._renderPill();
         return;
@@ -829,224 +759,246 @@ export const SettingsMenu = {
     ph.raf = requestAnimationFrame(frame);
   },
 
-  _sleepPill() {
-    if (this._ph.raf !== null) { cancelAnimationFrame(this._ph.raf); this._ph.raf = null; }
-  },
+  _sleepPill() { if (this._ph.raf !== null) { cancelAnimationFrame(this._ph.raf); this._ph.raf = null; } },
 
   _renderPill() {
     const pill = document.getElementById('cat-pill');
+    const track = document.getElementById('pages-track');
     if (!pill) return;
     const ph = this._ph;
     let sx = 1, sy = 1, skew = 0;
     if (!this._reducedMotion) {
       const s = Math.min(Math.abs(ph.v) / STRETCH_DIV, STRETCH_MAX);
-      sx = 1 + s - ph.pop * 0.05;
-      sy = 1 - s * 0.55 + ph.pop * 0.14;
+      const bulge = ph.press * 0.16;             // 3D touch: давление раздувает каплю
+      sx = 1 + s - ph.pop * 0.05 + bulge;
+      sy = 1 - s * 0.55 + ph.pop * 0.14 + bulge * 0.55;
       skew = clamp(-ph.v / 160, -9, 9);
-    } else {
-      ph.x = ph.target; ph.v = 0;
+    } else { ph.x = ph.target; ph.v = 0; }
+    pill.style.transform = `translate3d(${ph.x}px,0,0) translate(-50%,-50%) skewX(${skew}deg) scale(${sx},${sy})`;
+    pill.style.setProperty('--pressx', (ph.pressX - ph.x + (pill.offsetWidth * sx) / 2) + 'px');
+    pill.style.setProperty('--pressop', (ph.downT ? ph.press : 0).toFixed(2));
+    // страницы следуют за каплей пропорционально
+    if (track) {
+      const f = clamp((ph.x - ph.centers[0]) / ph.segW, 0, TABS.length - 1);
+      track.style.transform = `translate3d(${-f * 25}%,0,0)`;
     }
-    pill.style.transform =
-      `translate3d(${ph.x}px,0,0) translate(-50%,-50%) skewX(${skew}deg) scale(${sx},${sy})`;
   },
 
   // ==================== СТИЛИ ====================
   _css() { return `
     .settings-layout {
       position: absolute; inset: 0; display: flex; flex-direction: column;
-      background: #050407; color: #fff; overflow: hidden;
+      background: #0b0714; color: #fff; overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
-    .settings-layout::before {
-      content: ''; position: absolute; inset: 0; pointer-events: none;
-      background:
-        radial-gradient(60% 45% at 18% 8%, rgba(120,0,10,.35), transparent 70%),
-        radial-gradient(55% 45% at 85% 92%, rgba(40,10,70,.4), transparent 70%),
-        radial-gradient(40% 30% at 70% 30%, rgba(255,255,255,.04), transparent 70%);
-    }
+    /* тёмно-фиолетовый туман */
+    .wm-fog { position: absolute; inset: -25%; pointer-events: none; filter: blur(70px); opacity: .6; z-index: 0; }
+    .wm-fog i { position: absolute; display: block; border-radius: 50%; }
+    .wm-fog i:nth-child(1) { width: 60%; height: 55%; left: 2%; top: 6%;
+      background: radial-gradient(circle, rgba(96,42,170,.55), transparent 65%);
+      animation: fog1 26s ease-in-out infinite alternate; }
+    .wm-fog i:nth-child(2) { width: 55%; height: 50%; right: 0%; top: 30%;
+      background: radial-gradient(circle, rgba(120,32,120,.38), transparent 65%);
+      animation: fog2 31s ease-in-out infinite alternate; }
+    .wm-fog i:nth-child(3) { width: 70%; height: 55%; left: 12%; bottom: -6%;
+      background: radial-gradient(circle, rgba(44,22,96,.55), transparent 70%);
+      animation: fog3 23s ease-in-out infinite alternate; }
+    @keyframes fog1 { to { transform: translate3d(6%,4%,0) scale(1.12); } }
+    @keyframes fog2 { to { transform: translate3d(-7%,5%,0) scale(1.08); } }
+    @keyframes fog3 { to { transform: translate3d(4%,-5%,0) scale(1.15); } }
     .settings-layout::after {
-      content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .05;
+      content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .05; z-index: 0;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
     }
-    .settings-layout > * { position: relative; z-index: 1; }
+    .settings-layout > *:not(.wm-fog) { position: relative; z-index: 1; }
 
+    /* БЕСЦВЕТНОЕ жидкое стекло */
     .glass, .g-btn, .cat-bar, .pill {
-      background: rgba(255,255,255,.055);
-      border: 1px solid rgba(255,255,255,.14);
-      -webkit-backdrop-filter: blur(14px) saturate(1.5);
-      backdrop-filter: blur(14px) saturate(1.5);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.18), inset 0 -1px 0 rgba(255,255,255,.05), 0 8px 24px rgba(0,0,0,.35);
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.16);
+      -webkit-backdrop-filter: blur(18px) saturate(1.6) brightness(1.06);
+      backdrop-filter: blur(18px) saturate(1.6) brightness(1.06);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -1px 0 rgba(255,255,255,.06), 0 10px 30px rgba(0,0,0,.45);
     }
 
     .settings-header {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
-      padding: 14px 16px; padding-top: calc(14px + env(safe-area-inset-top));
+      padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top));
     }
-    .settings-title { font-size: 17px; font-weight: 700; letter-spacing: .3px; opacity: .9; }
+    .settings-title { font-size: 17px; font-weight: 700; letter-spacing: .3px; opacity: .92; }
 
     .g-btn {
-      position: relative; padding: 11px 22px; font-size: 15px; color: #fff; cursor: pointer;
+      position: relative; padding: 10px 20px; font-size: 15px; color: #fff; cursor: pointer;
       border-radius: 999px; overflow: hidden;
-      transition: transform .22s cubic-bezier(.34,1.56,.64,1), background .25s ease, border-color .25s ease, opacity .25s ease;
+      transition: transform .12s cubic-bezier(.34,1.56,.64,1), background .15s ease, border-color .15s ease, opacity .15s ease;
     }
     .g-btn::before {
       content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-      background: linear-gradient(180deg, rgba(255,255,255,.22), transparent 45%);
+      background: linear-gradient(180deg, rgba(255,255,255,.25), transparent 45%);
     }
-    .g-btn:hover { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.3); }
+    .g-btn:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.35); }
     .g-btn:active { transform: scale(.94); }
-    .g-btn.primary { background: rgba(255,20,20,.2); border-color: rgba(255,70,70,.55); }
-    .g-btn.primary:hover { background: rgba(255,30,30,.32); }
+    .g-btn.primary { background: rgba(255,20,20,.22); border-color: rgba(255,70,70,.55); }
     .g-btn.danger { background: rgba(120,0,0,.45); border-color: rgba(255,0,0,.6); }
-    .g-btn.danger:hover { background: rgba(160,0,0,.55); }
     .g-btn.wide { width: 100%; max-width: 420px; padding: 14px; }
 
-    .save-btn { opacity: 0; transform: scale(.85); pointer-events: none; }
+    .save-btn { opacity: 0; transform: scale(.85); pointer-events: none; transition: all .15s cubic-bezier(.32,.72,0,1); }
     .save-btn.show { opacity: 1; transform: none; pointer-events: auto; }
 
+    /* страницы: трек следует за каплей */
     .settings-pages { position: relative; flex: 1; overflow: hidden; }
+    .pages-track { display: flex; width: 400%; height: 100%; will-change: transform; }
     .settings-page {
-      position: absolute; inset: 0; overflow-y: auto; padding: 18px 16px 24px;
-      display: flex; flex-direction: column; align-items: center; gap: 14px;
+      width: 25%; height: 100%; overflow-y: auto; padding: 16px 18px 24px;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.28) transparent;
     }
-    .settings-page > * { animation: wm-rise .45s cubic-bezier(.32,.72,0,1) both; animation-delay: calc(var(--i,0) * 45ms); }
-    @keyframes wm-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+    .settings-page::-webkit-scrollbar { width: 6px; }
+    .settings-page::-webkit-scrollbar-track { background: transparent; }
+    .settings-page::-webkit-scrollbar-thumb { background: rgba(255,255,255,.22); border-radius: 3px; }
+    .settings-page > * { animation: wm-rise .3s cubic-bezier(.32,.72,0,1) both; animation-delay: calc(var(--i,0) * 25ms); }
+    @keyframes wm-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
-    .setting-group { width: 100%; max-width: 420px; padding: 14px 16px; border-radius: 18px; display: flex; flex-direction: column; gap: 10px; }
-    .setting-group label {
-      font-size: 14px; color: #d8d8dc; display: flex; justify-content: space-between; align-items: center;
-    }
-    .setting-group label > span:first-child { color: #d8d8dc; }
-    .setting-group label span span { color: #fff; font-weight: 600; }
+    .setting-group { width: 100%; max-width: 420px; padding: 13px 16px; border-radius: 18px; display: flex; flex-direction: column; gap: 10px; }
+    .setting-group label { font-size: 14px; color: #d8d8dc; display: flex; justify-content: space-between; align-items: center; }
+    .setting-group label b { color: #fff; font-weight: 600; }
 
     .tip-icon {
       display: inline-flex; align-items: center; justify-content: center;
       width: 18px; height: 18px; border-radius: 50%; font-size: 11px; font-weight: 700;
-      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.2);
-      color: rgba(255,255,255,.75); cursor: help; flex-shrink: 0;
-      transition: background .2s ease, border-color .2s ease, transform .15s ease;
+      background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.22);
+      color: rgba(255,255,255,.8); cursor: help; flex-shrink: 0;
+      transition: background .15s ease, border-color .15s ease, transform .1s ease;
     }
-    .tip-icon:hover { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.45); }
+    .tip-icon:hover { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.5); }
     .tip-icon:active { transform: scale(.9); }
-    .tip-icon.btn-tip {
-      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
-      z-index: 2;
-    }
-    .g-btn.wide { position: relative; }
+    .tip-icon.btn-tip { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); z-index: 2; }
 
     input[type="range"] {
       -webkit-appearance: none; appearance: none; width: 100%; height: 8px; border-radius: 999px; cursor: pointer;
-      background: linear-gradient(90deg, rgba(255,40,40,.85) var(--p,50%), rgba(255,255,255,.12) var(--p,50%));
-      box-shadow: inset 0 1px 2px rgba(0,0,0,.5);
-      outline: none;
+      background: linear-gradient(90deg, rgba(255,255,255,.75) var(--p,50%), rgba(255,255,255,.12) var(--p,50%));
+      box-shadow: inset 0 1px 2px rgba(0,0,0,.5); outline: none;
     }
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%;
-      background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.95), rgba(255,255,255,.35) 40%, rgba(200,200,210,.25));
-      border: 1px solid rgba(255,255,255,.5);
-      box-shadow: 0 2px 8px rgba(0,0,0,.55), inset 0 1px 1px rgba(255,255,255,.7), 0 0 10px rgba(255,0,0,.25);
-      transition: transform .18s cubic-bezier(.34,1.56,.64,1);
+      background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.98), rgba(255,255,255,.4) 40%, rgba(210,210,220,.28));
+      border: 1px solid rgba(255,255,255,.6);
+      box-shadow: 0 2px 8px rgba(0,0,0,.55), inset 0 1px 1px rgba(255,255,255,.8);
+      transition: transform .12s cubic-bezier(.34,1.56,.64,1);
     }
-    input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.12); }
-    input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.2); }
+    input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.18); }
     input[type="range"]::-moz-range-thumb {
       width: 24px; height: 24px; border-radius: 50%;
-      background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.95), rgba(255,255,255,.35) 40%, rgba(200,200,210,.25));
-      border: 1px solid rgba(255,255,255,.5);
-      box-shadow: 0 2px 8px rgba(0,0,0,.55), inset 0 1px 1px rgba(255,255,255,.7);
+      background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.98), rgba(255,255,255,.4) 40%, rgba(210,210,220,.28));
+      border: 1px solid rgba(255,255,255,.6);
     }
 
-    .setting-group select {
-      appearance: none; -webkit-appearance: none;
-      padding: 12px 40px 12px 14px; font-size: 15px; color: #fff; cursor: pointer;
-      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.16); border-radius: 14px;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='white' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-      background-repeat: no-repeat; background-position: right 14px center;
-      transition: border-color .2s ease, background .2s ease, transform .2s ease;
+    /* полоски-сегменты с подписями */
+    .seg-strip {
+      position: relative; display: flex; padding: 4px; border-radius: 16px;
+      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12);
     }
-    .setting-group select:hover { border-color: rgba(255,255,255,.35); }
-    .setting-group select:focus { outline: none; border-color: rgba(255,70,70,.6); box-shadow: 0 0 0 3px rgba(255,0,0,.15); }
-    .setting-group select option { background: #14101a; color: #fff; }
-    .setting-group select.pulse { animation: wm-pulse .3s ease; }
-    @keyframes wm-pulse { 50% { transform: scale(1.025); } }
+    .seg-thumb {
+      position: absolute; top: 4px; bottom: 4px; left: 4px; border-radius: 12px;
+      background: rgba(255,255,255,.14);
+      border: 1px solid rgba(255,255,255,.28);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 4px 12px rgba(0,0,0,.35);
+      -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+      transition: transform .18s cubic-bezier(.32,.72,0,1);
+      pointer-events: none;
+    }
+    .seg-item {
+      position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;
+      padding: 8px 2px; background: none; border: none; cursor: pointer;
+      color: rgba(255,255,255,.55); transition: color .15s ease, transform .1s ease;
+    }
+    .seg-item:active { transform: scale(.94); }
+    .seg-item.on { color: #fff; }
+    .seg-label { font-size: 10px; font-weight: 600; letter-spacing: .2px; text-align: center; line-height: 1.1; }
+    .seg-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid currentColor; opacity: .8; }
+    .seg-item.on .seg-dot { background: currentColor; box-shadow: 0 0 10px rgba(255,255,255,.5); }
 
     .system-actions { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 420px; align-items: center; }
 
-    .cat-bar-wrap { padding: 12px 14px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+    /* капсула-оболочка */
+    .cat-bar-wrap { padding: 10px 14px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
     .cat-bar {
       position: relative; display: flex; height: 58px; border-radius: 999px;
       touch-action: none; user-select: none; -webkit-user-select: none;
       max-width: 560px; margin: 0 auto;
+      box-shadow: inset 0 2px 6px rgba(0,0,0,.5), inset 0 -1px 0 rgba(255,255,255,.12), 0 10px 30px rgba(0,0,0,.45);
     }
     .cat-btn {
       flex: 1; position: relative; z-index: 2; background: none; border: none; cursor: pointer;
       color: rgba(255,255,255,.55); font-size: 14px; font-weight: 600; border-radius: 999px;
-      transition: color .25s ease, transform .2s cubic-bezier(.34,1.56,.64,1);
+      transition: color .15s ease, transform .1s ease;
     }
     .cat-btn:active { transform: scale(.94); }
-    .cat-btn.active { color: #fff; text-shadow: 0 0 12px rgba(255,60,60,.5); }
-    .cat-btn:focus-visible { outline: 2px solid rgba(255,70,70,.7); outline-offset: -4px; }
+    .cat-btn.active { color: #fff; text-shadow: 0 0 12px rgba(255,255,255,.45); }
+    .cat-btn:focus-visible { outline: 2px solid rgba(255,255,255,.6); outline-offset: -4px; }
 
     .pill {
       position: absolute; left: 0; top: 50%; z-index: 1; border-radius: 999px;
       will-change: transform; pointer-events: none;
-      background: rgba(255,60,60,.14);
-      border: 1px solid rgba(255,120,120,.35);
-      -webkit-backdrop-filter: blur(3px) saturate(1.7) brightness(1.08);
-      backdrop-filter: blur(3px) saturate(1.7) brightness(1.08);
-      box-shadow: inset 0 1px 1px rgba(255,255,255,.5), inset 0 -1px 1px rgba(255,255,255,.12), 0 4px 16px rgba(255,0,0,.2);
+      background: rgba(255,255,255,.10);
+      border: 1px solid rgba(255,255,255,.30);
+      -webkit-backdrop-filter: blur(3px) saturate(1.8) brightness(1.1);
+      backdrop-filter: blur(3px) saturate(1.8) brightness(1.1);
+      box-shadow: inset 0 1px 1px rgba(255,255,255,.55), inset 0 -1px 1px rgba(255,255,255,.15), 0 6px 18px rgba(0,0,0,.4);
     }
     .pill-lens {
       position: absolute; inset: 0; border-radius: inherit;
-      -webkit-backdrop-filter: url(#wm-liquid);
-      backdrop-filter: url(#wm-liquid);
+      -webkit-backdrop-filter: url(#wm-liquid); backdrop-filter: url(#wm-liquid);
     }
     .pill::after {
       content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-      background: linear-gradient(180deg, rgba(255,255,255,.3), transparent 40%, rgba(255,255,255,.06));
+      background: linear-gradient(180deg, rgba(255,255,255,.35), transparent 42%, rgba(255,255,255,.06));
+    }
+    .pill-press {
+      position: absolute; top: 50%; left: var(--pressx, 50%); width: 46px; height: 46px;
+      transform: translate(-50%,-50%); border-radius: 50%; pointer-events: none;
+      background: radial-gradient(circle, rgba(255,255,255,.5), transparent 65%);
+      opacity: var(--pressop, 0); filter: blur(2px);
+      transition: opacity .12s ease;
     }
 
-    .settings-layout.sound-locked button,
-    .settings-layout.sound-locked select,
-    .settings-layout.sound-locked .cat-bar { pointer-events: none; }
+    .settings-layout.sound-locked button:not(.cat-btn):not(.seg-item),
+    .settings-layout.sound-locked select { pointer-events: none; }
+    .settings-layout.sound-locked input[type="range"] { pointer-events: none; }
     .settings-layout.sound-locked { cursor: progress; }
-    /* Демо-звук не блокирует: audioMode-селект всегда кликабельный */
-    #set-audioMode { pointer-events: auto !important; }
 
     .wm-overlay {
       position: absolute; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center;
       background: rgba(0,0,0,0); -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0);
-      transition: background .24s ease, backdrop-filter .24s ease, -webkit-backdrop-filter .24s ease;
+      transition: background .16s ease, backdrop-filter .16s ease;
     }
-    .wm-overlay.show { background: rgba(0,0,0,.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+    .wm-overlay.show { background: rgba(5,2,10,.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
     .wm-dialog {
-      width: min(92%, 380px); padding: 22px; border-radius: 24px;
-      background: rgba(22,16,24,.82);
-      transform: translateY(16px) scale(.94); opacity: 0;
-      transition: transform .26s cubic-bezier(.32,.72,0,1), opacity .22s ease;
+      width: min(92%, 380px); padding: 20px; border-radius: 24px; background: rgba(26,18,34,.85);
+      transform: translateY(14px) scale(.95); opacity: 0;
+      transition: transform .16s cubic-bezier(.32,.72,0,1), opacity .14s ease;
     }
     .wm-overlay.show .wm-dialog { transform: none; opacity: 1; }
     .wm-dialog-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
-    .wm-dialog-text { font-size: 14px; color: #cfcfd4; line-height: 1.45; margin-bottom: 18px; }
+    .wm-dialog-text { font-size: 14px; color: #cfcfd4; line-height: 1.45; margin-bottom: 16px; }
     .wm-dialog-buttons { display: flex; gap: 10px; }
     .wm-dialog-buttons .g-btn { flex: 1; }
 
     .wm-tooltip {
       position: fixed; z-index: 120; padding: 10px 14px; max-width: 280px;
-      background: rgba(30,20,35,.94); color: #fff; font-size: 13px; line-height: 1.4;
-      border: 1px solid rgba(255,255,255,.16); border-radius: 12px;
-      -webkit-backdrop-filter: blur(10px) saturate(1.4);
-      backdrop-filter: blur(10px) saturate(1.4);
+      background: rgba(32,22,44,.94); color: #fff; font-size: 13px; line-height: 1.4;
+      border: 1px solid rgba(255,255,255,.18); border-radius: 12px;
+      -webkit-backdrop-filter: blur(10px) saturate(1.4); backdrop-filter: blur(10px) saturate(1.4);
       box-shadow: 0 8px 24px rgba(0,0,0,.6);
-      opacity: 0; transform: translateY(4px);
-      transition: opacity .18s ease, transform .18s ease;
+      opacity: 0; transform: translateY(4px); transition: opacity .12s ease, transform .12s ease;
       pointer-events: none;
     }
     .wm-tooltip.show { opacity: 1; transform: none; }
 
     @media (prefers-reduced-motion: reduce) {
       .settings-page > * { animation: none; }
-      .g-btn, .cat-btn, .wm-dialog, input[type="range"]::-webkit-slider-thumb, .wm-tooltip { transition: none; }
+      .wm-fog i { animation: none; }
+      .g-btn, .cat-btn, .wm-dialog, .wm-tooltip, .seg-thumb { transition: none; }
     }
   `; }
 };

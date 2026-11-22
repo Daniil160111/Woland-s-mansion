@@ -17,15 +17,16 @@ const TABS = [
 
 const UI_FALLBACK = { btn_click: 0.30, btn_select: 0.30, btn_back: 0.35, transition: 0.50, reset: 0.50 };
 const SPRING_RELEASE = { k: 300, c: 24 };
-const SPRING_DRAG    = { k: 1000, c: 50 };
+const SPRING_DRAG    = { k: 900, c: 50 };
 const BRAKE_MS = 80, BRAKE_DAMP = 55;
 const STRETCH_DIV = 2200, STRETCH_MAX = 0.42;
-const RUBBER = 0.35;
 const EDGE_SPILL_MAX = 0.5;
 const LINE_PAD = 18;
+const LINE_THUMB_TOP = 34;   // базовый top шайбы на линии
+const PILL_WALL_Y = 8;       // насколько шайба/капля может «попробовать» вверх/вниз
+const WALL_DEAD = 50;        // мёртвая зона давления в стену
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const rubber = (v, min, max, k) => v < min ? min - (min - v) * k : v > max ? max + (v - max) * k : v;
 
 const TIPS = {
   masterVol: 'Громкость музыки настроек и всего, кроме звуков эффектов.',
@@ -52,11 +53,12 @@ export const SettingsMenu = {
   _busTimers: { music: null, effects: null },
   _visHandler: null, _ro: null, _reducedMotion: false, _tip: null,
   _tipHandler: null, _tipHost: null, _dialogOpen: false, _pendingDemo: null,
-  _snapshot: null, _saved: true, _canVib: false,
+  _snapshot: null,
   _liq: new Map(), _liqRaf: null,
-  _ph: { x:0, v:0, target:0, dragging:false, pop:0, press:0, pressS:0, hold:0, pressX:0, brakeUntil:0,
+  _ph: { x:0, y:0, v:0, vy:0, target:0, yT:0, dragging:false, pop:0, press:0, pressS:0, hold:0,
+         pressX:0, brakeUntil:0, rawOver:0, wallY:0, hitX:0,
          vibAcc:0, lastVib:0, touchF:0,
-         lastIdx:0, raf:null, lastT:0, centers:[], segW:0, pad:5, downX:0, downT:0, moved:false, downIdx:0 },
+         lastIdx:0, raf:null, lastT:0, centers:[], segW:0, pad:5, downX:0, downY:0, downT:0, moved:false, downIdx:0 },
 
   _buzz(ms, el) {
     if (this._canVib) { try { navigator.vibrate(ms); } catch (e) {} return; }
@@ -66,7 +68,7 @@ export const SettingsMenu = {
     }
   },
   _vibMove(st, dt, el) {
-    const speed = Math.abs(st.v);
+    const speed = Math.abs(st.v) + Math.abs(st.vy || 0);
     if (el) el.classList.toggle('mov', !this._canVib && (st.dragging || speed > 60));
     if (!this._canVib) return;
     if (!st.downT && speed < 60) return;
@@ -84,12 +86,25 @@ export const SettingsMenu = {
     if (f > 0.01) return clamp(f * 1.4, 0, 1);
     return 0.35;
   },
-  // звук релиза: мимо замка, всегда слышен
   _playFree(name) {
     const eng = window.SoundsEngine;
     if (!eng) return;
     console.info('[Settings] release-sound:', name);
     eng.play(name, { type: 'effects', dolby: false });
+  },
+
+  // ==================== ГРЯЗНО/ЧИСТО (сравнение с снимком) ====================
+  _snapEq() {
+    const a = this._snapshot || {}, b = Settings.current || {};
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const k of keys) if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) return false;
+    return true;
+  },
+  _syncDirty() {
+    const dirty = !this._snapEq();
+    this.hasUnsavedChanges = dirty;
+    this._saved = !dirty;
+    document.querySelector('#btn-settings-save')?.classList.toggle('show', dirty);
   },
 
   // ==================== ВХОД / ВЫХОД ====================
@@ -101,12 +116,12 @@ export const SettingsMenu = {
 
     this._active = true;
     this._uiLockUntil = 0;
-    this._saved = true;
     this._dialogOpen = false;
     this._musicRetry = false;
     this._canVib = typeof navigator !== 'undefined' && !!navigator.vibrate;
     this._liq.clear();
     this._snapshot = JSON.parse(JSON.stringify(Settings.current));
+    this.hasUnsavedChanges = false;
     this._reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     this.applyEngineVolumes(0);
@@ -136,7 +151,7 @@ export const SettingsMenu = {
     this._active = false;
     this._musicToken++;
     this._stopDemo();
-    if (!this._saved && this._snapshot) {
+    if (!this._snapEq() && this._snapshot) {   // вышли без сохранения → откат
       Settings.current = JSON.parse(JSON.stringify(this._snapshot));
       Settings.apply();
     }
@@ -198,7 +213,6 @@ export const SettingsMenu = {
     if (this._demoSource && window.SoundsEngine) { try { window.SoundsEngine.stop(this._demoSource); } catch (e) {} }
     this._demoSource = null;
   },
-  // надёжная загрузка демо: default → no-store (лечит закэшированный 404 от SW)
   async _loadDemoBuffer() {
     const eng = window.SoundsEngine;
     if (!eng || eng.loadedBuffers[DEMO_ID]) return true;
@@ -232,6 +246,7 @@ export const SettingsMenu = {
       return;
     }
     this._stopDemo();
+    console.info('[Settings] демо-предпросмотр режима:', mode);
     const opts = { type: 'effects', modeOverride: mode, volume: 1 };
     if (mode === 'stereo') opts.channelGains = [0.4, 0.6];
     if (mode === 'dolby')  opts.panSweep = true;
@@ -385,7 +400,7 @@ export const SettingsMenu = {
         <div class="cat-bar-wrap">
           <div class="cat-bar" id="cat-bar" role="tablist" aria-label="Категории настроек">
             <div class="pill" id="cat-pill" aria-hidden="true">
-              <div class="pill-lens"></div><span class="pill-press"></span>
+              <div class="pill-lens"></div><span class="pill-press"></span><span class="pill-vspill"></span>
             </div>
             ${TABS.map(t => `
               <button class="cat-btn ${this.currentTab === t.id ? 'active' : ''}" role="tab"
@@ -410,6 +425,7 @@ export const SettingsMenu = {
 
     container.querySelector('#btn-settings-back').onclick = async () => {
       if (this.isLocked() || this._dialogOpen) return;
+      this._syncDirty();
       if (this.hasUnsavedChanges) {
         const r = await this.confirmDialog({
           title: 'Несохранённые изменения',
@@ -514,7 +530,7 @@ export const SettingsMenu = {
         <div class="liq-line" id="set-${id}" data-key="${id}" data-cont="1" data-min="${min}" data-max="${max}" data-val="${val}" tabindex="0">
           <span class="liq-track"></span>
           <span class="liq-fill"></span>
-          <span class="liq-thumb"><span class="liq-lens"></span><span class="liq-shine"></span></span>
+          <span class="liq-thumb"><span class="liq-lens"></span><span class="liq-shine"></span><span class="liq-vspill"></span></span>
         </div>
       </div>`;
   },
@@ -528,7 +544,7 @@ export const SettingsMenu = {
         <div class="liq-line" id="set-${id}" data-key="${id}" data-idx="${idx}" tabindex="0">
           <span class="liq-track"></span>
           <span class="liq-fill"></span>
-          <span class="liq-thumb"><span class="liq-lens"></span><span class="liq-shine"></span></span>
+          <span class="liq-thumb"><span class="liq-lens"></span><span class="liq-shine"></span><span class="liq-vspill"></span></span>
           ${options.map(([v, t], i) => `
             <button type="button" class="liq-stop ${i === idx ? 'on' : ''}" data-i="${i}" data-val="${v}"
               style="--t:${n > 1 ? i / (n - 1) : 0.5}" role="radio" aria-checked="${i === idx}">
@@ -538,7 +554,7 @@ export const SettingsMenu = {
       </div>`;
   },
 
-  // ==================== ЕДИНАЯ ФИЗИКА ШАЙБ ====================
+  // ==================== ЕДИНАЯ ФИЗИКА ШАЙБ (360° + стены) ====================
   _bindLine(page, id, key, opts = {}) {
     const line = page.querySelector('#set-' + id);
     if (!line) return;
@@ -550,8 +566,11 @@ export const SettingsMenu = {
       cMin: cont ? parseFloat(line.dataset.min) : 0,
       cMax: cont ? parseFloat(line.dataset.max) : 150,
       idx: parseInt(line.dataset.idx, 10) || 0,
-      x: 0, v: 0, target: 0, dragging: false, grab: false, brakeUntil: 0,
-      press: 0, pressS: 0, hold: 0, pressX: 0, downT: 0, downX: 0, moved: false, pop: 0, lastStop: -1,
+      x: 0, v: 0, target: 0, y: 0, vy: 0, yT: 0,
+      dragging: false, grab: false, brakeUntil: 0,
+      press: 0, pressS: 0, hold: 0, pressX: 0,
+      downT: 0, downX: 0, downY: 0, moved: false, pop: 0, lastStop: -1,
+      rawOver: 0, wallY: 0, hitX: 0,
       vibAcc: 0, lastVib: 0, touchF: 0, touched: false,
       startVal: null, changed: false, lastV: null,
       min: 0, max: 0, pos: [], width: 0, measured: false,
@@ -581,13 +600,13 @@ export const SettingsMenu = {
       this._tryMusicRetry();
       line.setPointerCapture(e.pointerId);
       const r = line.getBoundingClientRect();
-      const x = e.clientX - r.left;
+      const x = e.clientX - r.left, y = e.clientY - r.top;
       measure();
       st.touched = true;
-      st.downT = performance.now(); st.downX = x; st.moved = false; st.changed = false;
+      st.downT = performance.now(); st.downX = x; st.downY = y; st.moved = false; st.changed = false;
       st.press = this._pressFrom(e, st); st.pressX = x;
       st.startVal = cont ? st.lastV : st.idx;
-      st.grab = Math.abs(x - st.x) < 30;
+      st.grab = Math.abs(x - st.x) < 30 && Math.abs(y - LINE_THUMB_TOP) < 30;
       if (Math.abs(st.v) > 40) st.brakeUntil = performance.now() + BRAKE_MS;
       if (!st.grab) {
         if (cont) st.target = clamp(x, st.min, st.max);
@@ -602,12 +621,17 @@ export const SettingsMenu = {
     line.addEventListener('pointermove', (e) => {
       if (!st.downT) return;
       const r = line.getBoundingClientRect();
-      const x = e.clientX - r.left;
+      const x = e.clientX - r.left, y = e.clientY - r.top;
       st.press = this._pressFrom(e, st); st.pressX = x;
-      if (!st.moved && Math.abs(x - st.downX) > 6) st.moved = true;
+      if (!st.moved && (Math.abs(x - st.downX) > 6 || Math.abs(y - st.downY) > 6)) st.moved = true;
       if (!st.moved || !st.grab) return;
       st.dragging = true; st.brakeUntil = 0;
-      st.target = rubber(x, st.min, st.max, RUBBER);
+      // стены 360°: позиция строго внутри, давление в стену → скапливание
+      st.target = clamp(x, st.min, st.max);
+      st.rawOver = Math.max(0, x - st.max, st.min - x);
+      const dy = y - st.downY;
+      st.yT = clamp(dy * 0.12, -PILL_WALL_Y, PILL_WALL_Y);
+      st.wallY = Math.max(0, Math.abs(dy) - WALL_DEAD);
       if (!cont) {
         const i = clamp(Math.round((st.target - st.min) / ((st.max - st.min) / (n - 1 || 1))), 0, n - 1);
         if (st.lastStop === -1) st.lastStop = i;
@@ -619,6 +643,7 @@ export const SettingsMenu = {
       if (!st.downT) return;
       const wasDrag = st.moved && st.grab;
       st.downT = 0; st.dragging = false; st.lastStop = -1;
+      st.rawOver = 0; st.wallY = 0; st.yT = 0;
       try { line.releasePointerCapture(e.pointerId); } catch (_) {}
       if (wasDrag) {
         if (cont) st.target = clamp(st.x, st.min, st.max);
@@ -636,7 +661,7 @@ export const SettingsMenu = {
     stops.forEach((btn, i) => {
       btn.onclick = (e) => {
         e.stopPropagation();
-        if (this.isLocked()) return;
+        if (this.isLocked() && st.key !== 'audioMode') return;
         st.touched = true;
         if (Math.abs(st.v) > 40) st.brakeUntil = performance.now() + BRAKE_MS;
         st.target = st.pos[i];
@@ -676,19 +701,16 @@ export const SettingsMenu = {
     if (st.idx !== i) { st.idx = i; st.changed = true; }
   },
 
-  // релиз-звук:
-  //   audioMode → Звук.wav (предпросмотр режима)
-  //   всё остальное → btn_select (звук выбора)
   _liqRelease(st) {
     const thumb = st.el.querySelector('.liq-thumb');
     if (st.key === 'audioMode') {
       const val = st.el.querySelectorAll('.liq-stop')[st.idx]?.dataset.val;
       if (!val) return;
-      this._playDemoForMode(val);
+      this._playDemoForMode(val);                       // всегда, включая повторный тап
       this._buzz(this._canVib ? [10, 30, 14] : 10, thumb);
       if (st.changed && Settings.current[st.key] !== val) {
         Settings.set(st.key, val);
-        this.markChanged();
+        this._syncDirty();
         if (st.onRelease) st.onRelease(val);
       }
       st.changed = false;
@@ -699,10 +721,10 @@ export const SettingsMenu = {
       const val = st.el.querySelectorAll('.liq-stop')[st.idx]?.dataset.val;
       if (val && Settings.current[st.key] !== val) {
         Settings.set(st.key, val);
-        this.markChanged();
+        this._syncDirty();
         if (st.onRelease) st.onRelease(val);
       }
-    }
+    } else this._syncDirty();
     this._playFree('btn_select');
     this._buzz(this._canVib ? [8, 24, 10] : 8, thumb);
     st.changed = false;
@@ -724,15 +746,22 @@ export const SettingsMenu = {
         const nn = Math.max(1, Math.ceil(dt / (1 / 120)));
         const h = dt / nn;
         for (let i = 0; i < nn; i++) {
-          const a = braking ? -BRAKE_DAMP * st.v : s.k * (st.target - st.x) - s.c * st.v;
-          st.v += a * h; st.x += st.v * h;
+          const a  = braking ? -BRAKE_DAMP * st.v  : s.k * (st.target - st.x) - s.c * st.v;
+          const ay = braking ? -BRAKE_DAMP * st.vy : s.k * ((st.yT || 0) - st.y) - s.c * st.vy;
+          st.v += a * h;  st.x += st.v * h;
+          st.vy += ay * h; st.y += st.vy * h;
         }
+        // удар о стену на инерции: импульс скапливания затухает
+        const atWallX = (st.x <= st.min + 0.5 && st.v < 0) || (st.x >= st.max - 0.5 && st.v > 0);
+        st.hitX = Math.max(st.hitX * Math.exp(-6 * dt), atWallX ? Math.abs(st.v) / 900 : 0);
+        st.x = clamp(st.x, st.min, st.max); // строгая стена: за прямоугольник не выезжаем
         st.pop *= Math.exp(-7 * dt);
         st.pressS += (st.press - (st.pressS || 0)) * Math.min(1, dt * 12);
         st.hold   += ((st.downT ? 1 : 0) - (st.hold || 0)) * Math.min(1, dt * 10);
         this._vibMove(st, dt, st.el.querySelector('.liq-thumb'));
         this._renderLiq(st);
-        if (st.dragging || Math.abs(st.v) > 1 || Math.abs(st.target - st.x) > 0.25 || st.downT || st.hold > 0.02) any = true;
+        if (st.dragging || Math.abs(st.v) > 1 || Math.abs(st.vy) > 1 || Math.abs(st.target - st.x) > 0.25 ||
+            Math.abs(st.y) > 0.2 || st.downT || st.hold > 0.02 || st.hitX > 0.02) any = true;
       });
       if (any) this._liqRaf = requestAnimationFrame(tick);
     };
@@ -744,27 +773,27 @@ export const SettingsMenu = {
     const thumb = st.el.querySelector('.liq-thumb');
     const fill = st.el.querySelector('.liq-fill');
     if (!thumb) return;
-    const overL = Math.max(0, st.min - st.x);
-    const overR = Math.max(0, st.x - st.max);
-    const over = Math.max(overL, overR);
-    const spill = Math.min(over / 60, EDGE_SPILL_MAX);
-    let sx = 1, sy = 1, skew = 0;
-    if (!this._reducedMotion) {
-      const s = Math.min(Math.abs(st.v) / STRETCH_DIV, STRETCH_MAX);
-      const bulge = (st.hold || 0) * (0.10 + (st.pressS || 0) * 0.22);
-      sx = 1 + s + bulge + spill * 0.8 - st.pop * 0.05;
-      sy = 1 - s * 0.5 + bulge * 0.8 - spill * 0.35 + st.pop * 0.14;
-      skew = clamp(-st.v / 160, -9, 9) + (overR ? 6 : overL ? -6 : 0) * spill;
-    } else { st.x = st.target; st.v = 0; }
+    // давление в стены: горизонталь (rawOver/hitX) и вертикаль (wallY/|y|)
+    const sqX = Math.min((st.rawOver || 0) / 55 + (st.hitX || 0), 0.45); // давим влево/вправо → сплющивание по X, разлив по Y
+    const sqY = Math.min((st.wallY || 0) / 90 + Math.abs(st.y || 0) / PILL_WALL_Y * 0.12, 0.4); // давим вверх/вниз → сплющивание по Y, разлив по X
+    const s = this._reducedMotion ? 0 : Math.min(Math.abs(st.v) / STRETCH_DIV, STRETCH_MAX);
+    const bulge = (st.hold || 0) * (0.10 + (st.pressS || 0) * 0.22);
+    const sx = 1 + s + bulge + sqY * 0.6 - sqX * 0.45 - st.pop * 0.05;
+    const sy = 1 - s * 0.5 + bulge * 0.8 + sqX * 0.6 - sqY * 0.45 + st.pop * 0.14;
+    const skew = this._reducedMotion ? 0 : clamp(-st.v / 160, -9, 9);
     thumb.style.left = st.x + 'px';
+    thumb.style.top  = (LINE_THUMB_TOP + (st.y || 0)) + 'px';
     thumb.style.transform = `translate(-50%,-50%) skewX(${skew}deg) scale(${sx},${sy})`;
-    thumb.style.setProperty('--pressx', (st.pressX - st.x + 15) + 'px');
+    thumb.style.setProperty('--pressx', (st.pressX - st.x + 14) + 'px');
     thumb.style.setProperty('--pressop', ((st.downT ? 1 : 0) * (st.pressS || 0)).toFixed(2));
-    thumb.style.setProperty('--spill', spill.toFixed(2));
-    thumb.style.setProperty('--spilldir', overR ? 1 : overL ? -1 : 0);
-    if (fill) fill.style.width = Math.max(0, clamp(st.x, st.min, st.max) - st.min) + 'px';
+    thumb.style.setProperty('--spill', sqX.toFixed(2));
+    thumb.style.setProperty('--spilldir', (st.rawOver && st.x >= st.max - 0.5) ? 1 : (st.rawOver ? -1 : (st.hitX ? (st.v > 0 ? 1 : -1) : 0)));
+    thumb.style.setProperty('--spilly', sqY.toFixed(2));
+    thumb.style.setProperty(--0, ''); // noop guard
+    thumb.style.setProperty('--spilldiry', (st.y || 0) < 0 ? -1 : 1);
+    if (fill) fill.style.width = Math.max(0, st.x - st.min) + 'px';
     if (st.cont) {
-      const v = Math.round(st.cMin + (clamp(st.x, st.min, st.max) - st.min) / ((st.max - st.min) || 1) * (st.cMax - st.cMin));
+      const v = Math.round(st.cMin + (st.x - st.min) / ((st.max - st.min) || 1) * (st.cMax - st.cMin));
       if (v !== st.lastV) {
         st.lastV = v;
         const lab = document.getElementById('val-' + st.key);
@@ -772,7 +801,7 @@ export const SettingsMenu = {
         if (st.touched) {
           if (v !== st.startVal) st.changed = true;
           if (st.onLive) st.onLive(v);
-          this.markChanged();
+          this._syncDirty();
         }
       }
     }
@@ -828,6 +857,7 @@ export const SettingsMenu = {
       Settings.resetCategory(category);
       if (category === 'audio') { this.applyEngineVolumes(150); this._restartMusicWithMode(); }
       TABS.forEach((t, i) => this._rebuildPage(i));
+      this._syncDirty();
     };
   },
 
@@ -851,7 +881,8 @@ export const SettingsMenu = {
       if (!ok) return;
       await this.playUI('reset');
       Settings.reset();
-      this._saved = true;
+      this._snapshot = JSON.parse(JSON.stringify(Settings.current));
+      this._syncDirty();
       setTimeout(() => location.reload(), 500);
     };
     page.querySelector('#btn-clear-cache').onclick = async () => {
@@ -866,7 +897,6 @@ export const SettingsMenu = {
       this._cleanup();
       const reload = () => { localStorage.removeItem('woland_version'); location.reload(); };
       setTimeout(reload, 1500);
-      // чистим кэши service worker (иначе старые 404 прячут новые файлы типа Звук.wav)
       try {
         if (window.caches) {
           const keys = await caches.keys();
@@ -883,19 +913,13 @@ export const SettingsMenu = {
   },
 
   // ==================== СОХРАНЕНИЕ / МОДАЛКА ====================
-  markChanged() {
-    this.hasUnsavedChanges = true;
-    this._saved = false;
-    document.querySelector('#btn-settings-save')?.classList.add('show');
-  },
+  markChanged() { this._syncDirty(); },
   async saveSettings() {
     if (!(await this.playUI('transition'))) return;
     Settings.save();
-    this.hasUnsavedChanges = false;
-    this._saved = true;
     this._snapshot = JSON.parse(JSON.stringify(Settings.current));
+    this._syncDirty();
     this._buzz(this._canVib ? [12, 30, 18] : 14);
-    document.querySelector('#btn-settings-save')?.classList.remove('show');
   },
 
   confirmDialog({ title = 'Подтверждение', text = '', okText = 'Да', cancelText = 'Нет', danger = false, buttons = null } = {}) {
@@ -956,7 +980,7 @@ export const SettingsMenu = {
     });
   },
 
-  // ==================== КАПЛЯ КАТЕГОРИЙ ====================
+  // ==================== КАПЛЯ КАТЕГОРИЙ (360° + стены) ====================
   _initPill() {
     const bar = document.getElementById('cat-bar');
     this._measurePill();
@@ -997,10 +1021,10 @@ export const SettingsMenu = {
     const bar = document.getElementById('cat-bar');
     bar.setPointerCapture(e.pointerId);
     const rect = bar.getBoundingClientRect();
-    const x = e.clientX - rect.left;
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
     const ph = this._ph;
     ph.dragging = false; ph.moved = false;
-    ph.downX = x; ph.downT = performance.now();
+    ph.downX = x; ph.downY = y; ph.downT = performance.now();
     ph.downIdx = clamp(Math.floor((x - ph.pad) / ph.segW), 0, TABS.length - 1);
     ph.press = this._pressFrom(e, ph); ph.pressX = x;
     if (Math.abs(ph.v) > 40) ph.brakeUntil = performance.now() + BRAKE_MS;
@@ -1013,12 +1037,16 @@ export const SettingsMenu = {
     if (ph.downT === 0) return;
     const bar = document.getElementById('cat-bar');
     const rect = bar.getBoundingClientRect();
-    const x = e.clientX - rect.left;
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
     ph.press = this._pressFrom(e, ph); ph.pressX = x;
-    if (!ph.moved && Math.abs(x - ph.downX) > 8) ph.moved = true;
+    if (!ph.moved && (Math.abs(x - ph.downX) > 8 || Math.abs(y - ph.downY) > 8)) ph.moved = true;
     if (!ph.moved) return;
     ph.dragging = true; ph.brakeUntil = 0;
-    ph.target = rubber(x, ph.centers[0], ph.centers[TABS.length - 1], RUBBER);
+    ph.target = clamp(x, ph.centers[0], ph.centers[TABS.length - 1]);
+    ph.rawOver = Math.max(0, x - ph.centers[TABS.length - 1], ph.centers[0] - x);
+    const dy = y - rect.height / 2 - (ph.downY - rect.height / 2);
+    ph.yT = clamp(dy * 0.12, -PILL_WALL_Y, PILL_WALL_Y);
+    ph.wallY = Math.max(0, Math.abs(dy) - WALL_DEAD);
     this._wakePill();
   },
   _pillUp(e) {
@@ -1027,6 +1055,7 @@ export const SettingsMenu = {
     const wasDrag = ph.moved;
     const downIdx = ph.downIdx;
     ph.downT = 0; ph.dragging = false;
+    ph.rawOver = 0; ph.wallY = 0; ph.yT = 0;
     try { document.getElementById('cat-bar').releasePointerCapture(e.pointerId); } catch (_) {}
     if (!wasDrag) { this._commit(downIdx); return; }
     const idx = clamp(Math.round((ph.x - ph.pad) / ph.segW - 0.5), 0, TABS.length - 1);
@@ -1036,7 +1065,7 @@ export const SettingsMenu = {
   },
   _pillCancel() {
     const ph = this._ph;
-    ph.downT = 0; ph.dragging = false;
+    ph.downT = 0; ph.dragging = false; ph.rawOver = 0; ph.wallY = 0; ph.yT = 0;
     const i = TABS.findIndex(t => t.id === this.currentTab);
     ph.target = ph.centers[i];
     this._wakePill();
@@ -1055,16 +1084,22 @@ export const SettingsMenu = {
       const n = Math.max(1, Math.ceil(dt / (1 / 120)));
       const h = dt / n;
       for (let i = 0; i < n; i++) {
-        const a = braking ? -BRAKE_DAMP * ph.v : s.k * (ph.target - ph.x) - s.c * ph.v;
-        ph.v += a * h; ph.x += ph.v * h;
+        const a  = braking ? -BRAKE_DAMP * ph.v  : s.k * (ph.target - ph.x) - s.c * ph.v;
+        const ay = braking ? -BRAKE_DAMP * ph.vy : s.k * ((ph.yT || 0) - ph.y) - s.c * ph.vy;
+        ph.v += a * h;  ph.x += ph.v * h;
+        ph.vy += ay * h; ph.y += ph.vy * h;
       }
+      const c0 = ph.centers[0], cN = ph.centers[TABS.length - 1];
+      const atWallX = (ph.x <= c0 + 0.5 && ph.v < 0) || (ph.x >= cN - 0.5 && ph.v > 0);
+      ph.hitX = Math.max((ph.hitX || 0) * Math.exp(-6 * dt), atWallX ? Math.abs(ph.v) / 900 : 0);
       ph.pop *= Math.exp(-7 * dt);
       ph.pressS += (ph.press - (ph.pressS || 0)) * Math.min(1, dt * 12);
       ph.hold   += ((ph.downT ? 1 : 0) - (ph.hold || 0)) * Math.min(1, dt * 10);
       this._vibMove(ph, dt, document.getElementById('cat-pill'));
       this._renderPill();
-      if (!ph.dragging && Math.abs(ph.v) < 1 && Math.abs(ph.target - ph.x) < 0.25 && !ph.downT && ph.hold < 0.02) {
-        ph.x = ph.target; ph.v = 0; this._renderPill(); return;
+      if (!ph.dragging && Math.abs(ph.v) < 1 && Math.abs(ph.vy) < 1 && Math.abs(ph.target - ph.x) < 0.25 &&
+          Math.abs(ph.y) < 0.2 && !ph.downT && ph.hold < 0.02 && (ph.hitX || 0) < 0.02) {
+        ph.x = ph.target; ph.v = 0; ph.y = 0; ph.vy = 0; this._renderPill(); return;
       }
       ph.raf = requestAnimationFrame(frame);
     };
@@ -1077,23 +1112,25 @@ export const SettingsMenu = {
     if (!pill) return;
     const ph = this._ph;
     const c0 = ph.centers[0], cN = ph.centers[TABS.length - 1];
-    const overL = Math.max(0, c0 - ph.x), overR = Math.max(0, ph.x - cN);
-    const over = Math.max(overL, overR);
-    const spill = Math.min(over / 70, EDGE_SPILL_MAX);
+    const sqX = Math.min((ph.rawOver || 0) / 60 + (ph.hitX || 0), 0.45);
+    const sqY = Math.min((ph.wallY || 0) / 90 + Math.abs(ph.y || 0) / PILL_WALL_Y * 0.12, 0.4);
     let sx = 1, sy = 1, skew = 0;
     if (!this._reducedMotion) {
       const s = Math.min(Math.abs(ph.v) / STRETCH_DIV, STRETCH_MAX);
       const bulge = (ph.hold || 0) * (0.10 + (ph.pressS || 0) * 0.22);
-      sx = 1 + s - ph.pop * 0.05 + bulge + spill * 0.7;
-      sy = 1 - s * 0.55 + ph.pop * 0.14 + bulge * 0.8 - spill * 0.3;
-      skew = clamp(-ph.v / 160, -9, 9) + (overR ? 5 : overL ? -5 : 0) * spill;
-    } else { ph.x = ph.target; ph.v = 0; }
-    pill.style.transform = `translate3d(${ph.x}px,0,0) translate(-50%,-50%) skewX(${skew}deg) scale(${sx},${sy})`;
+      sx = 1 + s - ph.pop * 0.05 + bulge + sqY * 0.6 - sqX * 0.45;
+      sy = 1 - s * 0.55 + ph.pop * 0.14 + bulge * 0.8 + sqX * 0.6 - sqY * 0.45;
+      skew = clamp(-ph.v / 160, -9, 9);
+    } else { ph.x = ph.target; ph.v = 0; ph.y = 0; }
+    pill.style.transform = `translate3d(${ph.x}px, ${ph.y || 0}px, 0) translate(-50%,-50%) skewX(${skew}deg) scale(${sx},${sy})`;
     pill.style.setProperty('--pressx', (ph.pressX - ph.x + pill.offsetWidth * sx / 2) + 'px');
     pill.style.setProperty('--pressop', ((ph.downT ? 1 : 0) * (ph.pressS || 0)).toFixed(2));
-    pill.style.setProperty('--spill', spill.toFixed(2));
-    pill.style.setProperty('--spilldir', overR ? 1 : overL ? -1 : 0);
+    pill.style.setProperty('--spill', sqX.toFixed(2));
+    pill.style.setProperty('--spilldir', (ph.rawOver && ph.x >= cN - 0.5) ? 1 : (ph.rawOver ? -1 : (ph.hitX ? (ph.v > 0 ? 1 : -1) : 0)));
+    pill.style.setProperty('--spilly', sqY.toFixed(2));
+    pill.style.setProperty('--spilldiry', (ph.y || 0) < 0 ? -1 : 1);
     if (track) {
+      // энергия краёв: пружина может чуть overshoot'ить за центры — но не за пределы капсулы
       const f = clamp((ph.x - c0) / ph.segW, -0.22, TABS.length - 1 + 0.22);
       track.style.transform = `translate3d(${-f * 25}%,0,0)`;
     }
@@ -1102,10 +1139,8 @@ export const SettingsMenu = {
   // ==================== СТИЛИ ====================
   _css() { return `
     .settings-layout {
-      --gw: 235px;
       position: absolute; inset: 0; display: flex; flex-direction: column;
       background: #050308; color: #fff; overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
     .wm-fog { position: absolute; inset: -20%; pointer-events: none; opacity: .9; z-index: 0; }
     .wm-fog i { position: absolute; display: block; border-radius: 50%; will-change: transform, opacity; }
@@ -1167,7 +1202,8 @@ export const SettingsMenu = {
     .g-btn:active { transform: scale(.94); }
     .g-btn.primary { background: rgba(255,20,20,.22); border-color: rgba(255,70,70,.55); }
     .g-btn.danger { background: rgba(120,0,0,.45); border-color: rgba(255,0,0,.6); }
-    .g-btn.wide { width: 100%; max-width: var(--gw); padding: 11px 32px 11px 12px; text-align: left; font-size: 13px; }
+    /* ширина как просил: 80% (по 10% с каждой стороны) */
+    .g-btn.wide { width: 80%; padding: 10px 32px 10px 12px; text-align: left; font-size: 13px; }
 
     .save-btn {
       opacity: .35; pointer-events: none; filter: saturate(.35) brightness(.8);
@@ -1182,15 +1218,16 @@ export const SettingsMenu = {
 
     .settings-pages { position: relative; flex: 1; overflow: hidden; }
     .pages-track { display: flex; width: 400%; height: 100%; will-change: transform; }
-    .settings-page { width: 25%; height: 100%; overflow-y: auto; padding: 12px 14px 20px;
-      display: flex; flex-direction: column; align-items: center; gap: 10px;
+    .settings-page { width: 25%; height: 100%; overflow-y: auto; padding: 10px 0 18px;
+      display: flex; flex-direction: column; align-items: center; gap: 9px;
       scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.28) transparent; }
     .settings-page::-webkit-scrollbar { width: 6px; }
     .settings-page::-webkit-scrollbar-thumb { background: rgba(255,255,255,.22); border-radius: 3px; }
     .settings-page > * { flex: 0 0 auto; animation: wm-rise .18s cubic-bezier(.32,.72,0,1) both; }
     @keyframes wm-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
-    .setting-group { width: 100%; max-width: var(--gw); padding: 9px 12px; border-radius: 16px; display: flex; flex-direction: column; gap: 7px; }
+    /* панели: 80% ширины, высота ужата в ~1.7 раза, всё умещается */
+    .setting-group { width: 80%; padding: 8px 12px; border-radius: 16px; display: flex; flex-direction: column; gap: 6px; }
     .setting-group label { font-size: 13px; color: #d8d8dc; display: flex; justify-content: space-between; align-items: center; }
     .setting-group label b { color: #fff; font-weight: 600; }
 
@@ -1201,15 +1238,15 @@ export const SettingsMenu = {
     .tip-icon:hover { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.5); }
     .tip-icon.btn-tip { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); z-index: 2; }
 
-    .liq-line { position: relative; height: 48px; touch-action: none; user-select: none; -webkit-user-select: none; outline: none; }
+    .liq-line { position: relative; height: 46px; touch-action: none; user-select: none; -webkit-user-select: none; outline: none; }
     .liq-line:focus-visible .liq-track { box-shadow: 0 0 0 3px rgba(255,255,255,.25), inset 0 1px 2px rgba(0,0,0,.55); }
-    .liq-track { position: absolute; left: 18px; right: 18px; top: 34px; height: 4px; border-radius: 999px;
+    .liq-track { position: absolute; left: 18px; right: 18px; top: 32px; height: 4px; border-radius: 999px;
       background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.14);
       -webkit-backdrop-filter: blur(8px) saturate(1.4); backdrop-filter: blur(8px) saturate(1.4);
       box-shadow: inset 0 1px 2px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.12); }
-    .liq-fill { position: absolute; left: 19px; top: 35px; height: 3px; border-radius: 999px;
+    .liq-fill { position: absolute; left: 19px; top: 33px; height: 3px; border-radius: 999px;
       background: rgba(255,255,255,.65); box-shadow: 0 0 8px rgba(255,255,255,.35); pointer-events: none; }
-    .liq-thumb { position: absolute; top: 36px; left: 18px; width: 30px; height: 30px; border-radius: 50%;
+    .liq-thumb { position: absolute; top: 34px; left: 18px; width: 28px; height: 28px; border-radius: 50%;
       overflow: hidden; will-change: transform; pointer-events: none; z-index: 2;
       background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.35);
       -webkit-backdrop-filter: blur(4px) saturate(2) brightness(1.15);
@@ -1220,9 +1257,15 @@ export const SettingsMenu = {
         0 8px 20px rgba(0,0,0,.5); }
     .liq-thumb::before { content: ''; position: absolute; inset: 0; border-radius: inherit; z-index: 2;
       background: linear-gradient(180deg, rgba(255,255,255,.45), transparent 45%, rgba(255,255,255,.08)); }
+    /* горизонтальный перелив в стену */
     .liq-thumb::after { content: ''; position: absolute; top: 15%; bottom: 15%; width: calc(var(--spill,0) * 20px);
       border-radius: 50%; background: rgba(255,255,255,.28); filter: blur(3px); z-index: 1;
       left: calc(var(--spilldir,0) * -1 * var(--spill,0) * 20px); opacity: var(--spill,0); }
+    /* вертикальный перелив в стену (вверх/вниз) */
+    .liq-vspill { position: absolute; left: 15%; right: 15%; height: calc(var(--spilly,0) * 18px);
+      border-radius: 50%; background: rgba(255,255,255,.26); filter: blur(3px); z-index: 1; pointer-events: none;
+      top: calc(var(--spilldiry,1) * -1 * var(--spilly,0) * 18px + 50% - calc(var(--spilly,0) * 9px));
+      opacity: var(--spilly,0); }
     .liq-lens { position: absolute; inset: 0; border-radius: inherit; z-index: 0;
       -webkit-backdrop-filter: url(#wm-liquid); backdrop-filter: url(#wm-liquid); }
     .liq-lens::after { content: ''; position: absolute; inset: 0; border-radius: inherit;
@@ -1231,22 +1274,22 @@ export const SettingsMenu = {
       -webkit-mask: radial-gradient(closest-side, transparent 88%, #000 93%);
       mask: radial-gradient(closest-side, transparent 88%, #000 93%);
       opacity: .8; }
-    .liq-shine { position: absolute; top: 50%; left: var(--pressx,50%); width: 34px; height: 34px; z-index: 3;
+    .liq-shine { position: absolute; top: 50%; left: var(--pressx,50%); width: 32px; height: 32px; z-index: 3;
       transform: translate(-50%,-50%); border-radius: 50%;
       background: radial-gradient(circle, rgba(255,255,255,.55), transparent 65%);
       opacity: var(--pressop,0); filter: blur(2px); transition: opacity .1s ease; }
-    .liq-stop { position: absolute; top: 36px; left: calc(18px + (100% - 36px) * var(--t));
+    .liq-stop { position: absolute; top: 34px; left: calc(18px + (100% - 36px) * var(--t));
       transform: translate(-50%,-50%); background: none; border: none; cursor: pointer;
       color: rgba(255,255,255,.5); padding: 5px; transition: color .12s ease, transform .1s ease; }
     .liq-stop:active { transform: translate(-50%,-50%) scale(.9); }
     .liq-stop.on { color: #fff; }
     .liq-label { position: absolute; bottom: calc(100% + 2px); left: 50%; transform: translateX(-50%);
-      font-size: 9px; font-weight: 600; text-align: center; line-height: 1.05; white-space: nowrap; max-width: 46px;
+      font-size: 9px; font-weight: 600; text-align: center; line-height: 1.05; white-space: nowrap; max-width: 56px;
       overflow: hidden; text-overflow: ellipsis; }
     .liq-dot { display: block; width: 8px; height: 8px; border-radius: 50%; border: 2px solid currentColor; opacity: .85; }
     .liq-stop.on .liq-dot { background: currentColor; box-shadow: 0 0 8px rgba(255,255,255,.5); }
 
-    .system-actions { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: var(--gw); align-items: center; }
+    .system-actions { display: flex; flex-direction: column; gap: 12px; width: 80%; align-items: center; }
 
     .cat-bar-wrap { padding: 8px 12px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
     .cat-bar { position: relative; display: flex; height: 52px; border-radius: 999px;
@@ -1281,6 +1324,10 @@ export const SettingsMenu = {
     .pill::before { content: ''; position: absolute; top: 12%; bottom: 12%; width: calc(var(--spill,0) * 40px);
       border-radius: 50%; background: rgba(255,255,255,.3); filter: blur(4px); z-index: 3;
       left: calc(var(--spilldir,0) * -1 * var(--spill,0) * 40px); opacity: var(--spill,0); }
+    .pill-vspill { position: absolute; left: 6%; right: 6%; height: calc(var(--spilly,0) * 26px);
+      border-radius: 50%; background: rgba(255,255,255,.28); filter: blur(4px); z-index: 3; pointer-events: none;
+      top: calc(50% + var(--spilldiry,1) * -1 * (50% + var(--spilly,0) * 13px));
+      opacity: var(--spilly,0); }
     .pill-press { position: absolute; top: 50%; left: var(--pressx,50%); width: 46px; height: 46px;
       transform: translate(-50%,-50%); border-radius: 50%; pointer-events: none;
       background: radial-gradient(circle, rgba(255,255,255,.5), transparent 65%);

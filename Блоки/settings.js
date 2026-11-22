@@ -22,7 +22,7 @@ const BRAKE_MS = 80, BRAKE_DAMP = 55;
 const STRETCH_DIV = 2200, STRETCH_MAX = 0.42;
 const RUBBER = 0.35;
 const EDGE_SPILL_MAX = 0.5;
-const LINE_PAD = 26;
+const LINE_PAD = 18;
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rubber = (v, min, max, k) => v < min ? min - (min - v) * k : v > max ? max + (v - max) * k : v;
@@ -54,7 +54,7 @@ export const SettingsMenu = {
   _tipHandler: null, _tipHost: null, _dialogOpen: false, _pendingDemo: null,
   _snapshot: null, _saved: true, _canVib: false,
   _liq: new Map(), _liqRaf: null,
-  _ph: { x:0, v:0, target:0, dragging:false, pop:0, press:0, pressX:0, brakeUntil:0,
+  _ph: { x:0, v:0, target:0, dragging:false, pop:0, press:0, pressS:0, hold:0, pressX:0, brakeUntil:0,
          vibAcc:0, lastVib:0, touchF:0,
          lastIdx:0, raf:null, lastT:0, centers:[], segW:0, pad:5, downX:0, downT:0, moved:false, downIdx:0 },
 
@@ -73,7 +73,7 @@ export const SettingsMenu = {
     st.vibAcc = (st.vibAcc || 0) + speed * dt;
     const now = performance.now();
     if (st.vibAcc > 16 && now - (st.lastVib || 0) > 45) {
-      try { navigator.vibrate(Math.round(clamp(4 + (st.press ?? 0.5) * 6 + speed / 500, 4, 16))); } catch (e) {}
+      try { navigator.vibrate(Math.round(clamp(4 + (st.pressS ?? 0.5) * 6 + speed / 500, 4, 16))); } catch (e) {}
       st.lastVib = now; st.vibAcc = 0;
     }
   },
@@ -83,6 +83,13 @@ export const SettingsMenu = {
     const f = st?.touchF || 0;
     if (f > 0.01) return clamp(f * 1.4, 0, 1);
     return 0.35;
+  },
+  // звук релиза: мимо замка, всегда слышен
+  _playFree(name) {
+    const eng = window.SoundsEngine;
+    if (!eng) return;
+    console.info('[Settings] release-sound:', name);
+    eng.play(name, { type: 'effects', dolby: false });
   },
 
   // ==================== ВХОД / ВЫХОД ====================
@@ -150,7 +157,7 @@ export const SettingsMenu = {
     this._musicSource = null;
   },
 
-  // ==================== МУЗЫКА: старт без ожидания очереди загрузчика ====================
+  // ==================== МУЗЫКА / ДЕМО ====================
   _ensureMusicBuffer(eng) {
     if (eng.loadedBuffers[MUSIC_ID] || this._musicLoading) return;
     this._musicLoading = (async () => {
@@ -159,18 +166,17 @@ export const SettingsMenu = {
         if (!res.ok) throw new Error(res.status);
         const buf = await eng.ctx.decodeAudioData(await res.arrayBuffer());
         if (!eng.loadedBuffers[MUSIC_ID]) eng.loadedBuffers[MUSIC_ID] = buf;
-      } catch (e) { /* догрузит общий загрузчик */ }
+      } catch (e) {}
       finally { this._musicLoading = null; }
     })();
   },
-
   async _startMusic() {
     const eng = window.SoundsEngine;
     if (!eng || this._musicSource) return;
     const token = ++this._musicToken;
     const t0 = performance.now();
     this._ensureMusicBuffer(eng);
-    for (let i = 0; i < 600 && this._active; i++) {          // стартуем в момент готовности, а не через N сек
+    for (let i = 0; i < 600 && this._active; i++) {
       if (eng.loadedBuffers[MUSIC_ID]) break;
       await new Promise(r => setTimeout(r, 80));
     }
@@ -185,31 +191,46 @@ export const SettingsMenu = {
       this._fadeBus('music', this._musicBusTarget(), 700);
     } catch (e) { console.warn('[Settings] ошибка музыки:', e); }
   },
-
   _tryMusicRetry() {
-    if (this._musicRetry && this._active && !this._musicSource) {
-      this._musicRetry = false;
-      this._startMusic();
-    }
+    if (this._musicRetry && this._active && !this._musicSource) { this._musicRetry = false; this._startMusic(); }
   },
-
   _stopDemo() {
     if (this._demoSource && window.SoundsEngine) { try { window.SoundsEngine.stop(this._demoSource); } catch (e) {} }
     this._demoSource = null;
   },
-  async _preloadDemo() {
+  // надёжная загрузка демо: default → no-store (лечит закэшированный 404 от SW)
+  async _loadDemoBuffer() {
     const eng = window.SoundsEngine;
-    if (eng && !eng.loadedBuffers[DEMO_ID]) {
+    if (!eng || eng.loadedBuffers[DEMO_ID]) return true;
+    const url = new URL(DEMO_PATH, document.baseURI).href;
+    for (const mode of ['default', 'no-store']) {
       try {
-        await eng.loadSound(DEMO_ID, new URL(DEMO_PATH, document.baseURI).href);
-        if (this._pendingDemo) { const m = this._pendingDemo; this._pendingDemo = null; this._playDemoForMode(m); }
-      } catch (e) {}
+        const res = await fetch(url, mode === 'no-store' ? { cache: 'no-store' } : undefined);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const buf = await eng.ctx.decodeAudioData(await res.arrayBuffer());
+        if (buf) { eng.loadedBuffers[DEMO_ID] = buf; console.info('[Settings] демо загружено (' + mode + ')'); return true; }
+      } catch (e) { console.warn('[Settings] демо fetch (' + mode + '):', e); }
+    }
+    return false;
+  },
+  async _preloadDemo() {
+    if (await this._loadDemoBuffer()) {
+      if (this._pendingDemo) { const m = this._pendingDemo; this._pendingDemo = null; this._playDemoForMode(m); }
     }
   },
   _playDemoForMode(mode) {
     const eng = window.SoundsEngine;
     if (!eng) return;
-    if (!eng.loadedBuffers[DEMO_ID]) { this._pendingDemo = mode; return; }
+    if (!eng.loadedBuffers[DEMO_ID]) {
+      this._pendingDemo = mode;
+      this._loadDemoBuffer().then(ok => {
+        const m = this._pendingDemo;
+        this._pendingDemo = null;
+        if (ok && m) this._playDemoForMode(m);
+        else if (!ok) { console.warn('[Settings] Звук.wav недоступен — фолбэк btn_select'); this._playFree('btn_select'); }
+      });
+      return;
+    }
     this._stopDemo();
     const opts = { type: 'effects', modeOverride: mode, volume: 1 };
     if (mode === 'stereo') opts.channelGains = [0.4, 0.6];
@@ -394,9 +415,9 @@ export const SettingsMenu = {
           title: 'Несохранённые изменения',
           text: 'Что сделать с изменениями перед выходом?',
           buttons: [
-            { id: 'save',    label: 'Сохранить и выйти',   cls: 'primary' },
-            { id: 'discard', label: 'Выйти не сохраняя',   cls: 'ghost' },
-            { id: 'stay',    label: 'Отмена',              cls: 'ghost' }
+            { id: 'save',    label: 'Сохранить и выйти', cls: 'primary' },
+            { id: 'discard', label: 'Выйти не сохраняя', cls: 'ghost' },
+            { id: 'stay',    label: 'Отмена',            cls: 'ghost' }
           ]
         });
         if (r === 'stay') return;
@@ -451,7 +472,6 @@ export const SettingsMenu = {
     this._wakePill();
     this._commit(idx);
   },
-
   _commit(idx) {
     const cat = TABS[idx].id;
     if (cat !== this.currentTab) {
@@ -460,7 +480,6 @@ export const SettingsMenu = {
       this._buzz(10);
     }
   },
-
   _updateTabsAria() {
     document.querySelectorAll('#cat-bar .cat-btn').forEach(btn => {
       const on = btn.dataset.cat === this.currentTab;
@@ -469,7 +488,6 @@ export const SettingsMenu = {
       btn.tabIndex = on ? 0 : -1;
     });
   },
-
   _pruneLiq() { this._liq.forEach((st, el) => { if (!el.isConnected) this._liq.delete(el); }); },
   _rebuildPage(idx) {
     const track = document.getElementById('pages-track');
@@ -533,7 +551,7 @@ export const SettingsMenu = {
       cMax: cont ? parseFloat(line.dataset.max) : 150,
       idx: parseInt(line.dataset.idx, 10) || 0,
       x: 0, v: 0, target: 0, dragging: false, grab: false, brakeUntil: 0,
-      press: 0, pressX: 0, downT: 0, downX: 0, moved: false, pop: 0, lastStop: -1,
+      press: 0, pressS: 0, hold: 0, pressX: 0, downT: 0, downX: 0, moved: false, pop: 0, lastStop: -1,
       vibAcc: 0, lastVib: 0, touchF: 0, touched: false,
       startVal: null, changed: false, lastV: null,
       min: 0, max: 0, pos: [], width: 0, measured: false,
@@ -570,10 +588,8 @@ export const SettingsMenu = {
       st.press = this._pressFrom(e, st); st.pressX = x;
       st.startVal = cont ? st.lastV : st.idx;
       st.grab = Math.abs(x - st.x) < 30;
-      if (st.grab) {
-        if (Math.abs(st.v) > 40) st.brakeUntil = performance.now() + BRAKE_MS;
-      } else {
-        if (Math.abs(st.v) > 40) st.brakeUntil = performance.now() + BRAKE_MS;
+      if (Math.abs(st.v) > 40) st.brakeUntil = performance.now() + BRAKE_MS;
+      if (!st.grab) {
         if (cont) st.target = clamp(x, st.min, st.max);
         else {
           const i = clamp(Math.round((x - st.min) / ((st.max - st.min) / (n - 1 || 1))), 0, n - 1);
@@ -605,7 +621,7 @@ export const SettingsMenu = {
       st.downT = 0; st.dragging = false; st.lastStop = -1;
       try { line.releasePointerCapture(e.pointerId); } catch (_) {}
       if (wasDrag) {
-        if (cont) { st.target = clamp(st.x, st.min, st.max); }
+        if (cont) st.target = clamp(st.x, st.min, st.max);
         else {
           const i = clamp(Math.round((st.x - st.min) / ((st.max - st.min) / (n - 1 || 1))), 0, n - 1);
           st.target = st.pos[i];
@@ -660,12 +676,15 @@ export const SettingsMenu = {
     if (st.idx !== i) { st.idx = i; st.changed = true; }
   },
 
+  // релиз-звук:
+  //   audioMode → Звук.wav (предпросмотр режима)
+  //   всё остальное → btn_select (звук выбора)
   _liqRelease(st) {
     const thumb = st.el.querySelector('.liq-thumb');
     if (st.key === 'audioMode') {
       const val = st.el.querySelectorAll('.liq-stop')[st.idx]?.dataset.val;
       if (!val) return;
-      this._playDemoForMode(val);                       // предпросмотр вместо звука выбора
+      this._playDemoForMode(val);
       this._buzz(this._canVib ? [10, 30, 14] : 10, thumb);
       if (st.changed && Settings.current[st.key] !== val) {
         Settings.set(st.key, val);
@@ -684,7 +703,7 @@ export const SettingsMenu = {
         if (st.onRelease) st.onRelease(val);
       }
     }
-    if (!this.isLocked()) this.playUI('btn_select');    // звук выбора на отпуск
+    this._playFree('btn_select');
     this._buzz(this._canVib ? [8, 24, 10] : 8, thumb);
     st.changed = false;
   },
@@ -709,9 +728,11 @@ export const SettingsMenu = {
           st.v += a * h; st.x += st.v * h;
         }
         st.pop *= Math.exp(-7 * dt);
+        st.pressS += (st.press - (st.pressS || 0)) * Math.min(1, dt * 12);
+        st.hold   += ((st.downT ? 1 : 0) - (st.hold || 0)) * Math.min(1, dt * 10);
         this._vibMove(st, dt, st.el.querySelector('.liq-thumb'));
         this._renderLiq(st);
-        if (st.dragging || Math.abs(st.v) > 1 || Math.abs(st.target - st.x) > 0.25 || st.downT) any = true;
+        if (st.dragging || Math.abs(st.v) > 1 || Math.abs(st.target - st.x) > 0.25 || st.downT || st.hold > 0.02) any = true;
       });
       if (any) this._liqRaf = requestAnimationFrame(tick);
     };
@@ -730,15 +751,15 @@ export const SettingsMenu = {
     let sx = 1, sy = 1, skew = 0;
     if (!this._reducedMotion) {
       const s = Math.min(Math.abs(st.v) / STRETCH_DIV, STRETCH_MAX);
-      const bulge = st.press * 0.3;
+      const bulge = (st.hold || 0) * (0.10 + (st.pressS || 0) * 0.22);
       sx = 1 + s + bulge + spill * 0.8 - st.pop * 0.05;
-      sy = 1 - s * 0.5 + bulge * 0.5 - spill * 0.35 + st.pop * 0.14;
+      sy = 1 - s * 0.5 + bulge * 0.8 - spill * 0.35 + st.pop * 0.14;
       skew = clamp(-st.v / 160, -9, 9) + (overR ? 6 : overL ? -6 : 0) * spill;
     } else { st.x = st.target; st.v = 0; }
     thumb.style.left = st.x + 'px';
     thumb.style.transform = `translate(-50%,-50%) skewX(${skew}deg) scale(${sx},${sy})`;
-    thumb.style.setProperty('--pressx', (st.pressX - st.x + 17) + 'px');
-    thumb.style.setProperty('--pressop', (st.downT ? st.press : 0).toFixed(2));
+    thumb.style.setProperty('--pressx', (st.pressX - st.x + 15) + 'px');
+    thumb.style.setProperty('--pressop', ((st.downT ? 1 : 0) * (st.pressS || 0)).toFixed(2));
     thumb.style.setProperty('--spill', spill.toFixed(2));
     thumb.style.setProperty('--spilldir', overR ? 1 : overL ? -1 : 0);
     if (fill) fill.style.width = Math.max(0, clamp(st.x, st.min, st.max) - st.min) + 'px';
@@ -761,14 +782,14 @@ export const SettingsMenu = {
   _pageAudio(page) {
     const c = Settings.current;
     page.innerHTML = `
+      ${this._lineHTML('audioMode', 'Режим звука', [['mono','Моно'],['stereo','Стерео'],['dolby','Dolby Vertical']], c.audioMode, 'audioMode')}
       ${this._sliderHTML('masterVol', 'Общая громкость', 0, 150, c.masterVolume, 'masterVol')}
       ${this._sliderHTML('effectsVol', 'Громкость эффектов', 0, 150, c.effectsVolume, 'effectsVol')}
-      ${this._lineHTML('audioMode', 'Режим звука', [['mono','Моно'],['stereo','Стерео'],['dolby','Dolby Vertical']], c.audioMode, 'audioMode')}
       <button id="btn-recommended" class="g-btn ghost wide">Рекомендуемые значения</button>
     `;
+    this._bindLine(page, 'audioMode', 'audioMode', { onRelease: () => this._restartMusicWithMode() });
     this._bindLine(page, 'masterVol', 'masterVolume', { onLive: (v) => { Settings.set('masterVolume', v); this._fadeBus('music', this._musicBusTarget(), 60); } });
     this._bindLine(page, 'effectsVol', 'effectsVolume', { onLive: (v) => { Settings.set('effectsVolume', v); this._fadeBus('effects', this._fxBusTarget(), 60); } });
-    this._bindLine(page, 'audioMode', 'audioMode', { onRelease: () => this._restartMusicWithMode() });
     this._bindRecommended(page, 'audio', 'Сброс звука', 'Вернуть рекомендуемые настройки звука?');
   },
 
@@ -844,7 +865,16 @@ export const SettingsMenu = {
       await this._stopMusic(200);
       this._cleanup();
       const reload = () => { localStorage.removeItem('woland_version'); location.reload(); };
-      setTimeout(reload, 1200);
+      setTimeout(reload, 1500);
+      // чистим кэши service worker (иначе старые 404 прячут новые файлы типа Звук.wav)
+      try {
+        if (window.caches) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(k => caches.delete(k)));
+        }
+        const reg = await navigator.serviceWorker?.getRegistration();
+        await reg?.update?.();
+      } catch (e) { console.warn('[Settings] purge caches:', e); }
       try {
         const req = indexedDB.deleteDatabase('woland_db');
         req.onsuccess = req.onerror = req.onblocked = reload;
@@ -876,6 +906,7 @@ export const SettingsMenu = {
       { id: false, label: cancelText, cls: 'ghost' },
       { id: true,  label: okText,     cls: danger ? 'danger' : 'primary' }
     ];
+    const enterId = buttons ? buttons[0].id : true;
     return new Promise(resolve => {
       const host = document.querySelector('.settings-layout') || document.body;
       const overlay = document.createElement('div');
@@ -905,7 +936,7 @@ export const SettingsMenu = {
       const onKey = (e) => {
         if (!overlay.isConnected) { document.removeEventListener('keydown', onKey); return; }
         if (e.key === 'Escape') { e.preventDefault(); close(btns.length > 2 ? 'stay' : false, 'btn_back'); }
-        if (e.key === 'Enter')  { e.preventDefault(); close(btns[0].id, 'btn_select'); }
+        if (e.key === 'Enter')  { e.preventDefault(); close(enterId, 'btn_select'); }
         if (e.key === 'Tab') {
           e.preventDefault();
           const all = [...overlay.querySelectorAll('.wm-b')];
@@ -917,7 +948,7 @@ export const SettingsMenu = {
       overlay.querySelectorAll('.wm-b').forEach(b => {
         b.onclick = () => {
           const def = btns[parseInt(b.dataset.i, 10)];
-          close(def.id, def.id === 'discard' || def.id === false ? 'btn_back' : 'btn_select');
+          close(def.id, (def.id === 'discard' || def.id === false) ? 'btn_back' : 'btn_select');
         };
       });
       overlay.onclick = (e) => { if (e.target === overlay) close(btns.length > 2 ? 'stay' : false, 'btn_back'); };
@@ -1028,9 +1059,11 @@ export const SettingsMenu = {
         ph.v += a * h; ph.x += ph.v * h;
       }
       ph.pop *= Math.exp(-7 * dt);
+      ph.pressS += (ph.press - (ph.pressS || 0)) * Math.min(1, dt * 12);
+      ph.hold   += ((ph.downT ? 1 : 0) - (ph.hold || 0)) * Math.min(1, dt * 10);
       this._vibMove(ph, dt, document.getElementById('cat-pill'));
       this._renderPill();
-      if (!ph.dragging && Math.abs(ph.v) < 1 && Math.abs(ph.target - ph.x) < 0.25 && !ph.downT) {
+      if (!ph.dragging && Math.abs(ph.v) < 1 && Math.abs(ph.target - ph.x) < 0.25 && !ph.downT && ph.hold < 0.02) {
         ph.x = ph.target; ph.v = 0; this._renderPill(); return;
       }
       ph.raf = requestAnimationFrame(frame);
@@ -1050,14 +1083,14 @@ export const SettingsMenu = {
     let sx = 1, sy = 1, skew = 0;
     if (!this._reducedMotion) {
       const s = Math.min(Math.abs(ph.v) / STRETCH_DIV, STRETCH_MAX);
-      const bulge = ph.press * 0.3;
+      const bulge = (ph.hold || 0) * (0.10 + (ph.pressS || 0) * 0.22);
       sx = 1 + s - ph.pop * 0.05 + bulge + spill * 0.7;
-      sy = 1 - s * 0.55 + ph.pop * 0.14 + bulge * 0.5 - spill * 0.3;
+      sy = 1 - s * 0.55 + ph.pop * 0.14 + bulge * 0.8 - spill * 0.3;
       skew = clamp(-ph.v / 160, -9, 9) + (overR ? 5 : overL ? -5 : 0) * spill;
     } else { ph.x = ph.target; ph.v = 0; }
     pill.style.transform = `translate3d(${ph.x}px,0,0) translate(-50%,-50%) skewX(${skew}deg) scale(${sx},${sy})`;
     pill.style.setProperty('--pressx', (ph.pressX - ph.x + pill.offsetWidth * sx / 2) + 'px');
-    pill.style.setProperty('--pressop', (ph.downT ? ph.press : 0).toFixed(2));
+    pill.style.setProperty('--pressop', ((ph.downT ? 1 : 0) * (ph.pressS || 0)).toFixed(2));
     pill.style.setProperty('--spill', spill.toFixed(2));
     pill.style.setProperty('--spilldir', overR ? 1 : overL ? -1 : 0);
     if (track) {
@@ -1069,24 +1102,29 @@ export const SettingsMenu = {
   // ==================== СТИЛИ ====================
   _css() { return `
     .settings-layout {
+      --gw: 235px;
       position: absolute; inset: 0; display: flex; flex-direction: column;
       background: #050308; color: #fff; overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
-    /* анимированный туман: синий / тёмно-синий / фиолетовый / почти чёрный */
-    .wm-fog { position: absolute; inset: -20%; pointer-events: none; filter: blur(60px); opacity: .85; z-index: 0; }
-    .wm-fog i { position: absolute; display: block; border-radius: 50%; will-change: transform; }
-    .wm-fog i:nth-child(1) { width: 58%; height: 52%; left: 0%; top: 4%;
-      background: radial-gradient(circle, rgba(30,64,168,.42), transparent 65%); animation: fog1 26s ease-in-out infinite alternate; }
-    .wm-fog i:nth-child(2) { width: 52%; height: 48%; right: 0%; top: 28%;
-      background: radial-gradient(circle, rgba(12,22,74,.46), transparent 65%); animation: fog2 31s ease-in-out infinite alternate; }
-    .wm-fog i:nth-child(3) { width: 66%; height: 52%; left: 10%; bottom: -6%;
-      background: radial-gradient(circle, rgba(84,32,148,.36), transparent 70%); animation: fog3 23s ease-in-out infinite alternate; }
-    .wm-fog i:nth-child(4) { width: 44%; height: 44%; left: 38%; top: 36%;
-      background: radial-gradient(circle, rgba(20,12,46,.5), transparent 70%); animation: fog1 19s ease-in-out infinite alternate-reverse; }
-    @keyframes fog1 { to { transform: translate3d(6%,4%,0) scale(1.12); } }
-    @keyframes fog2 { to { transform: translate3d(-7%,5%,0) scale(1.08); } }
-    @keyframes fog3 { to { transform: translate3d(4%,-5%,0) scale(1.15); } }
+    .wm-fog { position: absolute; inset: -20%; pointer-events: none; opacity: .9; z-index: 0; }
+    .wm-fog i { position: absolute; display: block; border-radius: 50%; will-change: transform, opacity; }
+    .wm-fog i:nth-child(1) { width: 62%; height: 58%; left: -2%; top: 2%;
+      background: radial-gradient(closest-side, rgba(30,64,168,.5), rgba(30,64,168,.2) 45%, transparent 74%);
+      animation: fog1 26s ease-in-out infinite alternate; }
+    .wm-fog i:nth-child(2) { width: 56%; height: 52%; right: -2%; top: 26%;
+      background: radial-gradient(closest-side, rgba(12,22,74,.55), rgba(12,22,74,.22) 45%, transparent 74%);
+      animation: fog2 31s ease-in-out infinite alternate; }
+    .wm-fog i:nth-child(3) { width: 70%; height: 58%; left: 8%; bottom: -8%;
+      background: radial-gradient(closest-side, rgba(84,32,148,.44), rgba(84,32,148,.18) 45%, transparent 74%);
+      animation: fog3 23s ease-in-out infinite alternate; }
+    .wm-fog i:nth-child(4) { width: 46%; height: 46%; left: 36%; top: 34%;
+      background: radial-gradient(closest-side, rgba(20,12,46,.6), rgba(20,12,46,.25) 45%, transparent 74%);
+      animation: fog4 19s ease-in-out infinite alternate; }
+    @keyframes fog1 { 0% { opacity:.75; } 50% { opacity:.95; } 100% { transform: translate3d(6%,4%,0) scale(1.12); opacity:.8; } }
+    @keyframes fog2 { 0% { opacity:.85; } 50% { opacity:.65; } 100% { transform: translate3d(-7%,5%,0) scale(1.08); opacity:.9; } }
+    @keyframes fog3 { 0% { opacity:.7; } 50% { opacity:.95; } 100% { transform: translate3d(4%,-5%,0) scale(1.15); opacity:.75; } }
+    @keyframes fog4 { 0% { opacity:.55; } 50% { opacity:.85; } 100% { transform: translate3d(-5%,6%,0) scale(1.1); opacity:.6; } }
     .settings-layout::after {
       content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .05; z-index: 0;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -1129,15 +1167,17 @@ export const SettingsMenu = {
     .g-btn:active { transform: scale(.94); }
     .g-btn.primary { background: rgba(255,20,20,.22); border-color: rgba(255,70,70,.55); }
     .g-btn.danger { background: rgba(120,0,0,.45); border-color: rgba(255,0,0,.6); }
-    .g-btn.wide { width: 100%; max-width: 400px; padding: 12px 36px 12px 14px; text-align: left; }
+    .g-btn.wide { width: 100%; max-width: var(--gw); padding: 11px 32px 11px 12px; text-align: left; font-size: 13px; }
 
-    /* Сохранить: всегда видна. Полупрозрачная = неактивна (без анимаций), красная = активна */
-    .save-btn { opacity: .35; pointer-events: none; filter: saturate(.35) brightness(.8); transition: none; }
+    .save-btn {
+      opacity: .35; pointer-events: none; filter: saturate(.35) brightness(.8);
+      transition: opacity .25s ease, filter .25s ease, background .25s ease,
+                  border-color .25s ease, box-shadow .25s ease, transform .25s ease;
+    }
     .save-btn.show {
       opacity: 1; pointer-events: auto; filter: none;
       background: rgba(255,20,20,.28); border-color: rgba(255,80,80,.75);
       box-shadow: 0 0 18px rgba(255,0,0,.28), inset 0 1px 0 rgba(255,255,255,.25);
-      transition: transform .1s cubic-bezier(.34,1.56,.64,1), background .12s ease, border-color .12s ease, opacity .12s ease;
     }
 
     .settings-pages { position: relative; flex: 1; overflow: hidden; }
@@ -1150,53 +1190,63 @@ export const SettingsMenu = {
     .settings-page > * { flex: 0 0 auto; animation: wm-rise .18s cubic-bezier(.32,.72,0,1) both; }
     @keyframes wm-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
-    .setting-group { width: 100%; max-width: 400px; padding: 10px 14px; border-radius: 16px; display: flex; flex-direction: column; gap: 8px; }
-    .setting-group label { font-size: 14px; color: #d8d8dc; display: flex; justify-content: space-between; align-items: center; }
+    .setting-group { width: 100%; max-width: var(--gw); padding: 9px 12px; border-radius: 16px; display: flex; flex-direction: column; gap: 7px; }
+    .setting-group label { font-size: 13px; color: #d8d8dc; display: flex; justify-content: space-between; align-items: center; }
     .setting-group label b { color: #fff; font-weight: 600; }
 
-    .tip-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
-      border-radius: 50%; font-size: 11px; font-weight: 700; background: rgba(255,255,255,.07);
+    .tip-icon { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px;
+      border-radius: 50%; font-size: 10px; font-weight: 700; background: rgba(255,255,255,.07);
       border: 1px solid rgba(255,255,255,.22); color: rgba(255,255,255,.8); cursor: help; flex-shrink: 0;
       transition: background .12s ease, border-color .12s ease, transform .1s ease; }
     .tip-icon:hover { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.5); }
-    .tip-icon.btn-tip { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); z-index: 2; }
+    .tip-icon.btn-tip { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); z-index: 2; }
 
-    .liq-line { position: relative; height: 54px; touch-action: none; user-select: none; -webkit-user-select: none; outline: none; }
+    .liq-line { position: relative; height: 48px; touch-action: none; user-select: none; -webkit-user-select: none; outline: none; }
     .liq-line:focus-visible .liq-track { box-shadow: 0 0 0 3px rgba(255,255,255,.25), inset 0 1px 2px rgba(0,0,0,.55); }
-    .liq-track { position: absolute; left: 26px; right: 26px; top: 38px; height: 5px; border-radius: 999px;
+    .liq-track { position: absolute; left: 18px; right: 18px; top: 34px; height: 4px; border-radius: 999px;
       background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.14);
       -webkit-backdrop-filter: blur(8px) saturate(1.4); backdrop-filter: blur(8px) saturate(1.4);
       box-shadow: inset 0 1px 2px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.12); }
-    .liq-fill { position: absolute; left: 27px; top: 39px; height: 4px; border-radius: 999px;
+    .liq-fill { position: absolute; left: 19px; top: 35px; height: 3px; border-radius: 999px;
       background: rgba(255,255,255,.65); box-shadow: 0 0 8px rgba(255,255,255,.35); pointer-events: none; }
-    .liq-thumb { position: absolute; top: 40px; left: 26px; width: 34px; height: 34px; border-radius: 50%;
+    .liq-thumb { position: absolute; top: 36px; left: 18px; width: 30px; height: 30px; border-radius: 50%;
       overflow: hidden; will-change: transform; pointer-events: none; z-index: 2;
       background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.35);
-      -webkit-backdrop-filter: blur(4px) saturate(1.8) brightness(1.12);
-      backdrop-filter: blur(4px) saturate(1.8) brightness(1.12);
-      box-shadow: inset 0 2px 2px rgba(255,255,255,.5), inset 0 -2px 3px rgba(255,255,255,.12), 0 8px 20px rgba(0,0,0,.5); }
+      -webkit-backdrop-filter: blur(4px) saturate(2) brightness(1.15);
+      backdrop-filter: blur(4px) saturate(2) brightness(1.15);
+      box-shadow:
+        inset 0 2px 2px rgba(255,255,255,.5), inset 0 -2px 3px rgba(255,255,255,.12),
+        inset 1px 0 0 rgba(120,220,255,.22), inset -1px 0 0 rgba(255,120,220,.2),
+        0 8px 20px rgba(0,0,0,.5); }
     .liq-thumb::before { content: ''; position: absolute; inset: 0; border-radius: inherit; z-index: 2;
       background: linear-gradient(180deg, rgba(255,255,255,.45), transparent 45%, rgba(255,255,255,.08)); }
-    .liq-thumb::after { content: ''; position: absolute; top: 15%; bottom: 15%; width: calc(var(--spill,0) * 24px);
+    .liq-thumb::after { content: ''; position: absolute; top: 15%; bottom: 15%; width: calc(var(--spill,0) * 20px);
       border-radius: 50%; background: rgba(255,255,255,.28); filter: blur(3px); z-index: 1;
-      left: calc(var(--spilldir,0) * -1 * var(--spill,0) * 24px); opacity: var(--spill,0); }
+      left: calc(var(--spilldir,0) * -1 * var(--spill,0) * 20px); opacity: var(--spill,0); }
     .liq-lens { position: absolute; inset: 0; border-radius: inherit; z-index: 0;
       -webkit-backdrop-filter: url(#wm-liquid); backdrop-filter: url(#wm-liquid); }
-    .liq-shine { position: absolute; top: 50%; left: var(--pressx,50%); width: 38px; height: 38px; z-index: 3;
+    .liq-lens::after { content: ''; position: absolute; inset: 0; border-radius: inherit;
+      background: conic-gradient(from 210deg, transparent 0 12%, rgba(140,220,255,.5) 22%, rgba(255,255,255,.65) 30%,
+        rgba(255,170,230,.45) 40%, transparent 52% 62%, rgba(160,255,220,.35) 74%, rgba(255,255,255,.5) 84%, transparent 94%);
+      -webkit-mask: radial-gradient(closest-side, transparent 88%, #000 93%);
+      mask: radial-gradient(closest-side, transparent 88%, #000 93%);
+      opacity: .8; }
+    .liq-shine { position: absolute; top: 50%; left: var(--pressx,50%); width: 34px; height: 34px; z-index: 3;
       transform: translate(-50%,-50%); border-radius: 50%;
       background: radial-gradient(circle, rgba(255,255,255,.55), transparent 65%);
       opacity: var(--pressop,0); filter: blur(2px); transition: opacity .1s ease; }
-    .liq-stop { position: absolute; top: 40px; left: calc(26px + (100% - 52px) * var(--t));
+    .liq-stop { position: absolute; top: 36px; left: calc(18px + (100% - 36px) * var(--t));
       transform: translate(-50%,-50%); background: none; border: none; cursor: pointer;
-      color: rgba(255,255,255,.5); padding: 6px; transition: color .12s ease, transform .1s ease; }
+      color: rgba(255,255,255,.5); padding: 5px; transition: color .12s ease, transform .1s ease; }
     .liq-stop:active { transform: translate(-50%,-50%) scale(.9); }
     .liq-stop.on { color: #fff; }
-    .liq-label { position: absolute; bottom: calc(100% + 3px); left: 50%; transform: translateX(-50%);
-      font-size: 10px; font-weight: 600; text-align: center; line-height: 1.1; white-space: nowrap; }
-    .liq-dot { display: block; width: 9px; height: 9px; border-radius: 50%; border: 2px solid currentColor; opacity: .85; }
+    .liq-label { position: absolute; bottom: calc(100% + 2px); left: 50%; transform: translateX(-50%);
+      font-size: 9px; font-weight: 600; text-align: center; line-height: 1.05; white-space: nowrap; max-width: 46px;
+      overflow: hidden; text-overflow: ellipsis; }
+    .liq-dot { display: block; width: 8px; height: 8px; border-radius: 50%; border: 2px solid currentColor; opacity: .85; }
     .liq-stop.on .liq-dot { background: currentColor; box-shadow: 0 0 8px rgba(255,255,255,.5); }
 
-    .system-actions { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 400px; align-items: center; }
+    .system-actions { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: var(--gw); align-items: center; }
 
     .cat-bar-wrap { padding: 8px 12px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
     .cat-bar { position: relative; display: flex; height: 52px; border-radius: 999px;
@@ -1214,9 +1264,18 @@ export const SettingsMenu = {
       background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.30);
       -webkit-backdrop-filter: blur(3px) saturate(1.8) brightness(1.1);
       backdrop-filter: blur(3px) saturate(1.8) brightness(1.1);
-      box-shadow: inset 0 2px 2px rgba(255,255,255,.5), inset 0 -2px 3px rgba(255,255,255,.12), 0 8px 20px rgba(0,0,0,.45); }
+      box-shadow:
+        inset 0 2px 2px rgba(255,255,255,.5), inset 0 -2px 3px rgba(255,255,255,.12),
+        inset 1px 0 0 rgba(120,220,255,.2), inset -1px 0 0 rgba(255,120,220,.18),
+        0 8px 20px rgba(0,0,0,.45); }
     .pill-lens { position: absolute; inset: 0; border-radius: inherit;
       -webkit-backdrop-filter: url(#wm-liquid); backdrop-filter: url(#wm-liquid); }
+    .pill-lens::after { content: ''; position: absolute; inset: 0; border-radius: inherit;
+      background: conic-gradient(from 210deg, transparent 0 10%, rgba(140,220,255,.4) 20%, rgba(255,255,255,.5) 28%,
+        rgba(255,170,230,.35) 38%, transparent 50% 62%, rgba(160,255,220,.3) 74%, rgba(255,255,255,.4) 84%, transparent 94%);
+      -webkit-mask: radial-gradient(closest-side, transparent 86%, #000 93%);
+      mask: radial-gradient(closest-side, transparent 86%, #000 93%);
+      opacity: .8; }
     .pill::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
       background: linear-gradient(180deg, rgba(255,255,255,.35), transparent 42%, rgba(255,255,255,.06)); }
     .pill::before { content: ''; position: absolute; top: 12%; bottom: 12%; width: calc(var(--spill,0) * 40px);

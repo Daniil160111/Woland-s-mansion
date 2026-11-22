@@ -18,7 +18,8 @@ export const Menu = {
   isTransitioning: false,
   
   currentScreen: 'main', 
-  gameMode: null, 
+  gameMode: null,
+  duck: 1,  // 1 = титульный экран, 0.5 = меню (кнопки/гром тише)
   
   buttonsConfig: {
     main: [
@@ -55,6 +56,7 @@ export const Menu = {
     this.currentState = mode;
     this.isTransitioning = false;
     this.currentScreen = 'main';
+    this.duck = 1;  // начинаем с полной громкости на титульном экране
 
     const container = document.getElementById('game-container');
     if (!container) throw new Error('game-container was not found');
@@ -202,12 +204,13 @@ export const Menu = {
             
             // Применяем громкость из настроек
             const finalVol = this.getMusicVolume(0.32);
+            const isDolby = Settings.current.audioMode === 'dolby';
             
             window.SoundsEngine.play('menu_theme', { 
               loop: true, 
               type: 'music',
-              dolby: true,         // ★ DOLBY ДЛЯ МУЗЫКИ
-              loopEndOffset: 0.41, // ★ ОБРЕЗКА
+              dolby: isDolby,
+              loopEndOffset: 0.41,
               volume: finalVol
             });
             
@@ -251,15 +254,16 @@ export const Menu = {
       const mainPan = Math.random() * 2 - 1;
       const mainVol = Math.random() * 0.5 + 0.5;
       
-      const finalVol = mainVol * this.getEffectsVolume(1.0);
+      // ★ ГРОМОСТЬ С УЧЕТОМ НАСТРОЕК И DUCK ★
+      const finalVol = mainVol * this.getEffectsVolume(1.0) * (this.duck ?? 1);
+      const isDolby = Settings.current.audioMode === 'dolby';
 
-      // ★ ГРОЗА (DOLBY: TRUE) ★
       window.SoundsEngine.play(mainSound, { 
         type: 'effects', 
         pan: mainPan, 
         volume: finalVol, 
         reverb: true,
-        dolby: true // ★ DOLBY ДЛЯ ГРОЗЫ
+        dolby: isDolby
       });
       
       if (Math.random() > 0.4) {
@@ -272,7 +276,7 @@ export const Menu = {
             pan: mainPan > 0 ? -0.9 : 0.9, 
             volume: echoVol, 
             reverb: true,
-            dolby: true // ★ DOLBY ДЛЯ ЭХА
+            dolby: isDolby
           });
         }, Math.random() * 600 + 200);
       }
@@ -371,12 +375,12 @@ export const Menu = {
       if (this.isTransitioning) return;
       this.isTransitioning = true;
 
-      // ★ КНОПКИ (DOLBY: FALSE, С УЧЕТОМ ГРОМКОСТИ) ★
+      // ★ КНОПКИ С УЧЕТОМ ГРОМКОСТИ И DUCK ★
       if (window.SoundsEngine && btnInfo.sound) {
         window.SoundsEngine.play(btnInfo.sound, { 
           type: 'effects',
           dolby: false,
-          volume: this.getEffectsVolume(1.0)
+          volume: this.getEffectsVolume(1.0) * (this.duck ?? 1)
         });
       }
 
@@ -398,15 +402,25 @@ export const Menu = {
         this.isTransitioning = false;
       }
       else {
+        // ★ ПЕРЕХОД В ИГРУ: FADE OUT С УЧЕТОМ DUCK ★
         if (window.SoundsEngine) {
-          let vol = window.SoundsEngine.volumes.music || this.getMusicVolume(0.32); 
-          const targetVal = 0;
-          const step = vol / 14;
+          window.SoundsEngine.play('transition', { 
+            type: 'effects', 
+            dolby: false,
+            volume: this.getEffectsVolume(1.0) * (this.duck ?? 1)
+          });
+
+          const mFrom = window.SoundsEngine.volumes.music || this.getMusicVolume(0.32);
+          const mTo = 0;
+          const eFrom = window.SoundsEngine.volumes.effects || this.getEffectsVolume(0.8);
+          const eTo = 0;
+          let k = 0;
           const fadeOut = setInterval(() => {
-            vol -= step;
-            if (vol <= 0) { vol = 0; clearInterval(fadeOut); }
-            window.SoundsEngine.setMasterVolume('music', vol);
-            window.SoundsEngine.setMasterVolume('effects', vol);
+            k = Math.min(1, k + 1 / 14);
+            const e = 1 - Math.pow(1 - k, 3);
+            window.SoundsEngine.setMasterVolume('music', mFrom + (mTo - mFrom) * e);
+            window.SoundsEngine.setMasterVolume('effects', eFrom + (eTo - eFrom) * e);
+            if (k >= 1) clearInterval(fadeOut);
           }, 50);
         }
 
@@ -449,8 +463,9 @@ export const Menu = {
             
             if (window.SoundsEngine) {
               window.SoundsEngine.currentMusicTrack = null;
+              const isDolby = Settings.current.audioMode === 'dolby';
               window.SoundsEngine.play('menu_theme', { 
-                loop: true, type: 'music', dolby: true, loopEndOffset: 0.41, volume: this.getMusicVolume(0.32)
+                loop: true, type: 'music', dolby: isDolby, loopEndOffset: 0.41, volume: this.getMusicVolume(0.32)
               });
             }
           }
@@ -461,24 +476,30 @@ export const Menu = {
     const goToMenu = () => {
       if (this.isTransitioning || this.currentState === 'menu') return;
       this.isTransitioning = true;
+      this.duck = 0.5;  // ★ ПРИГЛУШАЕМ КНОПКИ/ГРОМ В МЕНЮ
       
       menuEl.classList.add('menu-mode', 'dark-shade');
-      // ★ КНОПКА ТИТУЛЬНОГО ЭКРАНА (DOLBY: FALSE) ★
+      
+      // ★ ЗВУК ПЕРЕХОДА С DUCK ★
       if (window.SoundsEngine) window.SoundsEngine.play('transition', { 
         type: 'effects', 
         dolby: false,
-        volume: this.getEffectsVolume(1.0)
+        volume: this.getEffectsVolume(1.0) * (this.duck ?? 1)
       });
 
+      // ★ FADE OUT ШИН (MUSIC И EFFECTS ОТДЕЛЬНО) ★
       if (window.SoundsEngine) {
-        let vol = window.SoundsEngine.volumes.music || this.getMusicVolume(0.32);
-        const targetVal = this.getMusicVolume(0.32) * 0.5; // Приглушаем на 50%
-        const step = (vol - targetVal) / 14;
+        const mFrom = window.SoundsEngine.volumes.music || this.getMusicVolume(0.32);
+        const mTo = this.getMusicVolume(0.32) * 0.5;
+        const eFrom = window.SoundsEngine.volumes.effects || this.getEffectsVolume(0.8);
+        const eTo = this.getEffectsVolume(0.8) * 0.5;
+        let k = 0;
         const fadeOut = setInterval(() => {
-          vol -= step;
-          if (vol <= targetVal) { vol = targetVal; clearInterval(fadeOut); }
-          window.SoundsEngine.setMasterVolume('music', vol);
-          window.SoundsEngine.setMasterVolume('effects', vol);
+          k = Math.min(1, k + 1 / 14);
+          const e = 1 - Math.pow(1 - k, 3);
+          window.SoundsEngine.setMasterVolume('music', mFrom + (mTo - mFrom) * e);
+          window.SoundsEngine.setMasterVolume('effects', eFrom + (eTo - eFrom) * e);
+          if (k >= 1) clearInterval(fadeOut);
         }, 50);
       }
 
@@ -500,11 +521,13 @@ export const Menu = {
       backBtn.onclick = () => {
         if (this.isTransitioning) return;
         this.isTransitioning = true;
-        // ★ КНОПКА НАЗАД (DOLBY: FALSE) ★
+        this.duck = 1;  // ★ ВОССТАНАВЛИВАЕМ ПОЛНУЮ ГРОМКОСТЬ НА ТИТУЛЬНОМ ★
+        
+        // ★ КНОПКА НАЗАД (БЕЗ DUCK, Т.К. УЖЕ duck=1) ★
         if (window.SoundsEngine) window.SoundsEngine.play('btn_back', { 
           type: 'effects', 
           dolby: false,
-          volume: this.getEffectsVolume(1.0)
+          volume: this.getEffectsVolume(1.0) * (this.duck ?? 1)
         });
         
         backBtn.style.opacity = '0';
@@ -516,15 +539,19 @@ export const Menu = {
 
         menuEl.classList.remove('menu-mode', 'dark-shade');
         
+        // ★ FADE IN ШИН (MUSIC И EFFECTS ОТДЕЛЬНО) ★
         if (window.SoundsEngine) {
-          let vol = window.SoundsEngine.volumes.music || this.getMusicVolume(0.32) * 0.5;
-          const targetVal = this.getMusicVolume(0.32); // Возвращаем к базовой
-          const step = (targetVal - vol) / 14;
+          const mFrom = window.SoundsEngine.volumes.music || this.getMusicVolume(0.32) * 0.5;
+          const mTo = this.getMusicVolume(0.32);
+          const eFrom = window.SoundsEngine.volumes.effects || this.getEffectsVolume(0.8) * 0.5;
+          const eTo = this.getEffectsVolume(0.8);
+          let k = 0;
           const fadeIn = setInterval(() => {
-            vol += step;
-            if (vol >= targetVal) { vol = targetVal; clearInterval(fadeIn); }
-            window.SoundsEngine.setMasterVolume('music', vol);
-            window.SoundsEngine.setMasterVolume('effects', vol);
+            k = Math.min(1, k + 1 / 14);
+            const e = 1 - Math.pow(1 - k, 3);
+            window.SoundsEngine.setMasterVolume('music', mFrom + (mTo - mFrom) * e);
+            window.SoundsEngine.setMasterVolume('effects', eFrom + (eTo - eFrom) * e);
+            if (k >= 1) clearInterval(fadeIn);
           }, 50);
         }
 

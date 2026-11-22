@@ -3,537 +3,499 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Woland's Mansion</title>
-  <meta name="description" content="Woland's Mansion — HTML horror game">
-  <meta name="theme-color" content="#050308">
-
-  <link rel="manifest" href="./manifest.json">
-  <link rel="icon" type="image/jpeg" href="./icon/Иконка.jpg" sizes="512x512">
-  <link rel="apple-touch-icon" href="./icon/Иконка.jpg">
-  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0a0616">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Woland's Mansion">
+  <title>Woland's Mansion</title>
+
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icon/icon.jpg" type="image/jpeg">
+  <link rel="apple-touch-icon" href="./icon/icon.jpg">
 
   <style>
-    @font-face {
-      font-family: 'WolandGame';
-      src: url('./supermario286rusbylyajka.otf') format('opentype');
-      font-display: block;
-    }
-    *, *::before, *::after {
-      font-family: 'WolandGame', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-      box-sizing: border-box;
-    }
-    html, body {
-      margin: 0; padding: 0; width: 100%; height: 100%;
-      background: #000; color: #fff;
-      overflow: hidden; overscroll-behavior: none;
-      -webkit-tap-highlight-color: transparent;
-      user-select: none; -webkit-user-select: none;
-      touch-action: manipulation;
-    }
-    #game-container { position: fixed; inset: 0; background: #000; }
+    @font-face { font-family: 'WolandFont'; src: url('./supermario286rusbylyajka.otf') format('opentype'); font-display: swap; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'WolandFont', 'Courier New', monospace; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #050407; color: #fff; touch-action: none; }
+    img, canvas, video { pointer-events: none; -webkit-user-drag: none; }
 
-    /* ================= BOOT ================= */
-    #boot {
-      position: fixed; inset: 0; z-index: 9999; background: #000;
-      transition: opacity .55s cubic-bezier(.4,0,.2,1); will-change: opacity;
+    .screen { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.5s, visibility 0.5s; padding: 20px; text-align: center; }
+    .screen.active { opacity: 1; visibility: visible; pointer-events: auto; }
+
+    #screen-l1, #screen-l2 { background: #000; padding: 0; z-index: 200; }
+    .l-image { width: 80vw; max-width: 800px; max-height: 80vh; object-fit: contain; opacity: 0; transition: opacity 1.5s ease; }
+    .l-image.visible { opacity: 1; }
+
+    #install-screen { background: radial-gradient(ellipse at center, #201020, #050407 75%); overflow-y: auto; justify-content: flex-start; padding-top: 5vh; z-index: 110; }
+    .install-content { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; max-width: 600px; margin: auto 0; gap: 15px; }
+    #install-screen > .install-content > img { width: min(80vw, 400px); max-height: 20vh; object-fit: contain; filter: drop-shadow(0 0 15px rgba(255,0,0,0.5)); }
+    #install-screen p { color: #aaa; font-size: clamp(12px, 1.8vh, 16px); line-height: 1.5; }
+    .install-card { width: 100%; padding: 15px; border: 1px solid #562323; border-radius: 8px; background: rgba(255,255,255,0.05); font-size: clamp(11px, 1.6vh, 14px); text-align: left; }
+    .install-card strong { color: #ff7777; display: block; margin-bottom: 4px; }
+    .lang-switch { display: flex; gap: 10px; margin-top: 20px; justify-content: center; flex-wrap: wrap; }
+    .lang-btn { background: transparent; color: #888; border: 1px solid #333; padding: 5px 10px; cursor: pointer; border-radius: 5px; transition: all 0.4s ease; }
+    .lang-btn.active { color: #fff; border-color: #f00; background: rgba(255,0,0,0.2); }
+    .btn { padding: 12px 30px; font-size: 16px; background: linear-gradient(135deg, #800000, #400000); color: #fff; border: 2px solid #f00; border-radius: 10px; cursor: pointer; box-shadow: 0 0 15px rgba(255,0,0,0.4); width: 100%; max-width: 300px; }
+    #footer-credit { position: absolute; bottom: 15px; width: 100%; text-align: center; font-size: 12px; color: #555; }
+    #install-btn { display: none; }
+    [data-i18n] { transition: opacity 0.25s ease; }
+
+    /* ===== дисклеймер: появление с помехами, уход по клику (пиксельный переход) ===== */
+    #disclaimer-screen { background: #000; cursor: pointer; z-index: 100; padding: 0; }
+    #disclaimer-img { width: 100vw; height: 100vh; object-fit: cover; display: block; }
+    #disclaimer-screen.active #disclaimer-img { animation: disc-in 2.4s cubic-bezier(.2,.7,.2,1) both; }
+    @keyframes disc-in {
+      0%   { opacity: 0; transform: scale(1.10); filter: blur(16px) brightness(2.2); }
+      6%   { opacity: .55; } 8% { opacity: .12; } 11% { opacity: .85; } 13% { opacity: .3; }
+      17%  { opacity: 1; transform: scale(1.03); filter: blur(0) brightness(1.15); }
+      60%  { transform: scale(1.008); filter: blur(0) brightness(1); }
+      100% { opacity: 1; transform: scale(1); filter: blur(0) brightness(1); }
     }
-    #boot.done { opacity: 0; pointer-events: none; }
-    .boot-vignette {
-      position: absolute; inset: 0; pointer-events: none; z-index: 5;
-      background: radial-gradient(120% 90% at 50% 50%, transparent 52%, rgba(0,0,0,.88) 100%);
+    #disclaimer-screen .disc-scan {
+      position: absolute; inset: 0; pointer-events: none; opacity: .16;
+      background: repeating-linear-gradient(0deg, rgba(255,255,255,.14) 0 1px, transparent 1px 3px);
     }
-    .boot-grain {
-      position: absolute; inset: -4%; pointer-events: none; opacity: .05; z-index: 6;
+    #disclaimer-screen.active .disc-scan { animation: disc-scan 2.4s linear both; }
+    @keyframes disc-scan { 0% { transform: translateY(-3%); opacity: .3; } 100% { transform: translateY(3%); opacity: .12; } }
+    #disclaimer-screen .disc-grain {
+      position: absolute; inset: -4%; pointer-events: none; opacity: .06;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
-      animation: grain 1.1s steps(4) infinite;
+      animation: disc-grain 1.1s steps(4) infinite;
     }
-    @keyframes grain {
+    @keyframes disc-grain {
       0% { transform: translate(0,0); } 25% { transform: translate(-2%,1%); }
       50% { transform: translate(1%,-2%); } 75% { transform: translate(-1%,2%); } 100% { transform: translate(0,0); }
     }
+    #disclaimer-screen .disc-hint {
+      position: absolute; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+      font-size: 12px; letter-spacing: 2px; color: #9a9aa6; white-space: nowrap; opacity: 0; pointer-events: none;
+      text-shadow: 0 1px 4px #000;
+    }
+    #disclaimer-screen.active .disc-hint { animation: disc-hint 2.2s ease-in-out 2.2s infinite; }
+    @keyframes disc-hint { 0%,100% { opacity: .3; } 50% { opacity: .95; } }
+    #disclaimer-screen.out #disclaimer-img { transition: filter .3s ease, transform .3s ease; filter: blur(6px) brightness(1.5); transform: scale(1.04); }
+    #disclaimer-screen.out .disc-hint, #disclaimer-screen.out .disc-scan { opacity: 0 !important; transition: opacity .2s ease; }
 
-    .stage {
-      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-      opacity: 0; visibility: hidden; transition: opacity .6s ease, visibility .6s;
-    }
-    .stage.on { opacity: 1; visibility: visible; }
+    #pixel-canvas { position: fixed; inset: 0; z-index: 150; display: none; width: 100%; height: 100%; background: transparent; }
+    #fade-overlay { position: fixed; inset: 0; background: #000; z-index: 50; pointer-events: none; opacity: 0; transition: opacity 1.5s ease-in-out; }
 
-    /* ---------- логотипы: по центру, без растяжения ---------- */
-    #stage-logos img {
-      position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
-      max-width: min(72vw, 560px); max-height: 54vh; width: auto; height: auto;
-      object-fit: contain; opacity: 0; border-radius: 10px;
-      box-shadow: 0 24px 70px rgba(0,0,0,.85);
-    }
+    #loading-screen { background: #050407; z-index: 90; padding: 0; overflow: hidden; opacity: 0; transition: opacity 0.9s linear; }
+    .loading-center { display: flex; flex-direction: column; align-items: center; gap: 15px; width: 90%; max-width: 600px; margin-top: -10vh; }
+    #loading-logo { width: min(80vw, 500px); max-height: 25vh; object-fit: contain; }
 
-    /* ---------- дисклеймер: появление с помехами, уход по клику ---------- */
-    #disclaimer { position: relative; width: min(78vw, 640px); cursor: pointer; }
-    #disclaimer .disc-img { display: block; width: 100%; border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.9); }
-    #stage-disc.on #disclaimer .main { animation: disc-in 2.6s cubic-bezier(.2,.7,.2,1) both; }
-    #disclaimer .chr {
-      position: absolute; inset: 0; width: 100%; border-radius: 14px;
-      mix-blend-mode: screen; pointer-events: none; opacity: 0;
-    }
-    #stage-disc.on #disclaimer .chr.r { filter: grayscale(1) sepia(1) hue-rotate(-30deg) saturate(4); animation: chr-r 2.6s steps(12) both; }
-    #stage-disc.on #disclaimer .chr.c { filter: grayscale(1) sepia(1) hue-rotate(140deg) saturate(3); animation: chr-c 2.6s steps(12) both; }
-    #disclaimer .scanlines {
-      position: absolute; inset: 0; border-radius: 14px; pointer-events: none; opacity: .18;
-      background: repeating-linear-gradient(0deg, rgba(255,255,255,.14) 0 1px, transparent 1px 3px);
-    }
-    #stage-disc.on #disclaimer .scanlines { animation: scan 2.6s linear both; }
-    #disclaimer .skip-hint {
-      position: absolute; left: 50%; bottom: -36px; transform: translateX(-50%);
-      font-size: 11px; letter-spacing: 2px; color: #8a8a96; white-space: nowrap;
-      opacity: 0;
-    }
-    #stage-disc.on #disclaimer .skip-hint { animation: hint-pulse 2.2s ease-in-out 2.4s infinite; }
-    @keyframes hint-pulse { 0%,100% { opacity: .35; } 50% { opacity: .95; } }
-    @keyframes disc-in {
-      0%   { opacity: 0; transform: scale(1.14); filter: blur(16px) brightness(2); }
-      6%   { opacity: .55; } 8% { opacity: .1; } 11% { opacity: .8; } 13% { opacity: .25; }
-      17%  { opacity: 1; transform: scale(1.05); filter: blur(0) brightness(1.15); }
-      60%  { transform: scale(1.015); filter: blur(0) brightness(1); }
-      100% { opacity: 1; transform: scale(1); }
-    }
-    @keyframes chr-r {
-      0%,16% { opacity: 0; transform: none; }
-      20% { opacity: .5; transform: translate(3px,-1px); } 26% { opacity: .15; transform: translate(-2px,1px); }
-      34% { opacity: .4; transform: translate(2px,1px); } 46% { opacity: .12; transform: translate(-1px,-1px); }
-      60%,100% { opacity: 0; transform: none; }
-    }
-    @keyframes chr-c {
-      0%,16% { opacity: 0; transform: none; }
-      22% { opacity: .45; transform: translate(-3px,1px); } 28% { opacity: .12; transform: translate(2px,-1px); }
-      38% { opacity: .35; transform: translate(-2px,-1px); } 50% { opacity: .1; transform: translate(1px,1px); }
-      60%,100% { opacity: 0; transform: none; }
-    }
-    @keyframes scan { 0% { transform: translateY(-4%); opacity: .3; } 100% { transform: translateY(4%); opacity: .12; } }
-    /* оригинальный уход: разъезд хроматики + blur + scale */
-    #disclaimer.out .main {
-      transition: opacity .5s ease, filter .5s ease, transform .5s cubic-bezier(.4,0,.2,1);
-      opacity: 0 !important; filter: blur(12px) brightness(1.6); transform: scale(1.08);
-    }
-    #disclaimer.out .chr.r { animation: chr-out-r .5s ease both; }
-    #disclaimer.out .chr.c { animation: chr-out-c .5s ease both; }
-    #disclaimer.out .scanlines, #disclaimer.out .skip-hint { transition: opacity .3s ease; opacity: 0 !important; }
-    @keyframes chr-out-r { 0% { opacity: .5; transform: none; } 100% { opacity: 0; transform: translate(26px,-6px) scale(1.06); } }
-    @keyframes chr-out-c { 0% { opacity: .5; transform: none; } 100% { opacity: 0; transform: translate(-26px,6px) scale(1.06); } }
+    .loader-title { display: flex; gap: 3px; font-size: clamp(20px, 4vh, 32px); text-shadow: 0 0 10px #f00; }
+    .loader-title span { display: inline-block; animation: wave-sequence 1.5s infinite linear; }
+    @keyframes wave-sequence { 0%, 60%, 100% { transform: translateY(0); opacity: 0.5; } 20% { transform: translateY(-10px); opacity: 1; color: #f00; } }
 
-    /* ---------- загрузка: вращающийся Воланд + чистый логотип x2 + байты по разделам ---------- */
-    #loadui { flex-direction: column; gap: 14px; }
-    .ld-woland {
-      width: min(30vw, 150px); height: min(30vw, 150px); object-fit: contain;
-      animation: spin 9s linear infinite; opacity: .9;
-      filter: drop-shadow(0 10px 30px rgba(0,0,0,.8));
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .ld-logo { width: min(64vw, 440px); height: auto; object-fit: contain; }
-    .ld-sections { display: flex; flex-direction: column; gap: 4px; width: min(76vw, 360px); }
-    .ld-sec { display: flex; justify-content: space-between; font-size: 11px; color: #9a9aa4; }
-    .ld-sec b { color: #e8e8ee; font-weight: 600; font-variant-numeric: tabular-nums; }
-    .lu-bar {
-      position: relative; height: 10px; border-radius: 999px; overflow: hidden; width: min(76vw, 360px);
-      background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.16);
-      -webkit-backdrop-filter: blur(14px) saturate(1.5); backdrop-filter: blur(14px) saturate(1.5);
-      box-shadow: inset 0 1px 2px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.15);
-    }
-    .lu-fill {
-      position: absolute; inset: 0 auto 0 0; width: 0%;
-      background: linear-gradient(90deg, rgba(255,255,255,.5), rgba(255,255,255,.92));
-      border-radius: 999px; box-shadow: 0 0 12px rgba(255,255,255,.45);
-      transition: width .25s cubic-bezier(.32,.72,0,1);
-    }
-    .lu-fill i {
-      position: absolute; top: 0; bottom: 0; width: 40%;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,.85), transparent);
-      animation: lu-shine 1.4s ease-in-out infinite;
-    }
-    @keyframes lu-shine { 0% { left: -45%; } 100% { left: 105%; } }
-    .lu-row { display: flex; justify-content: space-between; gap: 12px; width: min(76vw, 360px); font-size: 11px; color: #9a9aa4; }
-    #lu-status { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    #lu-pct { font-variant-numeric: tabular-nums; color: #e8e8ee; flex-shrink: 0; }
+    .progress { width: 80%; max-width: 400px; height: 10px; background: #222; border-radius: 10px; overflow: hidden; position: relative; box-shadow: inset 0 2px 5px rgba(0,0,0,0.8); display: none; }
+    #progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ff0000, #ff5500, #ffaa00, #ff5500, #ff0000); background-size: 200% 100%; animation: lava-flow 2s linear infinite; transition: width 0.2s ease; border-radius: 10px; box-shadow: 0 0 15px rgba(255, 50, 0, 0.8); position: relative; overflow: hidden; }
+    #progress-fill::after { content: ''; position: absolute; inset: 0; background-image: radial-gradient(circle at 20% 50%, rgba(255,255,255,0.6) 2px, transparent 3px), radial-gradient(circle at 60% 30%, rgba(255,255,255,0.4) 3px, transparent 4px); background-size: 50px 50px; animation: bubbles-move 3s linear infinite; }
+    @keyframes lava-flow { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+    @keyframes bubbles-move { 0% { background-position: 0 0; } 100% { background-position: 100px 0; } }
 
-    /* ---------- ошибка ---------- */
-    #booterr {
-      position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%) scale(.96); z-index: 20;
-      width: min(88vw, 380px); padding: 20px; border-radius: 22px; text-align: center;
-      background: rgba(26,18,34,.92); border: 1px solid rgba(255,255,255,.18);
-      -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
-      box-shadow: 0 20px 60px rgba(0,0,0,.7);
-      opacity: 0; visibility: hidden;
-      transition: opacity .25s ease, visibility .25s, transform .25s cubic-bezier(.32,.72,0,1);
-    }
-    #booterr.show { opacity: 1; visibility: visible; transform: translate(-50%,-50%) scale(1); }
-    #booterr h3 { margin: 0 0 8px; font-size: 17px; }
-    #booterr p { margin: 0 0 14px; font-size: 13px; color: #cfcfd6; line-height: 1.45; word-break: break-word; }
-    #booterr button {
-      padding: 10px 26px; font-size: 14px; color: #fff; cursor: pointer;
-      background: rgba(255,20,20,.25); border: 1px solid rgba(255,80,80,.6); border-radius: 999px;
-      transition: transform .12s cubic-bezier(.34,1.56,.64,1), background .15s ease;
-    }
-    #booterr button:hover { background: rgba(255,30,30,.35); }
-    #booterr button:active { transform: scale(.94); }
+    #loading-size { font-size: 14px; color: #aaa; display: none; }
+    #loading-status { position: absolute; bottom: 25px; right: 25px; font-size: 14px; color: #666; text-align: right; max-width: 200px; }
+
+    #game-container { position: fixed; inset: 0; z-index: 10; display: none; }
+    #game-container.active { display: block; }
 
     @media (prefers-reduced-motion: reduce) {
-      #disclaimer .main, #disclaimer .chr, #disclaimer .scanlines, #disclaimer .skip-hint,
-      .boot-grain, .lu-fill i, .ld-woland { animation: none !important; }
-      #stage-disc.on #disclaimer .main { opacity: 1; transform: none; filter: none; }
-      #stage-disc.on #disclaimer .skip-hint { opacity: .8; }
-      #boot, .stage, #booterr { transition-duration: .01s; }
+      #disclaimer-screen.active #disclaimer-img, #disclaimer-screen .disc-scan,
+      #disclaimer-screen .disc-grain, #disclaimer-screen .disc-hint { animation: none !important; }
+      #disclaimer-screen.active #disclaimer-img { opacity: 1; transform: none; filter: none; }
+      #disclaimer-screen.active .disc-hint { opacity: .8; }
     }
   </style>
 </head>
 <body>
+
+  <section id="screen-l1" class="screen"><img id="img-l1" class="l-image" src="./Текстуры/Меню/L1.jpg" alt="L1" onerror="this.style.display='none';"></section>
+  <section id="screen-l2" class="screen"><img id="img-l2" class="l-image" src="./Текстуры/Меню/l2.jpg" alt="L2" onerror="this.style.display='none';"></section>
+
+  <section id="install-screen" class="screen">
+    <div class="install-content">
+      <img src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" onerror="this.hidden=true">
+      <p data-i18n="install_hint">Для комфортной игры на телефоне установите приложение.</p>
+      <div class="install-card"><strong>iPhone / iPad (Safari)</strong><span data-i18n="ios_text">Поделиться → На экран "Домой"</span></div>
+      <div class="install-card"><strong>Android (Chrome / Samsung)</strong><span data-i18n="android_text">Меню (⋮) → Установить приложение</span></div>
+      <button id="install-btn" class="btn" data-i18n="install_btn">Установить приложение</button>
+      <div class="lang-switch">
+        <button class="lang-btn active" data-lang="ru">RU</button><button class="lang-btn" data-lang="en">EN</button><button class="lang-btn" data-lang="fr">FR</button><button class="lang-btn" data-lang="es">ES</button><button class="lang-btn" data-lang="it">IT</button>
+      </div>
+    </div>
+    <div id="footer-credit">HTML Gaming 2026</div>
+  </section>
+
+  <section id="disclaimer-screen" class="screen">
+    <img id="disclaimer-img" src="./Текстуры/Меню/Дисклеймер.jpg" alt="Disclaimer" onerror="this.style.display='none';">
+    <div class="disc-scan"></div>
+    <div class="disc-grain"></div>
+    <div class="disc-hint">НАЖМИТЕ, ЧТОБЫ ПРОДОЛЖИТЬ</div>
+  </section>
+
+  <canvas id="pixel-canvas"></canvas>
+
+  <section id="loading-screen" class="screen">
+    <div class="loading-center">
+      <img id="loading-logo" src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" onerror="this.hidden=true">
+      <div class="loader-title" id="loader-title"></div>
+      <div class="progress" id="progress-bar"><div id="progress-fill"></div></div>
+      <div id="loading-size">0.0 МБ / 0.0 МБ</div>
+    </div>
+    <div id="loading-status">Подготовка...</div>
+  </section>
+
   <div id="game-container"></div>
-
-  <div id="boot">
-    <!-- логотипы: L1 5с → затемнение 1.5с → L2 1с + 1.5с + 1.5с -->
-    <div class="stage" id="stage-logos">
-      <img id="logo1" src="./Текстуры/Меню/L1.jpg" alt="" draggable="false">
-      <img id="logo2" src="./Текстуры/Меню/l2.jpg" alt="" draggable="false">
-    </div>
-
-    <!-- дисклеймер: появление с помехами, уход ТОЛЬКО по нажатию -->
-    <div class="stage" id="stage-disc">
-      <div id="disclaimer" aria-label="Дисклеймер">
-        <img class="disc-img main" src="./Текстуры/Меню/Дисклеймер.jpg" alt="Дисклеймер" draggable="false">
-        <img class="disc-img chr r" src="./Текстуры/Меню/Дисклеймер.jpg" alt="" aria-hidden="true" draggable="false">
-        <img class="disc-img chr c" src="./Текстуры/Меню/Дисклеймер.jpg" alt="" aria-hidden="true" draggable="false">
-        <div class="scanlines"></div>
-        <div class="skip-hint">НАЖМИТЕ, ЧТОБЫ ПРОДОЛЖИТЬ</div>
-      </div>
-    </div>
-
-    <!-- загрузка: только если чего-то не хватает -->
-    <div class="stage" id="loadui">
-      <img class="ld-woland" src="./Текстуры/Воланд/Воланд0.png" alt="" draggable="false">
-      <img class="ld-logo" src="./Текстуры/Меню/Название.jpg" alt="Woland's Mansion" draggable="false">
-      <div class="ld-sections">
-        <div class="ld-sec"><span>Текстуры</span><b id="sec-tex">0 Б</b></div>
-        <div class="ld-sec"><span>Звуки</span><b id="sec-snd">0 Б</b></div>
-      </div>
-      <div class="lu-bar"><div class="lu-fill" id="lu-fill"><i></i></div></div>
-      <div class="lu-row"><span id="lu-status">Проверка кэша…</span><span id="lu-pct">0%</span></div>
-    </div>
-
-    <div id="booterr">
-      <h3>Не удалось загрузиться</h3>
-      <p id="booterr-text">Проверь соединение и попробуй ещё раз.</p>
-      <button id="booterr-retry" type="button">Повторить</button>
-    </div>
-
-    <div class="boot-grain"></div>
-    <div class="boot-vignette"></div>
-  </div>
+  <div id="fade-overlay"></div>
 
   <script type="module">
-    // ==================== КОНФИГ ====================
-    const DB = 'woland_db';
-    const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const IS_MOBILE = matchMedia('(pointer: coarse)').matches;
+    'use strict';
 
-    const TEXTURES = [
-      'Текстуры/Меню/Фон.jpg', 'Текстуры/Меню/Фон-молния.jpg', 'Текстуры/Меню/Название.jpg',
-      'Текстуры/Меню/Дисклеймер.jpg', 'Текстуры/Меню/L1.jpg', 'Текстуры/Меню/l2.jpg',
-      'Текстуры/Игра/Фон.png',
-      'Текстуры/Здоровье/Здоровье.png', 'Текстуры/Здоровье/Здоровье фон.png',
-      'Текстуры/Воланд/Воланд0.png', 'Текстуры/Воланд/Воланд45.png', 'Текстуры/Воланд/Воланд90.png',
-      'Текстуры/Воланд/Воланд135.png', 'Текстуры/Воланд/Воланд180.png',
-      'Текстуры/Воланд/Воланд_глаза_закрыты.png', 'Текстуры/Воланд/Воланд_глаза_открываются.png',
-      'Текстуры/Воланд/Воланд_глаза_открыты.png', 'Текстуры/Воланд/Воланд_глаза_поднимаются.png',
-      'Текстуры/Воланд/Воланд_рот_открывается1.png', 'Текстуры/Воланд/Воланд_рот_открывается2.png',
-      'Текстуры/Воланд/Воланд_рот_открыт.png'
-    ];
-    const ALIASES = {
-      'Текстуры/Меню/Фон.jpg': 'menu_bg',
-      'Текстуры/Меню/Фон-молния.jpg': 'menu_lightning',
-      'Текстуры/Меню/Название.jpg': 'menu_logo',
-      'Текстуры/Меню/Дисклеймер.jpg': 'menu_disclaimer',
-      'Текстуры/Меню/L1.jpg': 'menu_l1',
-      'Текстуры/Меню/l2.jpg': 'menu_l2'
-    };
-    const EXTRA_SOUNDS = { audio_demo: './Звуки/Эффекты/Звук.wav' };
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('dragstart', e => e.preventDefault());
+    document.addEventListener('selectstart', e => e.preventDefault());
 
-    const $ = (s) => document.querySelector(s);
-    const wait = (ms) => new Promise(r => setTimeout(r, ms));
-    window.GameAssets = window.GameAssets || {};
-    let booted = false;
-
-    // ==================== INDEXEDDB: старая база остаётся рабочей ====================
-    let idb = null, stores = [], writeStore = null;
-    const openDB = () => new Promise((res, rej) => {
-      let rq;
-      try { rq = indexedDB.open(DB); } catch (e) { rej(e); return; }
-      rq.onupgradeneeded = () => { const d = rq.result; if (!d.objectStoreNames.length) d.createObjectStore('media'); };
-      rq.onsuccess = () => { const db = rq.result; db.onversionchange = () => { try { db.close(); } catch (e) {} }; res(db); };
-      rq.onerror = () => rej(rq.error);
-      rq.onblocked = () => rej(new Error('IDB blocked'));
-    });
-    const idbReq = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
-    const txDone = (tx) => new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); });
-    const getAllKeys = async () => {
-      const out = [];
-      for (const s of stores) {
-        try { out.push(...await idbReq(idb.transaction(s, 'readonly').objectStore(s).getAllKeys())); } catch (e) {}
-      }
-      return out.filter(k => typeof k === 'string');
-    };
-    const getAny = async (keys) => {
-      for (const k of keys) for (const s of stores) {
-        try {
-          const v = await idbReq(idb.transaction(s, 'readonly').objectStore(s).get(k));
-          if (v instanceof Blob && v.size > 0) return v;
-        } catch (e) {}
-      }
-      return null;
-    };
-    const putAny = async (key, blob) => {
-      if (!idb || !writeStore) return;
-      try { const tx = idb.transaction(writeStore, 'readwrite'); tx.objectStore(writeStore).put(blob, key); await txDone(tx); } catch (e) {}
-    };
-
-    // ==================== БАЙТЫ / ПРОГРЕСС ====================
-    const sec = { tex: { loaded: 0, total: 0 }, snd: { loaded: 0, total: 0 } };
-    const fmtB = (n) => n >= 1048576 ? (n / 1048576).toFixed(1) + ' МБ' : n >= 1024 ? (n / 1024).toFixed(0) + ' КБ' : n + ' Б';
-    const paintSections = () => {
-      $('#sec-tex').textContent = sec.tex.total ? `${fmtB(sec.tex.loaded)} / ${fmtB(sec.tex.total)}` : fmtB(sec.tex.loaded);
-      $('#sec-snd').textContent = sec.snd.total ? `${fmtB(sec.snd.loaded)} / ${fmtB(sec.snd.total)}` : fmtB(sec.snd.loaded);
-      const L = sec.tex.loaded + sec.snd.loaded, T = sec.tex.total + sec.snd.total;
-      const p = T > 0 ? Math.min(1, L / T) : 0;
-      $('#lu-fill').style.width = Math.round(p * 100) + '%';
-      $('#lu-pct').textContent = Math.round(p * 100) + '%';
-    };
-    const setStatus = (t) => { $('#lu-status').textContent = t; };
-
-    const fetchBlobProgress = async (url, bucket, ms = 30000) => {
-      const ctl = new AbortController();
-      const t = setTimeout(() => ctl.abort(), ms);
-      try {
-        const res = await fetch(url, { signal: ctl.signal, cache: 'force-cache' });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const len = parseInt(res.headers.get('Content-Length') || '0', 10);
-        if (len > 0) bucket.total += len;
-        if (!res.body || !res.body.getReader) {
-          const b = await res.blob();
-          bucket.loaded += b.size;
-          if (!len) bucket.total += b.size;
-          paintSections();
-          return b;
-        }
-        const reader = res.body.getReader();
-        const chunks = [];
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          bucket.loaded += value.byteLength;
-          paintSections();
-        }
-        const blob = new Blob(chunks);
-        if (!len) bucket.total += blob.size;
-        paintSections();
-        return blob;
-      } finally { clearTimeout(t); }
-    };
-
-    // ==================== АССЕТЫ ====================
-    const mapLimit = async (items, limit, fn) => {
-      let i = 0;
-      const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
-        while (i < items.length) { const idx = i++; await fn(items[idx], idx); }
-      });
-      await Promise.all(workers);
-    };
-    const buildRequired = (soundsMap) => {
-      const list = [];
-      for (const path of TEXTURES) list.push({ key: path, url: './' + path, kind: 'texture', path });
-      for (const [id, s] of Object.entries(soundsMap)) if (s && s.url) list.push({ key: 'sound:' + id, url: s.url, kind: 'sound', id, size: s.size || 0 });
-      return list;
-    };
-    const candidateKeys = (a) => {
-      const bare = a.url.replace(/^\.\//, '');
-      const base = bare.split('/').pop();
-      const noExt = base.replace(/\.[^.]+$/, '');
-      const list = [a.key, a.url, bare, base, noExt];
-      if (a.kind === 'sound') list.push(a.id, 'sound:' + a.id, 'sounds:' + a.id);
-      else list.push(a.path, 'texture:' + a.path, ALIASES[a.path] || '');
-      return [...new Set(list.filter(Boolean))];
-    };
-    const resolveKey = (a, keySet) => {
-      for (const k of candidateKeys(a)) if (keySet.has(k)) return k;
-      const base = a.url.split('/').pop();
-      for (const k of keySet) if (k.endsWith(base) || k.endsWith('/' + base)) return k;
-      return null;
-    };
-    const applyTexture = (a, blob) => {
-      const url = URL.createObjectURL(blob);
-      const base = a.path.split('/').pop();
-      const noExt = base.replace(/\.[^.]+$/, '');
-      for (const k of [ALIASES[a.path], a.path, base, noExt].filter(Boolean)) window.GameAssets[k] = url;
-    };
-    const decodeSound = async (id, blob) => {
-      try { await window.SoundsEngine?.loadSound(id, blob); } catch (e) { console.warn('[Boot] decode fail:', id, e); }
-    };
-
-    const ensureAssets = async (resolved) => {
-      await mapLimit(resolved, 3, async (r) => {
-        const a = r.asset;
-        const bucket = a.kind === 'sound' ? sec.snd : sec.tex;
-        let blob = r.key ? await getAny([r.key, ...candidateKeys(a)]) : null;
-        if (blob) {
-          bucket.loaded += blob.size; bucket.total += blob.size;
-          paintSections();
-        } else {
-          setStatus('Загрузка: ' + a.url.split('/').pop());
-          try {
-            blob = await fetchBlobProgress(a.url, bucket);
-            await putAny(a.key, blob);
-          } catch (e) {
-            console.warn('[Boot] пропущен ассет:', a.url, e?.message || e);
-            blob = null;
-          }
-        }
-        if (!blob) return;
-        if (a.kind === 'texture') applyTexture(a, blob);
-        else await decodeSound(a.id, blob);
-      });
-      paintSections();
-      setStatus('Готово');
-    };
-
-    // ==================== ПЕРВЫЙ КЛИК: звук + fullscreen/ориентация (только мобильные) ====================
-    let unlocked = false;
-    const firstGesture = async () => {
-      if (unlocked) return;
-      unlocked = true;
-      try { window.SoundsEngine?.init(); } catch (e) {}
-      if (IS_MOBILE) {
-        try { await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }); } catch (e) {}
-        try { await screen.orientation?.lock?.('landscape'); } catch (e) {}
-      }
-    };
-
-    // ==================== ИНТРО: логотипы → дисклеймер по клику ====================
-    const imgsReady = (els) => Promise.all(els.map(el => el.decode ? el.decode().catch(() => {}) : Promise.resolve()));
-
-    const logoSequence = async () => {
-      const stage = $('#stage-logos'), l1 = $('#logo1'), l2 = $('#logo2');
-      await imgsReady([l1, l2]);
-      stage.classList.add('on');
-      l1.style.transition = 'none'; l1.style.opacity = '1';       // L1 без анимации
-      let skipped = false;
-      const onSkip = () => { skipped = true; firstGesture(); };
-      $('#boot').addEventListener('pointerdown', onSkip, { once: true });
-      await wait(REDUCED ? 600 : 5000);
-      if (!skipped) {
-        l1.style.transition = 'opacity 1.5s ease'; l1.style.opacity = '0';   // затемнение 1.5с
-        await wait(1500);
-        l2.style.transition = 'opacity 1s ease'; l2.style.opacity = '1';     // L2 за 1с
-        await wait(1000 + 1500);                                            // держим 1.5с
-        l2.style.transition = 'opacity 1.5s ease'; l2.style.opacity = '0';   // скрываем 1.5с
-        await wait(1500);
-      } else {
-        l1.style.transition = 'opacity .4s ease'; l1.style.opacity = '0';
-        l2.style.transition = 'opacity .4s ease'; l2.style.opacity = '0';
-        await wait(400);
-      }
-      $('#boot').removeEventListener('pointerdown', onSkip);
-      stage.classList.remove('on');
-    };
-
-    const disclaimerStage = () => new Promise((res) => {
-      const stage = $('#stage-disc'), d = $('#disclaimer');
-      stage.classList.add('on');
-      const onClick = async () => {
-        d.removeEventListener('pointerdown', onClick);
-        await firstGesture();                       // первый клик = разблокировка звука
-        d.classList.add('out');                     // оригинальный плавный уход
-        await wait(REDUCED ? 60 : 500);
-        stage.classList.remove('on');
-        res();
-      };
-      d.addEventListener('pointerdown', onClick);
-    });
-
-    // ==================== BOOT ====================
-    const registerSW = () => {
-      if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-        navigator.serviceWorker.register('./sw.js').catch(e => console.warn('[Boot] SW:', e));
-      }
-    };
-    const fatal = (msg) => {
-      console.error('[Boot]', msg);
-      $('#booterr-text').textContent = String(msg || 'Неизвестная ошибка');
-      $('#booterr').classList.add('show');
-    };
-    const startMenu = async () => {
-      if (booted) return;
-      booted = true;
-      const bootEl = $('#boot');
-      bootEl.classList.add('done');
-      setTimeout(() => bootEl.remove(), 700);
-      const mod = await import('./Блоки/menu.js');
-      mod.Menu.start('title');
-    };
-
-    async function boot() {
-      registerSW();
-      await import('./Фон/sounds.js');
-
-      let version = null, soundsMap = {};
-      try {
-        const vres = await fetch('./version.json?t=' + Date.now(), { cache: 'no-store' });
-        if (vres.ok) version = (await vres.json()).version ?? null;
-      } catch (e) { console.warn('[Boot] version.json:', e); }
-      try {
-        const lres = await fetch('./load.json?t=' + Date.now(), { cache: 'no-store' });
-        if (lres.ok) soundsMap = (await lres.json()).sounds ?? {};
-      } catch (e) { console.warn('[Boot] load.json:', e); }
-      Object.assign(soundsMap, EXTRA_SOUNDS);
-
-      try {
-        idb = await openDB();
-        stores = [...idb.objectStoreNames];
-        writeStore = stores.includes('media') ? 'media' : stores[0] || null;
-      } catch (e) {
-        console.warn('[Boot] IndexedDB недоступна, работаем без кэша:', e);
-        idb = null; stores = []; writeStore = null;
-      }
-
-      const required = buildRequired(soundsMap);
-      for (const a of required) if (a.kind === 'sound' && a.size) sec.snd.total += a.size;
-      const keySet = new Set(idb ? await getAllKeys() : []);
-      const resolved = required.map(a => ({ asset: a, key: resolveKey(a, keySet) }));
-      const missing = resolved.filter(r => !r.key).length;
-      const fullCache = !!idb && missing === 0;
-      console.info('[Boot] кэш:', fullCache ? 'полный' : `не хватает ${missing}/${required.length}`);
-
-      // подготовка идёт фоном во время логотипов и дисклеймера
-      let assetsDone = false;
-      const ready = ensureAssets(resolved).then(() => { assetsDone = true; });
-
-      await logoSequence();          // L1 → затемнение → L2 (как было)
-      await disclaimerStage();       // уход ТОЛЬКО по нажатию
-
-      if (!assetsDone) {
-        $('#loadui').classList.add('on');   // бар только если реально ещё грузим
-        await ready;
-        await wait(220);
-        $('#loadui').classList.remove('on');
-        await wait(350);
-      } else {
-        await ready;
-      }
-
-      try { localStorage.setItem('woland_version', version || localStorage.getItem('woland_version') || '1'); } catch (e) {}
-      await startMenu();
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {});
     }
 
-    $('#booterr-retry').onclick = () => location.reload();
-    boot().catch(e => fatal(e?.message || e));
+    const $ = id => document.getElementById(id);
+    const textContainer = $('loader-title');
+    [..."Загрузка..."].forEach((char, index) => {
+      const span = document.createElement('span');
+      span.textContent = char;
+      span.style.animationDelay = `${index * 0.1}s`;
+      textContainer.appendChild(span);
+    });
+
+    const translations = {
+      ru: { install_hint: "Для комфортной игры на телефоне установите приложение.", ios_text: "Поделиться → На экран 'Домой'", android_text: "Меню (⋮) → Установить приложение", install_btn: "Установить приложение" },
+      en: { install_hint: "For the best experience on mobile, install the app.", ios_text: "Share → Add to Home Screen", android_text: "Menu (⋮) → Install app", install_btn: "Install App" },
+      fr: { install_hint: "Pour une meilleure expérience, installez l'application.", ios_text: "Partager → Sur l'écran d'accueil", android_text: "Menu (⋮) → Installer l'application", install_btn: "Installer l'App" },
+      es: { install_hint: "Para una mejor experiencia, instala la aplicación.", ios_text: "Compartir → Añadir a pantalla de inicio", android_text: "Menú (⋮) → Instalar aplicación", install_btn: "Instalar App" },
+      it: { install_hint: "Per un'esperienza migliore, installa l'app.", ios_text: "Condividi → Aggiungi alla schermata Home", android_text: "Menu (⋮) → Installa app", install_btn: "Installa App" }
+    };
+
+    let currentLang = 'ru';
+    async function setLanguage(lang, force = false) {
+      if (currentLang === lang && !force) return;
+      currentLang = lang;
+      document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.lang === lang));
+      const elements = document.querySelectorAll('[data-i18n]');
+      elements.forEach(el => { el.style.opacity = '0'; });
+      await new Promise(r => setTimeout(r, 250));
+      elements.forEach(el => {
+        const key = el.dataset.i18n;
+        if (translations[lang][key]) el.innerHTML = translations[lang][key];
+        el.style.opacity = '1';
+      });
+    }
+    document.querySelectorAll('.lang-btn').forEach(btn => btn.addEventListener('click', () => setLanguage(btn.dataset.lang)));
+
+    function isPWA() { return window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches || window.navigator.standalone === true; }
+    function isMobile() { return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches); }
+
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; $('install-btn').style.display = 'inline-block'; });
+    $('install-btn').addEventListener('click', async () => { if (deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; $('install-btn').style.display = 'none'; } });
+
+    const activateScreen = (id) => {
+      document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+      if (id) $(id).classList.add('active');
+    };
+
+    // ★ ИНИЦИАЛИЗАЦИЯ НАСТРОЕК ★
+    let SettingsModule = null;
+    try {
+      const mod = await import('./Фон/settings-manager.js');
+      SettingsModule = mod.Settings;
+      SettingsModule.init();
+    } catch (e) {
+      console.warn('settings-manager.js не найден, используются стандартные настройки.');
+    }
+
+    // звук импортируем заранее: первый клик по дисклеймеру = разблокировка AudioContext
+    await import('./Фон/sounds.js').catch(() => {});
+
+    // ★ ПОЛНЫЙ ЭКРАН + БЛОКИРОВКА ГОРИЗОНТАЛЬНОЙ ОРИЕНТАЦИИ (вызывать внутри жеста) ★
+    function enterImmersive() {
+      try { window.SoundsEngine?.init(); } catch (e) {}
+      if (!isMobile() && !isPWA()) return; // на компьютере остаёмся в браузере
+      try {
+        const el = document.documentElement;
+        const req = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (req && !document.fullscreenElement) req.call(el, { navigationUI: 'hide' }).catch(() => {});
+      } catch (e) {}
+      try { screen.orientation?.lock?.('landscape').catch(() => {}); } catch (e) {}
+    }
+
+    async function startApp() {
+      if (isMobile() && !isPWA()) {
+        activateScreen('install-screen'); setLanguage('ru', true); return;
+      }
+
+      const imgL1 = $('img-l1'), imgL2 = $('img-l2'), fade = $('fade-overlay');
+
+      activateScreen('screen-l1');
+      fade.style.transition = 'none'; fade.style.opacity = '0';
+      if (imgL1) imgL1.classList.add('visible');
+
+      await new Promise(r => setTimeout(r, 5000));
+
+      fade.style.transition = 'opacity 1.5s ease'; fade.style.opacity = '1';
+      await new Promise(r => setTimeout(r, 1500));
+
+      activateScreen('screen-l2');
+      if (imgL2) imgL2.classList.add('visible');
+      fade.style.opacity = '0';
+
+      await new Promise(r => setTimeout(r, 2500));
+      if (imgL2) imgL2.classList.remove('visible');
+      await new Promise(r => setTimeout(r, 1500));
+
+      activateScreen('disclaimer-screen');
+    }
+
+    // ★ ПИКСЕЛЬНЫЙ ПЕРЕХОД ПО КЛИКУ (исправлен: канвас прозрачный, пиксели накапливаются) ★
+    async function pixelTransition() {
+      return new Promise(resolve => {
+        const canvas = $('pixel-canvas');
+        const ctx = canvas.getContext('2d');
+        const pixelSize = 30;
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const cols = Math.ceil(canvas.width / pixelSize);
+        const rows = Math.ceil(canvas.height / pixelSize);
+        const drawn = new Uint8Array(cols * rows);
+
+        canvas.style.display = 'block';
+
+        const startTime = performance.now();
+        const totalDuration = 1500;
+        const totalDiagonals = cols + rows - 1;
+        const timePerDiagonal = totalDuration / totalDiagonals;
+        const blurDuration = 150;
+
+        function animate(now) {
+          const elapsed = now - startTime;
+          for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              const idx = r * cols + c;
+              if (drawn[idx]) continue;
+              const timeSinceStart = elapsed - (r + c) * timePerDiagonal;
+              if (timeSinceStart < 0) continue;
+              const alpha = Math.min(1, timeSinceStart / blurDuration);
+              ctx.fillStyle = `rgba(5, 4, 7, ${alpha})`;
+              ctx.fillRect(c * pixelSize, r * pixelSize, pixelSize + 1, pixelSize + 1);
+              if (alpha >= 1) drawn[idx] = 1;
+            }
+          }
+          if (elapsed > totalDuration + blurDuration + 50) {
+            ctx.fillStyle = '#050407';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            resolve();
+          } else {
+            requestAnimationFrame(animate);
+          }
+        }
+        requestAnimationFrame(animate);
+      });
+    }
+
+    $('disclaimer-screen').addEventListener('click', async () => {
+      // первый клик: звук + полный экран + ландшафт (синхронно, внутри жеста)
+      enterImmersive();
+      $('disclaimer-screen').classList.add('out');
+
+      await pixelTransition();
+
+      $('disclaimer-screen').classList.remove('active');
+      $('disclaimer-screen').style.display = 'none';
+      $('pixel-canvas').style.display = 'none';
+
+      try {
+        if (SettingsModule) SettingsModule.apply();
+        if (window.SoundsEngine) window.SoundsEngine.init();
+
+        const pre = await precheckPromise;
+
+        // ★ ЕСЛИ ВСЁ В КЭШЕ — экран загрузки и полоса НЕ появляются, сразу меню ★
+        if (pre.missing.length > 0) {
+          const loadingScreen = $('loading-screen');
+          loadingScreen.classList.add('active');
+          requestAnimationFrame(() => { loadingScreen.style.opacity = '1'; });
+          await new Promise(r => setTimeout(r, 900));
+        }
+
+        await loadAssets(pre);
+
+        const menuModule = await import('./Блоки/menu.js');
+        if (menuModule && menuModule.Menu) {
+          await menuModule.Menu.start('title');
+        }
+
+        const fade = $('fade-overlay');
+        fade.style.transition = 'opacity 1s ease-in-out'; fade.style.opacity = '1';
+        await new Promise(r => setTimeout(r, 1000));
+
+        activateScreen(null);
+        $('game-container').classList.add('active');
+        fade.style.opacity = '0';
+
+      } catch (err) {
+        console.error('Критическая ошибка:', err);
+        $('loading-status').textContent = 'Ошибка загрузки';
+      }
+    }, { once: true });
+
+    // ★ СИСТЕМА КЭШИРОВАНИЯ (IndexedDB, совместимо со старой базой) ★
+    const DB_NAME = 'woland_db';
+    let STORE_NAME = 'assets';
+    let db = null;
+
+    function initDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME); // без фиксированной версии: старая база остаётся рабочей
+        req.onupgradeneeded = (e) => {
+          const d = e.target.result;
+          if (!d.objectStoreNames.contains(STORE_NAME)) d.createObjectStore(STORE_NAME);
+        };
+        req.onsuccess = () => {
+          db = req.result;
+          const names = [...db.objectStoreNames];
+          if (names.length) STORE_NAME = names.includes('assets') ? 'assets' : names[0];
+          db.onversionchange = () => { try { db.close(); } catch (e) {} };
+          resolve();
+        };
+        req.onerror = () => reject(req.error);
+        req.onblocked = () => reject(new Error('IDB blocked'));
+      });
+    }
+
+    function getAsset(key) {
+      return new Promise((resolve) => {
+        if (!db) return resolve(null);
+        try {
+          const tx = db.transaction(STORE_NAME, 'readonly');
+          const req = tx.objectStore(STORE_NAME).get(key);
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => resolve(null);
+        } catch (e) { resolve(null); }
+      });
+    }
+
+    function putAsset(key, blob) {
+      return new Promise((resolve) => {
+        if (!db) return resolve();
+        try {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          tx.objectStore(STORE_NAME).put(blob, key);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => resolve();
+          tx.onabort = () => resolve();
+        } catch (e) { resolve(); }
+      });
+    }
+
+    function allKeys() {
+      return new Promise((resolve) => {
+        if (!db) return resolve([]);
+        try {
+          const tx = db.transaction(STORE_NAME, 'readonly');
+          const req = tx.objectStore(STORE_NAME).getAllKeys();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => resolve([]);
+        } catch (e) { resolve([]); }
+      });
+    }
+
+    async function buildQueue() {
+      const resp = await fetch('./load.json?t=' + Date.now(), { cache: 'no-store' });
+      if (!resp.ok) throw new Error('load.json не найден');
+      const manifest = await resp.json();
+      return [
+        ...Object.entries(manifest.sounds || {}).map(([id, data]) => ({ id, url: data.url, size: data.size, type: 'Звуки' })),
+        ...Object.entries(manifest.textures || {}).map(([id, data]) => ({ id, url: data.url, size: data.size, type: 'Текстуры' }))
+      ];
+    }
+
+    // фоновая проверка кэша во время логотипов/дисклеймера
+    const precheckPromise = (async () => {
+      try {
+        await initDB();
+        const queue = await buildQueue();
+        const keys = new Set(await allKeys());
+        const cached = [], missing = [];
+        for (const item of queue) (keys.has(item.url) ? cached : missing).push(item);
+        return { queue, cached, missing };
+      } catch (e) {
+        console.warn('Кэш недоступен:', e);
+        try { return { queue: await buildQueue(), cached: [], missing: await buildQueue() }; }
+        catch (e2) { return { queue: [], cached: [], missing: [] }; }
+      }
+    })();
+
+    async function applyCached(items) {
+      window.GameAssets = window.GameAssets || {};
+      for (const item of items) {
+        const blob = await getAsset(item.url);
+        if (!blob) continue;
+        if (item.type === 'Текстуры') window.GameAssets[item.id] = URL.createObjectURL(blob);
+        else if (window.SoundsEngine) await window.SoundsEngine.loadSound(item.id, blob);
+      }
+    }
+
+    async function loadAssets(pre) {
+      const status = $('loading-status');
+      const progressBar = $('progress-bar');
+      const progress = $('progress-fill');
+      const sizeText = $('loading-size');
+
+      window.GameAssets = window.GameAssets || {};
+      await applyCached(pre.cached);
+
+      if (pre.missing.length === 0) {
+        status.textContent = 'Все файлы в кэше';
+        progressBar.style.display = 'none';
+        sizeText.style.display = 'none';
+        return;
+      }
+
+      status.textContent = 'Скачивание...';
+      progressBar.style.display = 'block';
+      sizeText.style.display = 'block';
+
+      const totalBytes = pre.queue.reduce((sum, item) => sum + (item.size || 0), 0);
+      let loadedBytes = pre.cached.reduce((sum, item) => sum + (item.size || 0), 0);
+      progress.style.width = `${totalBytes ? Math.min(100, Math.round(loadedBytes / totalBytes * 100)) : 0}%`;
+      sizeText.textContent = `${(loadedBytes / 1024 / 1024).toFixed(1)} МБ / ${(totalBytes / 1024 / 1024).toFixed(1)} МБ`;
+
+      for (let i = 0; i < pre.missing.length; i++) {
+        const item = pre.missing[i];
+        status.textContent = `Загрузка: ${item.type} [${i + 1}/${pre.missing.length}]`;
+        try {
+          const res = await fetch(item.url);
+          if (!res.ok) throw new Error('404');
+          const blob = await res.blob();
+          await putAsset(item.url, blob);
+          loadedBytes += (item.size || blob.size);
+          if (item.type === 'Текстуры') window.GameAssets[item.id] = URL.createObjectURL(blob);
+          else if (window.SoundsEngine) await window.SoundsEngine.loadSound(item.id, blob);
+        } catch (e) {
+          console.warn(`[Пропуск] ${item.url}`);
+          loadedBytes += (item.size || 0);
+        }
+        const percent = totalBytes ? Math.min(100, Math.round((loadedBytes / totalBytes) * 100)) : 100;
+        progress.style.width = `${percent}%`;
+        sizeText.textContent = `${(loadedBytes / 1024 / 1024).toFixed(1)} МБ / ${(totalBytes / 1024 / 1024).toFixed(1)} МБ`;
+      }
+
+      status.textContent = 'Готово!';
+      progress.style.width = '100%';
+    }
+
+    startApp();
   </script>
 </body>
 </html>

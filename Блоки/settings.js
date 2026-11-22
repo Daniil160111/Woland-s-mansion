@@ -17,13 +17,15 @@ const TABS = [
 
 const UI_FALLBACK = { btn_click: 0.30, btn_select: 0.30, btn_back: 0.35, transition: 0.50, reset: 0.50 };
 
-// физика капли: мгновенный отклик + торможение 80 мс при перехвате
 const SPRING_RELEASE = { k: 260, c: 22 };
 const SPRING_DRAG    = { k: 900, c: 46 };
 const BRAKE_MS = 80, BRAKE_DAMP = 55;
 const STRETCH_DIV = 2200, STRETCH_MAX = 0.42;
+const RUBBER = 0.35;          // сопротивление за краем
+const EDGE_SPILL_MAX = 0.5;   // макс «перелив» жидкости
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const rubber = (v, min, max, k) => v < min ? min - (min - v) * k : v > max ? max + (v - max) * k : v;
 
 const TIPS = {
   masterVol: 'Громкость музыки настроек и всего, кроме звуков эффектов.',
@@ -36,8 +38,8 @@ const TIPS = {
   render3D: 'Качество 3D-рендеринга объектов и окружения.',
   textureQuality: 'Детализация текстур поверхностей.',
   drawDistance: 'Как далеко видны объекты. Влияет на производительность.',
-  resetAll: 'Вернуть все настройки игры к заводским значениям.',
-  clearCache: 'Очистить кэшированные файлы. Игра перезапустится.'
+  resetAll: 'Вернуть все настройки к заводским. Игра перезапустится.',
+  clearCache: 'Очистить кэш медиа и кода. Игра перезапустится.'
 };
 
 export const SettingsMenu = {
@@ -48,9 +50,13 @@ export const SettingsMenu = {
   _active: false, _uiLockUntil: 0, _musicSource: null, _demoSource: null,
   _musicToken: 0, _musicStartedAt: 0, _busTimers: { music: null, effects: null },
   _visHandler: null, _ro: null, _reducedMotion: false, _tip: null,
-  _tipHandler: null, _tipHost: null, _enterAnim: null,
-  _ph: { x:0, v:0, target:0, dragging:false, pop:0, press:0, pressX:0, brakeUntil:0,
+  _tipHandler: null, _tipHost: null, _dialogOpen: false, _pendingDemo: null,
+  _snapshot: null, _saved: true,
+  _liq: new Map(), _liqRaf: null,
+  _ph: { x:0, v:0, target:0, dragging:false, pop:0, press:0, pressX:0, brakeUntil:0, over:0,
          lastIdx:0, raf:null, lastT:0, centers:[], segW:0, pad:5, downX:0, downT:0, moved:false, downIdx:0 },
+
+  _buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} },
 
   // ==================== ВХОД / ВЫХОД ====================
   start() {
@@ -61,27 +67,28 @@ export const SettingsMenu = {
 
     this._active = true;
     this._uiLockUntil = 0;
+    this._saved = true;
+    this._snapshot = JSON.parse(JSON.stringify(Settings.current)); // для отката при выходе без сохранения
     this._reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     this.applyEngineVolumes(0);
     this._renderShell(container);
     this._initPill();
+    this._bindWobble(container);
     this._startMusic();
     this._preloadDemo();
     this._bindTooltips(container);
 
     const layout = container.querySelector('.settings-layout');
     if (!this._reducedMotion && layout.animate) {
-      this._enterAnim = layout.animate(
-        [{ opacity: 0, transform: 'scale(.985)' }, { opacity: 1, transform: 'none' }],
-        { duration: 180, easing: 'cubic-bezier(.32,.72,0,1)' }
-      );
+      layout.animate([{ opacity: 0, transform: 'scale(.985)' }, { opacity: 1, transform: 'none' }],
+        { duration: 180, easing: 'cubic-bezier(.32,.72,0,1)' });
     }
 
     this._visHandler = () => {
       const eng = window.SoundsEngine;
       if (!this._active || !eng || !eng.ctx) return;
-      if (document.hidden) { eng.ctx.suspend(); this._sleepPill(); }
+      if (document.hidden) { eng.ctx.suspend(); this._sleepPill(); this._sleepLiq(); }
       else { eng.ctx.resume(); this._wakePill(); }
     };
     document.addEventListener('visibilitychange', this._visHandler);
@@ -91,6 +98,11 @@ export const SettingsMenu = {
     this._active = false;
     this._musicToken++;
     this._stopDemo();
+    // выход БЕЗ сохранения → откат к снимку
+    if (!this._saved && this._snapshot) {
+      Settings.current = JSON.parse(JSON.stringify(this._snapshot));
+      Settings.apply();
+    }
     const layout = document.querySelector('.settings-layout');
     const anim = (layout && layout.animate && !this._reducedMotion)
       ? layout.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, easing: 'ease-in', fill: 'forwards' }).finished.catch(() => {})
@@ -100,7 +112,7 @@ export const SettingsMenu = {
   },
 
   _cleanup() {
-    this._sleepPill();
+    this._sleepPill(); this._sleepLiq();
     this._unbindTooltips();
     if (this._ro) { this._ro.disconnect(); this._ro = null; }
     if (this._visHandler) { document.removeEventListener('visibilitychange', this._visHandler); this._visHandler = null; }
@@ -108,28 +120,28 @@ export const SettingsMenu = {
     this._musicSource = null;
   },
 
-  // ==================== ДЕМО-ЗВУК РЕЖИМА ====================
+  // ==================== ДЕМО ====================
   async _preloadDemo() {
     const eng = window.SoundsEngine;
     if (eng && !eng.loadedBuffers[DEMO_ID]) {
-      try { await eng.loadSound(DEMO_ID, new URL(DEMO_PATH, document.baseURI).href); } catch (e) {}
+      try {
+        await eng.loadSound(DEMO_ID, new URL(DEMO_PATH, document.baseURI).href);
+        if (this._pendingDemo) { const m = this._pendingDemo; this._pendingDemo = null; this._playDemoForMode(m); }
+      } catch (e) {}
     }
   },
-
   _stopDemo() {
-    if (this._demoSource && window.SoundsEngine) {
-      try { window.SoundsEngine.stop(this._demoSource); } catch (e) {}
-    }
+    if (this._demoSource && window.SoundsEngine) { try { window.SoundsEngine.stop(this._demoSource); } catch (e) {} }
     this._demoSource = null;
   },
-
   _playDemoForMode(mode) {
     const eng = window.SoundsEngine;
-    if (!eng || !eng.loadedBuffers[DEMO_ID]) return;
-    this._stopDemo(); // резко обрываем предыдущий
+    if (!eng) return;
+    if (!eng.loadedBuffers[DEMO_ID]) { this._pendingDemo = mode; return; }
+    this._stopDemo();
     const opts = { type: 'effects', modeOverride: mode, volume: 1 };
-    if (mode === 'stereo') opts.channelGains = [0.4, 0.6];   // моно-файл → честное стерео 40/60
-    if (mode === 'dolby')  opts.panSweep = true;             // панорама L→R на весь трек
+    if (mode === 'stereo') opts.channelGains = [0.4, 0.6];
+    if (mode === 'dolby')  opts.panSweep = true;
     const src = eng.play(DEMO_ID, opts);
     if (src) {
       this._demoSource = src;
@@ -139,7 +151,6 @@ export const SettingsMenu = {
 
   // ==================== ЗАМОК ====================
   isLocked() { return performance.now() < this._uiLockUntil; },
-
   playUI(name) {
     const now = performance.now();
     if (now < this._uiLockUntil) return Promise.resolve(false);
@@ -149,9 +160,7 @@ export const SettingsMenu = {
     this._uiLockUntil = now + ms;
     const layout = document.querySelector('.settings-layout');
     layout?.classList.add('sound-locked');
-    setTimeout(() => {
-      if (!this.isLocked()) document.querySelector('.settings-layout')?.classList.remove('sound-locked');
-    }, ms);
+    setTimeout(() => { if (!this.isLocked()) document.querySelector('.settings-layout')?.classList.remove('sound-locked'); }, ms);
     if (eng) eng.play(name, { type: 'effects', dolby: false, tailFade: name === 'reset' ? 0.3 : 0 });
     return new Promise(res => setTimeout(() => res(true), ms));
   },
@@ -160,12 +169,10 @@ export const SettingsMenu = {
   _musicBusTarget() { return clamp(Settings.current.masterVolume ?? 100, 0, 150) / 100 * MUSIC_BASE; },
   _fxBusTarget()    { return clamp(Settings.current.effectsVolume ?? 100, 0, 150) / 100 * FX_BASE; },
   _musicTrackVolume() { return MUSIC_BASE * clamp(Settings.current.masterVolume ?? 100, 0, 150) / 100; },
-
   applyEngineVolumes(ms = 120) {
     this._fadeBus('music', this._musicBusTarget(), ms);
     this._fadeBus('effects', this._fxBusTarget(), ms);
   },
-
   _fadeBus(bus, to, ms) {
     const eng = window.SoundsEngine;
     if (!eng) return;
@@ -180,13 +187,11 @@ export const SettingsMenu = {
       if (k >= 1) clearInterval(this._busTimers[bus]);
     }, 16);
   },
-
   async _startMusic() {
     const eng = window.SoundsEngine;
     if (!eng || this._musicSource) return;
     const token = ++this._musicToken;
     try {
-      // запускаем загрузку и терпеливо ждём буфер (до 3 c)
       if (!eng.loadedBuffers[MUSIC_ID]) eng.loadSound(MUSIC_ID, new URL(MUSIC_PATH, document.baseURI).href);
       for (let i = 0; i < 15; i++) {
         if (eng.loadedBuffers[MUSIC_ID] || token !== this._musicToken || !this._active) break;
@@ -197,27 +202,20 @@ export const SettingsMenu = {
       eng.setDolbyIntensity(100);
       this._musicStartedAt = eng.ctx.currentTime;
       eng.setMasterVolume('music', 0);
-      this._musicSource = eng.play(MUSIC_ID, {
-        type: 'music', loop: true, volume: this._musicTrackVolume(),
-        dolby: Settings.current.audioMode === 'dolby'
-      });
-      console.info('[Settings] музыка настроек запущена');
+      this._musicSource = eng.play(MUSIC_ID, { type: 'music', loop: true, volume: this._musicTrackVolume(), dolby: Settings.current.audioMode === 'dolby' });
       this._fadeBus('music', this._musicBusTarget(), 700);
     } catch (e) { console.warn('[Settings] ошибка музыки:', e); }
   },
-
   async _stopMusic(fadeMs = 300) {
     const eng = window.SoundsEngine;
     this._musicToken++;
-    const src = this._musicSource;
-    this._musicSource = null;
+    const src = this._musicSource; this._musicSource = null;
     if (!eng || !src) return;
     this._fadeBus('music', 0, fadeMs);
     await new Promise(r => setTimeout(r, fadeMs + 30));
     eng.stop(src);
     eng.setMasterVolume('music', this._musicBusTarget());
   },
-
   _restartMusicWithMode() {
     const eng = window.SoundsEngine;
     if (!eng || !this._musicSource) return;
@@ -226,10 +224,23 @@ export const SettingsMenu = {
     eng.stop(this._musicSource);
     this._musicStartedAt = eng.ctx.currentTime - offset;
     eng.setDolbyIntensity(100);
-    this._musicSource = eng.play(MUSIC_ID, {
-      type: 'music', loop: true, volume: this._musicTrackVolume(), offset,
-      dolby: Settings.current.audioMode === 'dolby'
-    });
+    this._musicSource = eng.play(MUSIC_ID, { type: 'music', loop: true, volume: this._musicTrackVolume(), offset, dolby: Settings.current.audioMode === 'dolby' });
+  },
+
+  // ==================== ВОЛНА НА СТАТИЧНЫХ ЭЛЕМЕНТАХ ====================
+  _bindWobble(host) {
+    host.addEventListener('pointerdown', (e) => {
+      const el = e.target.closest('.glass, .g-btn');
+      if (!el || el.closest('.wm-dialog')) return;
+      const r = el.getBoundingClientRect();
+      const px = ((e.clientX - r.left) / r.width) * 100;
+      const py = ((e.clientY - r.top) / r.height) * 100;
+      const press = e.pointerType === 'mouse' ? 0.5 : clamp(e.pressure || 0.5, 0, 1);
+      el.style.transformOrigin = `${px}% ${py}%`;
+      el.style.setProperty('--wamp', (0.4 + press * 1.2).toFixed(2));
+      el.classList.remove('wob'); void el.offsetWidth; el.classList.add('wob');
+      this._buzz(6);
+    }, true);
   },
 
   // ==================== ТУЛТИПЫ ====================
@@ -259,17 +270,14 @@ export const SettingsMenu = {
     this._hideTip(); this._tipHandler = null; this._tipHost = null;
   },
   _showTip(icon) {
-    const group = icon.closest('[data-tooltip]');
-    const text = group?.dataset.tooltip;
+    const text = icon.closest('[data-tooltip]')?.dataset.tooltip;
     if (!text) return;
     this._hideTip();
     const tip = document.createElement('div');
     tip.className = 'wm-tooltip'; tip.textContent = text;
-    document.body.appendChild(tip);
-    this._tip = tip;
+    document.body.appendChild(tip); this._tip = tip;
     requestAnimationFrame(() => {
-      const r = icon.getBoundingClientRect();
-      const tr = tip.getBoundingClientRect();
+      const r = icon.getBoundingClientRect(); const tr = tip.getBoundingClientRect();
       tip.style.left = Math.max(8, Math.min(window.innerWidth - tr.width - 8, r.left + r.width / 2 - tr.width / 2)) + 'px';
       tip.style.top  = Math.max(8, r.top - tr.height - 8) + 'px';
       tip.classList.add('show');
@@ -282,7 +290,7 @@ export const SettingsMenu = {
     const saveVisible = this.hasUnsavedChanges ? 'show' : '';
     container.innerHTML = `
       <div class="settings-layout">
-        <div class="wm-fog" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="wm-fog" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
         <svg width="0" height="0" style="position:absolute" aria-hidden="true">
           <filter id="wm-liquid" x="-20%" y="-20%" width="140%" height="140%">
             <feTurbulence type="fractalNoise" baseFrequency="0.012 0.028" numOctaves="2" seed="8" result="n"/>
@@ -302,14 +310,12 @@ export const SettingsMenu = {
         <div class="cat-bar-wrap">
           <div class="cat-bar" id="cat-bar" role="tablist" aria-label="Категории настроек">
             <div class="pill" id="cat-pill" aria-hidden="true">
-              <div class="pill-lens"></div>
-              <span class="pill-press"></span>
+              <div class="pill-lens"></div><span class="pill-press"></span>
             </div>
             ${TABS.map(t => `
               <button class="cat-btn ${this.currentTab === t.id ? 'active' : ''}" role="tab"
                 aria-selected="${this.currentTab === t.id}" tabindex="${this.currentTab === t.id ? 0 : -1}"
-                data-cat="${t.id}">${t.label}</button>
-            `).join('')}
+                data-cat="${t.id}">${t.label}</button>`).join('')}
           </div>
         </div>
 
@@ -317,7 +323,6 @@ export const SettingsMenu = {
       </div>
     `;
 
-    // все 4 страницы сразу: трек следует за каплей пропорционально
     const pages = container.querySelector('#settings-pages');
     pages.innerHTML = '<div class="pages-track" id="pages-track"></div>';
     const track = pages.firstElementChild;
@@ -367,7 +372,7 @@ export const SettingsMenu = {
     const idx = TABS.findIndex(t => t.id === cat);
     if (idx < 0) return;
     const ph = this._ph;
-    if (Math.abs(ph.v) > 40) ph.brakeUntil = performance.now() + BRAKE_MS; // перехват: тормоз 80 мс
+    if (Math.abs(ph.v) > 40) ph.brakeUntil = performance.now() + BRAKE_MS;
     ph.target = ph.centers[idx];
     ph.lastIdx = idx;
     this._wakePill();
@@ -377,11 +382,10 @@ export const SettingsMenu = {
   _commit(idx, sound) {
     const cat = TABS[idx].id;
     if (cat !== this.currentTab) {
-      this.currentTab = cat;
-      this.activeCategory = cat;
+      this.currentTab = cat; this.activeCategory = cat;
       this._updateTabsAria();
-    }
-    if (sound && !this.isLocked()) this.playUI('btn_click');
+      if (sound && !this.isLocked()) { this.playUI('btn_click'); this._buzz(12); }
+    } else if (sound && !this.isLocked()) { this.playUI('btn_select'); this._buzz(8); }
   },
 
   _updateTabsAria() {
@@ -395,8 +399,7 @@ export const SettingsMenu = {
 
   _rebuildPage(idx) {
     const track = document.getElementById('pages-track');
-    if (!track) return;
-    const pg = track.children[idx];
+    const pg = track?.children[idx];
     if (!pg) return;
     pg.innerHTML = '';
     this._fillPage(pg, TABS[idx].id);
@@ -420,18 +423,20 @@ export const SettingsMenu = {
       </div>`;
   },
 
-  _stripHTML(id, label, options, current, tipKey) {
+  // линия с круглой шайбой и физикой капли
+  _lineHTML(id, label, options, current, tipKey) {
     const idx = Math.max(0, options.findIndex(o => o[0] === current));
-    const w = 100 / options.length;
     return `
       <div class="setting-group glass" ${tipKey ? `data-tooltip="${TIPS[tipKey]}"` : ''}>
         <label><span>${label}:</span>${tipKey ? '<span class="tip-icon" aria-label="Справка">?</span>' : ''}</label>
-        <div class="seg-strip" id="set-${id}" role="radiogroup" aria-label="${label}">
-          <span class="seg-thumb" style="width:${w}%; transform:translateX(${idx * 100}%)"></span>
+        <div class="liq-line" id="set-${id}" data-key="${id}" data-idx="${idx}">
+          <span class="liq-track"></span>
+          <span class="liq-fill"></span>
+          <span class="liq-thumb"><span class="liq-shine"></span></span>
           ${options.map(([v, t], i) => `
-            <button type="button" class="seg-item ${i === idx ? 'on' : ''}" data-val="${v}"
-              role="radio" aria-checked="${i === idx}">
-              <span class="seg-label">${t}</span><span class="seg-dot"></span>
+            <button type="button" class="liq-stop ${i === idx ? 'on' : ''}" data-i="${i}" data-val="${v}"
+              style="left:${(i + 0.5) / options.length * 100}%" role="radio" aria-checked="${i === idx}">
+              <span class="liq-label">${t}</span><span class="liq-dot"></span>
             </button>`).join('')}
         </div>
       </div>`;
@@ -455,23 +460,153 @@ export const SettingsMenu = {
     });
   },
 
-  _bindStrip(page, id, key, onChange) {
-    const strip = page.querySelector('#set-' + id);
-    const thumb = strip.querySelector('.seg-thumb');
-    const items = [...strip.querySelectorAll('.seg-item')];
-    items.forEach((btn, i) => {
-      btn.onclick = () => {
+  // физика шайбы: общая для всех линий
+  _bindLine(page, id, key, onChange) {
+    const line = page.querySelector('#set-' + id);
+    if (!line) return;
+    const stops = [...line.querySelectorAll('.liq-stop')];
+    const n = stops.length;
+    const st = {
+      el: line, n, idx: parseInt(line.dataset.idx, 10) || 0,
+      x: 0, v: 0, target: 0, dragging: false, brakeUntil: 0, press: 0, pressX: 0,
+      downT: 0, downX: 0, moved: false, over: 0, key, onChange,
+      min: 0, max: 0, measured: false
+    };
+    this._liq.set(line, st);
+    const measure = () => {
+      const r = line.getBoundingClientRect();
+      const pad = 26;
+      st.min = pad; st.max = r.width - pad;
+      st.pos = stops.map((_, i) => pad + (st.max - st.min) * (i / (n - 1 || 1)));
+      if (!st.measured) { st.x = st.target = st.pos[st.idx]; st.measured = true; }
+      st.width = r.width;
+    };
+    st.measure = measure;
+    measure();
+
+    line.addEventListener('pointerdown', (e) => {
+      if (!this._active) return;
+      line.setPointerCapture(e.pointerId);
+      const r = line.getBoundingClientRect();
+      const x = e.clientX - r.left;
+      measure();
+      st.downT = performance.now(); st.downX = x; st.moved = false;
+      st.press = e.pointerType === 'mouse' ? 0.5 : clamp(e.pressure || 0.5, 0, 1);
+      st.pressX = x;
+      const near = Math.abs(x - st.x) < 30;
+      st.grab = near;
+      if (!near) { // тап по стопу
+        const i = clamp(Math.round((x - st.min) / ((st.max - st.min) / (n - 1 || 1))), 0, n - 1);
+        if (Math.abs(st.v) > 40) st.brakeUntil = performance.now() + BRAKE_MS;
+        st.target = st.pos[i];
+        this._wakeLiq();
+        this._liqCommit(st, i);
+      } else {
+        if (Math.abs(st.v) > 40) st.brakeUntil = performance.now() + BRAKE_MS;
+      }
+      this._wakeLiq();
+    });
+    line.addEventListener('pointermove', (e) => {
+      if (!st.downT) return;
+      const r = line.getBoundingClientRect();
+      const x = e.clientX - r.left;
+      st.press = e.pointerType === 'mouse' ? 0.5 : clamp(e.pressure || 0.5, 0, 1);
+      st.pressX = x;
+      if (!st.moved && Math.abs(x - st.downX) > 6) st.moved = true;
+      if (!st.moved || !st.grab) return;
+      st.dragging = true; st.brakeUntil = 0;
+      st.target = rubber(x, st.min, st.max, RUBBER); // резина за краями
+      this._wakeLiq();
+    });
+    const up = (e) => {
+      if (!st.downT) return;
+      const wasDrag = st.moved && st.grab;
+      st.downT = 0; st.dragging = false;
+      try { line.releasePointerCapture(e.pointerId); } catch (_) {}
+      if (wasDrag) {
+        const i = clamp(Math.round((st.x - st.min) / ((st.max - st.min) / (n - 1 || 1))), 0, n - 1);
+        st.target = st.pos[i];
+        this._wakeLiq();
+        this._liqCommit(st, i);
+      }
+    };
+    line.addEventListener('pointerup', up);
+    line.addEventListener('pointercancel', up);
+    stops.forEach((btn, i) => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
         if (this.isLocked()) return;
-        const val = btn.dataset.val;
-        this.playUI('btn_select');
-        if (Settings.current[key] === val) return;
-        Settings.set(key, val);
-        items.forEach((b, j) => { b.classList.toggle('on', j === i); b.setAttribute('aria-checked', j === i); });
-        thumb.style.transform = `translateX(${i * 100}%)`;
-        this.markChanged();
-        if (onChange) onChange(val);
+        if (Math.abs(st.v) > 40) st.brakeUntil = performance.now() + BRAKE_MS;
+        st.target = st.pos[i];
+        this._wakeLiq();
+        this._liqCommit(st, i);
       };
     });
+    this._renderLiq(st);
+  },
+
+  _liqCommit(st, i) {
+    const val = st.el.querySelectorAll('.liq-stop')[i]?.dataset.val;
+    if (!val) return;
+    st.el.querySelectorAll('.liq-stop').forEach((b, j) => {
+      b.classList.toggle('on', j === i); b.setAttribute('aria-checked', j === i);
+    });
+    st.idx = i;
+    if (this.isLocked()) return;
+    this.playUI('btn_select'); this._buzz(10);
+    if (Settings.current[st.key] === val) return;
+    Settings.set(st.key, val);
+    this.markChanged();
+    if (st.onChange) st.onChange(val);
+  },
+
+  _wakeLiq() {
+    if (this._liqRaf !== null || !this._active) return;
+    let last = performance.now();
+    const tick = (t) => {
+      this._liqRaf = null;
+      if (!this._active) return;
+      const dt = clamp((t - last) / 1000, 0, 1 / 30);
+      last = t;
+      let any = false;
+      this._liq.forEach(st => {
+        const braking = !st.dragging && t < st.brakeUntil;
+        const s = st.dragging ? SPRING_DRAG : SPRING_RELEASE;
+        const nn = Math.max(1, Math.ceil(dt / (1 / 120)));
+        const h = dt / nn;
+        for (let i = 0; i < nn; i++) {
+          const a = braking ? -BRAKE_DAMP * st.v : s.k * (st.target - st.x) - s.c * st.v;
+          st.v += a * h; st.x += st.v * h;
+        }
+        this._renderLiq(st);
+        if (st.dragging || Math.abs(st.v) > 1 || Math.abs(st.target - st.x) > 0.25 || st.downT) any = true;
+      });
+      if (any) this._liqRaf = requestAnimationFrame(tick);
+    };
+    this._liqRaf = requestAnimationFrame(tick);
+  },
+  _sleepLiq() { if (this._liqRaf !== null) { cancelAnimationFrame(this._liqRaf); this._liqRaf = null; } },
+
+  _renderLiq(st) {
+    const thumb = st.el.querySelector('.liq-thumb');
+    const fill = st.el.querySelector('.liq-fill');
+    if (!thumb) return;
+    const overL = Math.max(0, st.min - st.x);
+    const overR = Math.max(0, st.x - st.max);
+    const over = Math.max(overL, overR);
+    const s = Math.min(Math.abs(st.v) / STRETCH_DIV, STRETCH_MAX);
+    const spill = Math.min(over / 60, EDGE_SPILL_MAX);          // перелив жидкости в углы
+    const bulge = st.press * 0.3;                                // 3D touch
+    const sx = 1 + s + bulge + spill * 0.8;
+    const sy = 1 - s * 0.5 + bulge * 0.5 - spill * 0.35;
+    const skew = clamp(-st.v / 160, -9, 9) + (overR ? 6 : overL ? -6 : 0) * spill;
+    thumb.style.left = st.x + 'px';
+    thumb.style.transform = `translate(-50%,-50%) skewX(${skew}deg) scale(${sx},${sy})`;
+    thumb.style.setProperty('--pressx', (st.pressX - st.x + 17) + 'px');
+    thumb.style.setProperty('--pressop', (st.downT ? st.press : 0).toFixed(2));
+    thumb.style.setProperty('--spill', spill.toFixed(2));
+    thumb.style.setProperty('--spilldir', overR ? 1 : overL ? -1 : 0);
+    if (fill) fill.style.width = clamp(st.x, st.min, st.max) + 'px';
   },
 
   _pageAudio(page) {
@@ -479,15 +614,14 @@ export const SettingsMenu = {
     page.innerHTML = `
       ${this._rangeHTML('masterVol', 'Общая громкость', 0, 150, c.masterVolume, 'masterVol')}
       ${this._rangeHTML('effectsVol', 'Громкость эффектов', 0, 150, c.effectsVolume, 'effectsVol')}
-      ${this._stripHTML('audioMode', 'Режим звука',
-          [['mono','Моно'],['stereo','Стерео'],['dolby','Dolby Vertical']], c.audioMode, 'audioMode')}
+      ${this._lineHTML('audioMode', 'Режим звука', [['mono','Моно'],['stereo','Стерео'],['dolby','Dolby Vertical']], c.audioMode, 'audioMode')}
       <button id="btn-recommended" class="g-btn ghost wide">Рекомендуемые значения</button>
     `;
     this._bindRange(page, 'masterVol', 'masterVolume', () => this._fadeBus('music', this._musicBusTarget(), 100));
     this._bindRange(page, 'effectsVol', 'effectsVolume', () => this._fadeBus('effects', this._fxBusTarget(), 100));
-    this._bindStrip(page, 'audioMode', 'audioMode', (v) => {
+    this._bindLine(page, 'audioMode', 'audioMode', (v) => {
       this._restartMusicWithMode();
-      this._playDemoForMode(v); // демо на шине эффектов, без замка
+      this._playDemoForMode(v);
     });
     this._bindRecommended(page, 'audio', 'Сброс звука', 'Вернуть рекомендуемые настройки звука?');
   },
@@ -512,22 +646,21 @@ export const SettingsMenu = {
       { id: 'textureQuality', label: 'Качество текстур',     tip: 'textureQuality', options: [['ultra','Ультра'],['high','Высокий'],['medium','Средний'],['low','Низкий']] },
       { id: 'drawDistance',   label: 'Дальность прорисовки', tip: 'drawDistance',   options: [['no_simplification','Без упрощений'],['far','Дальний'],['near','Недалёкий'],['close','Ближний']] }
     ];
-    page.innerHTML = defs.map(d => this._stripHTML(d.id, d.label, d.options, Settings.current[d.id], d.tip)).join('') +
+    page.innerHTML = defs.map(d => this._lineHTML(d.id, d.label, d.options, Settings.current[d.id], d.tip)).join('') +
       `<button id="btn-recommended" class="g-btn ghost wide">Рекомендуемые значения</button>`;
-    defs.forEach(d => this._bindStrip(page, d.id, d.id));
+    defs.forEach(d => this._bindLine(page, d.id, d.id));
     this._bindRecommended(page, 'graphics', 'Сброс графики', 'Вернуть рекомендуемые настройки графики?');
   },
 
   _bindRecommended(page, category, title, text) {
     page.querySelector('#btn-recommended').onclick = async () => {
-      if (this.isLocked()) return;
+      if (this.isLocked() || this._dialogOpen) return;
       const ok = await this.confirmDialog({ title, text, okText: 'Сбросить', cancelText: 'Отмена' });
       if (!ok) return;
       if (!(await this.playUI('reset'))) return;
       Settings.resetCategory(category);
       if (category === 'audio') { this.applyEngineVolumes(150); this._restartMusicWithMode(); }
-      const idx = TABS.findIndex(t => t.id === category || (category === 'audio' && t.id === 'audio'));
-      this._rebuildPage(TABS.findIndex(t => t.id === this.currentTab));
+      TABS.forEach((t, i) => this._rebuildPage(i));
     };
   },
 
@@ -543,29 +676,31 @@ export const SettingsMenu = {
       </div>
     `;
     page.querySelector('#btn-reset-settings').onclick = async () => {
-      if (this.isLocked()) return;
+      if (this.isLocked() || this._dialogOpen) return;
       const ok = await this.confirmDialog({
-        title: 'Сброс всех настроек', text: 'Вернуть ВСЕ настройки к заводским? Это нельзя отменить.',
+        title: 'Сброс всех настроек', text: 'Вернуть ВСЕ настройки к заводским? Игра перезапустится.',
         okText: 'Сбросить всё', cancelText: 'Отмена', danger: true
       });
       if (!ok) return;
-      if (!(await this.playUI('reset'))) return;
+      console.info('[Settings] полный сброс → перезагрузка');
+      await this.playUI('reset');
       Settings.reset();
-      this.applyEngineVolumes(150);
-      this._restartMusicWithMode();
-      TABS.forEach((t, i) => this._rebuildPage(i));
+      this._saved = true;
+      setTimeout(() => location.reload(), 450); // даём хвосту звука дотлеть
     };
     page.querySelector('#btn-clear-cache').onclick = async () => {
-      if (this.isLocked()) return;
+      if (this.isLocked() || this._dialogOpen) return;
       const ok = await this.confirmDialog({
         title: 'Очистка кэша', text: 'Очистить кэш медиа и кода? Игра перезапустится.',
         okText: 'Очистить', cancelText: 'Отмена', danger: true
       });
       if (!ok) return;
+      console.info('[Settings] очистка кэша → перезагрузка');
       await this.playUI('reset');
       await this._stopMusic(200);
       this._cleanup();
       const reload = () => { localStorage.removeItem('woland_version'); location.reload(); };
+      setTimeout(reload, 1200); // гарантия даже если IndexedDB завис
       try {
         const req = indexedDB.deleteDatabase('woland_db');
         req.onsuccess = req.onerror = req.onblocked = reload;
@@ -576,17 +711,23 @@ export const SettingsMenu = {
   // ==================== СОХРАНЕНИЕ / МОДАЛКА ====================
   markChanged() {
     this.hasUnsavedChanges = true;
+    this._saved = false;
     document.querySelector('#btn-settings-save')?.classList.add('show');
   },
-
   async saveSettings() {
     if (!(await this.playUI('transition'))) return;
     Settings.save();
     this.hasUnsavedChanges = false;
+    this._saved = true;
+    this._snapshot = JSON.parse(JSON.stringify(Settings.current));
+    this._buzz(20);
     document.querySelector('#btn-settings-save')?.classList.remove('show');
   },
 
   confirmDialog({ title = 'Подтверждение', text = '', okText = 'Да', cancelText = 'Нет', danger = false } = {}) {
+    if (this._dialogOpen) return Promise.resolve(false); // окно не может удваиваться
+    this._dialogOpen = true;
+    this._buzz(10);
     return new Promise(resolve => {
       const host = document.querySelector('.settings-layout') || document.body;
       const overlay = document.createElement('div');
@@ -603,6 +744,7 @@ export const SettingsMenu = {
       host.appendChild(overlay);
       requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('show')));
       let closing = false;
+      const done = (v) => { this._dialogOpen = false; resolve(v); };
       const close = async (result, sound) => {
         if (closing) return;
         closing = true;
@@ -611,7 +753,7 @@ export const SettingsMenu = {
         if (wait > 0) await new Promise(r => setTimeout(r, wait));
         await this.playUI(sound);
         overlay.classList.remove('show');
-        setTimeout(() => { overlay.remove(); resolve(result); }, 130);
+        setTimeout(() => { overlay.remove(); done(result); }, 130);
       };
       const onKey = (e) => {
         if (!overlay.isConnected) { document.removeEventListener('keydown', onKey); return; }
@@ -631,7 +773,7 @@ export const SettingsMenu = {
     });
   },
 
-  // ==================== КАПЛЯ: ФИЗИКА + 3D TOUCH ====================
+  // ==================== КАПЛЯ ВНИЗУ ====================
   _initPill() {
     const bar = document.getElementById('cat-bar');
     this._measurePill();
@@ -645,10 +787,10 @@ export const SettingsMenu = {
       this._ph.x = this._ph.target = this._ph.centers[i];
       this._ph.v = 0;
       this._renderPill();
+      this._liq.forEach(st => { st.measured = false; st.measure && st.measure(); st.x = st.target = st.pos[st.idx]; this._renderLiq(st); });
     });
     this._ro.observe(bar);
   },
-
   _measurePill() {
     const bar = document.getElementById('cat-bar');
     const pill = document.getElementById('cat-pill');
@@ -660,14 +802,9 @@ export const SettingsMenu = {
     pill.style.width  = (this._ph.segW - 8) + 'px';
     pill.style.height = (r.height - 10) + 'px';
   },
-
-  _pressFrom(e) {
-    if (e.pointerType === 'mouse') return 0.35;
-    return clamp((e.pressure - 0.25) / 0.75, 0, 1);
-  },
-
+  _pressFrom(e) { return e.pointerType === 'mouse' ? 0.5 : clamp((e.pressure - 0.2) / 0.8, 0, 1); },
   _pillDown(e) {
-    if (!this._active || this._pageBusyGuard()) return;
+    if (!this._active) return;
     const bar = document.getElementById('cat-bar');
     bar.setPointerCapture(e.pointerId);
     const rect = bar.getBoundingClientRect();
@@ -676,33 +813,25 @@ export const SettingsMenu = {
     ph.dragging = false; ph.moved = false;
     ph.downX = x; ph.downT = performance.now();
     ph.downIdx = clamp(Math.floor((x - ph.pad) / ph.segW), 0, TABS.length - 1);
-    ph.press = this._pressFrom(e);
-    ph.pressX = x;
-    // МГНОВЕННЫЙ отклик: цель ставится сразу на нажатие
+    ph.press = this._pressFrom(e); ph.pressX = x;
     if (Math.abs(ph.v) > 40) ph.brakeUntil = performance.now() + BRAKE_MS;
     ph.target = ph.centers[ph.downIdx];
     ph.lastIdx = ph.downIdx;
     this._wakePill();
   },
-
-  _pageBusyGuard() { return false; }, // страницы больше не блокируют: трек едет всегда
-
   _pillMove(e) {
     const ph = this._ph;
     if (ph.downT === 0) return;
     const bar = document.getElementById('cat-bar');
     const rect = bar.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    ph.press = this._pressFrom(e);
-    ph.pressX = x;
+    ph.press = this._pressFrom(e); ph.pressX = x;
     if (!ph.moved && Math.abs(x - ph.downX) > 8) ph.moved = true;
     if (!ph.moved) return;
-    ph.dragging = true;
-    ph.brakeUntil = 0;
-    ph.target = clamp(x, ph.centers[0], ph.centers[TABS.length - 1]);
+    ph.dragging = true; ph.brakeUntil = 0;
+    ph.target = rubber(x, ph.centers[0], ph.centers[TABS.length - 1], RUBBER);
     this._wakePill();
   },
-
   _pillUp(e) {
     const ph = this._ph;
     if (ph.downT === 0) return;
@@ -710,16 +839,12 @@ export const SettingsMenu = {
     const downIdx = ph.downIdx;
     ph.downT = 0; ph.dragging = false;
     try { document.getElementById('cat-bar').releasePointerCapture(e.pointerId); } catch (_) {}
-    if (!wasDrag) {
-      this._commit(downIdx, true); // тап: цель уже стоит с pointerdown
-      return;
-    }
+    if (!wasDrag) { this._commit(downIdx, true); return; }
     const idx = clamp(Math.round((ph.x - ph.pad) / ph.segW - 0.5), 0, TABS.length - 1);
     ph.target = ph.centers[idx];
     this._wakePill();
     this._commit(idx, true);
   },
-
   _pillCancel() {
     const ph = this._ph;
     ph.downT = 0; ph.dragging = false;
@@ -727,7 +852,6 @@ export const SettingsMenu = {
     ph.target = ph.centers[i];
     this._wakePill();
   },
-
   _wakePill() {
     const ph = this._ph;
     if (ph.raf !== null || !this._active) return;
@@ -743,43 +867,43 @@ export const SettingsMenu = {
       const h = dt / n;
       for (let i = 0; i < n; i++) {
         const a = braking ? -BRAKE_DAMP * ph.v : s.k * (ph.target - ph.x) - s.c * ph.v;
-        ph.v += a * h;
-        ph.x += ph.v * h;
+        ph.v += a * h; ph.x += ph.v * h;
       }
       ph.pop *= Math.exp(-7 * dt);
-      ph.press += ((ph.downT ? ph.press : 0) - ph.press) * 0; // press обновляется в событиях
       this._renderPill();
       if (!ph.dragging && Math.abs(ph.v) < 1 && Math.abs(ph.target - ph.x) < 0.25 && !ph.downT) {
-        ph.x = ph.target; ph.v = 0;
-        this._renderPill();
-        return;
+        ph.x = ph.target; ph.v = 0; this._renderPill(); return;
       }
       ph.raf = requestAnimationFrame(frame);
     };
     ph.raf = requestAnimationFrame(frame);
   },
-
   _sleepPill() { if (this._ph.raf !== null) { cancelAnimationFrame(this._ph.raf); this._ph.raf = null; } },
-
   _renderPill() {
     const pill = document.getElementById('cat-pill');
     const track = document.getElementById('pages-track');
     if (!pill) return;
     const ph = this._ph;
+    const c0 = ph.centers[0], cN = ph.centers[TABS.length - 1];
+    const overL = Math.max(0, c0 - ph.x), overR = Math.max(0, ph.x - cN);
+    const over = Math.max(overL, overR);
+    const spill = Math.min(over / 70, EDGE_SPILL_MAX);
     let sx = 1, sy = 1, skew = 0;
     if (!this._reducedMotion) {
       const s = Math.min(Math.abs(ph.v) / STRETCH_DIV, STRETCH_MAX);
-      const bulge = ph.press * 0.16;             // 3D touch: давление раздувает каплю
-      sx = 1 + s - ph.pop * 0.05 + bulge;
-      sy = 1 - s * 0.55 + ph.pop * 0.14 + bulge * 0.55;
-      skew = clamp(-ph.v / 160, -9, 9);
+      const bulge = ph.press * 0.3;
+      sx = 1 + s - ph.pop * 0.05 + bulge + spill * 0.7;
+      sy = 1 - s * 0.55 + ph.pop * 0.14 + bulge * 0.5 - spill * 0.3;
+      skew = clamp(-ph.v / 160, -9, 9) + (overR ? 5 : overL ? -5 : 0) * spill;
     } else { ph.x = ph.target; ph.v = 0; }
     pill.style.transform = `translate3d(${ph.x}px,0,0) translate(-50%,-50%) skewX(${skew}deg) scale(${sx},${sy})`;
-    pill.style.setProperty('--pressx', (ph.pressX - ph.x + (pill.offsetWidth * sx) / 2) + 'px');
+    pill.style.setProperty('--pressx', (ph.pressX - ph.x + pill.offsetWidth * sx / 2) + 'px');
     pill.style.setProperty('--pressop', (ph.downT ? ph.press : 0).toFixed(2));
-    // страницы следуют за каплей пропорционально
+    pill.style.setProperty('--spill', spill.toFixed(2));
+    pill.style.setProperty('--spilldir', overR ? 1 : overL ? -1 : 0);
     if (track) {
-      const f = clamp((ph.x - ph.centers[0]) / ph.segW, 0, TABS.length - 1);
+      // резина на краях: энергия затухает туда-сюда даже на первой/последней странице
+      const f = clamp((ph.x - c0) / ph.segW, -0.22, TABS.length - 1 + 0.22);
       track.style.transform = `translate3d(${-f * 25}%,0,0)`;
     }
   },
@@ -788,21 +912,19 @@ export const SettingsMenu = {
   _css() { return `
     .settings-layout {
       position: absolute; inset: 0; display: flex; flex-direction: column;
-      background: #0b0714; color: #fff; overflow: hidden;
+      background: #050308; color: #fff; overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
-    /* тёмно-фиолетовый туман */
-    .wm-fog { position: absolute; inset: -25%; pointer-events: none; filter: blur(70px); opacity: .6; z-index: 0; }
+    .wm-fog { position: absolute; inset: -25%; pointer-events: none; filter: blur(80px); opacity: .55; z-index: 0; }
     .wm-fog i { position: absolute; display: block; border-radius: 50%; }
-    .wm-fog i:nth-child(1) { width: 60%; height: 55%; left: 2%; top: 6%;
-      background: radial-gradient(circle, rgba(96,42,170,.55), transparent 65%);
-      animation: fog1 26s ease-in-out infinite alternate; }
-    .wm-fog i:nth-child(2) { width: 55%; height: 50%; right: 0%; top: 30%;
-      background: radial-gradient(circle, rgba(120,32,120,.38), transparent 65%);
-      animation: fog2 31s ease-in-out infinite alternate; }
-    .wm-fog i:nth-child(3) { width: 70%; height: 55%; left: 12%; bottom: -6%;
-      background: radial-gradient(circle, rgba(44,22,96,.55), transparent 70%);
-      animation: fog3 23s ease-in-out infinite alternate; }
+    .wm-fog i:nth-child(1) { width: 58%; height: 52%; left: 0%; top: 4%;
+      background: radial-gradient(circle, rgba(28,58,150,.30), transparent 65%); animation: fog1 26s ease-in-out infinite alternate; }
+    .wm-fog i:nth-child(2) { width: 52%; height: 48%; right: 0%; top: 28%;
+      background: radial-gradient(circle, rgba(10,18,64,.36), transparent 65%); animation: fog2 31s ease-in-out infinite alternate; }
+    .wm-fog i:nth-child(3) { width: 66%; height: 52%; left: 10%; bottom: -6%;
+      background: radial-gradient(circle, rgba(74,28,132,.28), transparent 70%); animation: fog3 23s ease-in-out infinite alternate; }
+    .wm-fog i:nth-child(4) { width: 40%; height: 40%; left: 40%; top: 40%;
+      background: radial-gradient(circle, rgba(18,10,40,.4), transparent 70%); animation: fog1 19s ease-in-out infinite alternate-reverse; }
     @keyframes fog1 { to { transform: translate3d(6%,4%,0) scale(1.12); } }
     @keyframes fog2 { to { transform: translate3d(-7%,5%,0) scale(1.08); } }
     @keyframes fog3 { to { transform: translate3d(4%,-5%,0) scale(1.15); } }
@@ -812,8 +934,7 @@ export const SettingsMenu = {
     }
     .settings-layout > *:not(.wm-fog) { position: relative; z-index: 1; }
 
-    /* БЕСЦВЕТНОЕ жидкое стекло */
-    .glass, .g-btn, .cat-bar, .pill {
+    .glass, .g-btn, .cat-bar, .pill, .liq-thumb, .wm-dialog {
       background: rgba(255,255,255,.06);
       border: 1px solid rgba(255,255,255,.16);
       -webkit-backdrop-filter: blur(18px) saturate(1.6) brightness(1.06);
@@ -821,184 +942,157 @@ export const SettingsMenu = {
       box-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -1px 0 rgba(255,255,255,.06), 0 10px 30px rgba(0,0,0,.45);
     }
 
-    .settings-header {
-      display: flex; align-items: center; justify-content: space-between; gap: 10px;
-      padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top));
+    .wob { animation: wm-wob .5s cubic-bezier(.36,.07,.19,.97); }
+    @keyframes wm-wob {
+      0%   { transform: scale(1,1); }
+      18%  { transform: scale(calc(1 + .05*var(--wamp,1)), calc(1 - .045*var(--wamp,1))) rotate(calc(.5deg*var(--wamp,1))); }
+      42%  { transform: scale(calc(1 - .03*var(--wamp,1)), calc(1 + .028*var(--wamp,1))); }
+      68%  { transform: scale(calc(1 + .015*var(--wamp,1)), calc(1 - .013*var(--wamp,1))); }
+      100% { transform: none; }
     }
+
+    .settings-header { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top)); }
     .settings-title { font-size: 17px; font-weight: 700; letter-spacing: .3px; opacity: .92; }
 
-    .g-btn {
-      position: relative; padding: 10px 20px; font-size: 15px; color: #fff; cursor: pointer;
+    .g-btn { position: relative; padding: 10px 20px; font-size: 15px; color: #fff; cursor: pointer;
       border-radius: 999px; overflow: hidden;
-      transition: transform .12s cubic-bezier(.34,1.56,.64,1), background .15s ease, border-color .15s ease, opacity .15s ease;
-    }
-    .g-btn::before {
-      content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-      background: linear-gradient(180deg, rgba(255,255,255,.25), transparent 45%);
-    }
+      transition: transform .12s cubic-bezier(.34,1.56,.64,1), background .15s ease, border-color .15s ease, opacity .15s ease; }
+    .g-btn::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+      background: linear-gradient(180deg, rgba(255,255,255,.25), transparent 45%); }
     .g-btn:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.35); }
     .g-btn:active { transform: scale(.94); }
     .g-btn.primary { background: rgba(255,20,20,.22); border-color: rgba(255,70,70,.55); }
     .g-btn.danger { background: rgba(120,0,0,.45); border-color: rgba(255,0,0,.6); }
-    .g-btn.wide { width: 100%; max-width: 420px; padding: 14px; }
+    .g-btn.wide { width: 100%; max-width: 420px; padding: 14px 40px 14px 16px; text-align: left; }
 
     .save-btn { opacity: 0; transform: scale(.85); pointer-events: none; transition: all .15s cubic-bezier(.32,.72,0,1); }
     .save-btn.show { opacity: 1; transform: none; pointer-events: auto; }
 
-    /* страницы: трек следует за каплей */
     .settings-pages { position: relative; flex: 1; overflow: hidden; }
     .pages-track { display: flex; width: 400%; height: 100%; will-change: transform; }
-    .settings-page {
-      width: 25%; height: 100%; overflow-y: auto; padding: 16px 18px 24px;
+    .settings-page { width: 25%; height: 100%; overflow-y: auto; padding: 16px 18px 24px;
       display: flex; flex-direction: column; align-items: center; gap: 12px;
-      scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.28) transparent;
-    }
+      scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.28) transparent; }
     .settings-page::-webkit-scrollbar { width: 6px; }
-    .settings-page::-webkit-scrollbar-track { background: transparent; }
     .settings-page::-webkit-scrollbar-thumb { background: rgba(255,255,255,.22); border-radius: 3px; }
-    .settings-page > * { animation: wm-rise .3s cubic-bezier(.32,.72,0,1) both; animation-delay: calc(var(--i,0) * 25ms); }
+    .settings-page > * { flex: 0 0 auto; animation: wm-rise .3s cubic-bezier(.32,.72,0,1) both; animation-delay: calc(var(--i,0) * 25ms); }
     @keyframes wm-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
     .setting-group { width: 100%; max-width: 420px; padding: 13px 16px; border-radius: 18px; display: flex; flex-direction: column; gap: 10px; }
     .setting-group label { font-size: 14px; color: #d8d8dc; display: flex; justify-content: space-between; align-items: center; }
     .setting-group label b { color: #fff; font-weight: 600; }
 
-    .tip-icon {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 18px; height: 18px; border-radius: 50%; font-size: 11px; font-weight: 700;
-      background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.22);
-      color: rgba(255,255,255,.8); cursor: help; flex-shrink: 0;
-      transition: background .15s ease, border-color .15s ease, transform .1s ease;
-    }
+    .tip-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+      border-radius: 50%; font-size: 11px; font-weight: 700; background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.22); color: rgba(255,255,255,.8); cursor: help; flex-shrink: 0;
+      transition: background .15s ease, border-color .15s ease, transform .1s ease; }
     .tip-icon:hover { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.5); }
-    .tip-icon:active { transform: scale(.9); }
     .tip-icon.btn-tip { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); z-index: 2; }
 
-    input[type="range"] {
-      -webkit-appearance: none; appearance: none; width: 100%; height: 8px; border-radius: 999px; cursor: pointer;
+    input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 8px; border-radius: 999px; cursor: pointer;
       background: linear-gradient(90deg, rgba(255,255,255,.75) var(--p,50%), rgba(255,255,255,.12) var(--p,50%));
-      box-shadow: inset 0 1px 2px rgba(0,0,0,.5); outline: none;
-    }
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,.5); outline: none; }
+    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%;
       background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.98), rgba(255,255,255,.4) 40%, rgba(210,210,220,.28));
-      border: 1px solid rgba(255,255,255,.6);
-      box-shadow: 0 2px 8px rgba(0,0,0,.55), inset 0 1px 1px rgba(255,255,255,.8);
-      transition: transform .12s cubic-bezier(.34,1.56,.64,1);
-    }
+      border: 1px solid rgba(255,255,255,.6); box-shadow: 0 2px 8px rgba(0,0,0,.55), inset 0 1px 1px rgba(255,255,255,.8);
+      transition: transform .12s cubic-bezier(.34,1.56,.64,1); }
     input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.18); }
-    input[type="range"]::-moz-range-thumb {
-      width: 24px; height: 24px; border-radius: 50%;
+    input[type="range"]::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%;
       background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.98), rgba(255,255,255,.4) 40%, rgba(210,210,220,.28));
-      border: 1px solid rgba(255,255,255,.6);
-    }
+      border: 1px solid rgba(255,255,255,.6); }
 
-    /* полоски-сегменты с подписями */
-    .seg-strip {
-      position: relative; display: flex; padding: 4px; border-radius: 16px;
-      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12);
-    }
-    .seg-thumb {
-      position: absolute; top: 4px; bottom: 4px; left: 4px; border-radius: 12px;
-      background: rgba(255,255,255,.14);
-      border: 1px solid rgba(255,255,255,.28);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 4px 12px rgba(0,0,0,.35);
-      -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
-      transition: transform .18s cubic-bezier(.32,.72,0,1);
-      pointer-events: none;
-    }
-    .seg-item {
-      position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;
-      padding: 8px 2px; background: none; border: none; cursor: pointer;
-      color: rgba(255,255,255,.55); transition: color .15s ease, transform .1s ease;
-    }
-    .seg-item:active { transform: scale(.94); }
-    .seg-item.on { color: #fff; }
-    .seg-label { font-size: 10px; font-weight: 600; letter-spacing: .2px; text-align: center; line-height: 1.1; }
-    .seg-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid currentColor; opacity: .8; }
-    .seg-item.on .seg-dot { background: currentColor; box-shadow: 0 0 10px rgba(255,255,255,.5); }
+    /* линия с круглой шайбой */
+    .liq-line { position: relative; height: 64px; touch-action: none; user-select: none; -webkit-user-select: none; }
+    .liq-track { position: absolute; left: 26px; right: 26px; top: 44px; height: 5px; border-radius: 3px;
+      background: rgba(255,255,255,.14); box-shadow: inset 0 1px 2px rgba(0,0,0,.5); }
+    .liq-fill { position: absolute; left: 26px; top: 44px; height: 5px; border-radius: 3px;
+      background: rgba(255,255,255,.65); box-shadow: 0 0 8px rgba(255,255,255,.35); }
+    .liq-thumb { position: absolute; top: 46px; left: 26px; width: 34px; height: 34px; border-radius: 50%;
+      overflow: hidden; will-change: transform; pointer-events: none; z-index: 2;
+      background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.35);
+      -webkit-backdrop-filter: blur(4px) saturate(1.8) brightness(1.12);
+      backdrop-filter: blur(4px) saturate(1.8) brightness(1.12);
+      box-shadow: inset 0 1px 1px rgba(255,255,255,.6), inset 0 -1px 1px rgba(255,255,255,.15), 0 6px 16px rgba(0,0,0,.45); }
+    .liq-thumb::before { content: ''; position: absolute; inset: 0; border-radius: inherit;
+      background: linear-gradient(180deg, rgba(255,255,255,.4), transparent 45%); }
+    /* перелив жидкости за предел: капля тянется в незанятый угол */
+    .liq-thumb::after { content: ''; position: absolute; top: 15%; bottom: 15%; width: calc(var(--spill,0) * 26px);
+      ${''}border-radius: 50%; background: rgba(255,255,255,.28); filter: blur(3px);
+      left: calc(calc(var(--spilldir,0) * -1) * calc(var(--spill,0) * 26px)); opacity: var(--spill,0); }
+    .liq-shine { position: absolute; top: 50%; left: var(--pressx,50%); width: 40px; height: 40px;
+      transform: translate(-50%,-50%); border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,255,255,.55), transparent 65%);
+      opacity: var(--pressop,0); filter: blur(2px); transition: opacity .12s ease; }
+    .liq-stop { position: absolute; top: 0; transform: translateX(-50%); background: none; border: none;
+      display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 4px 2px; cursor: pointer;
+      color: rgba(255,255,255,.5); transition: color .15s ease, transform .1s ease; }
+    .liq-stop:active { transform: translateX(-50%) scale(.94); }
+    .liq-stop.on { color: #fff; }
+    .liq-label { font-size: 10px; font-weight: 600; text-align: center; line-height: 1.1; max-width: 64px; }
+    .liq-dot { width: 9px; height: 9px; border-radius: 50%; border: 2px solid currentColor; opacity: .85; }
+    .liq-stop.on .liq-dot { background: currentColor; box-shadow: 0 0 8px rgba(255,255,255,.5); }
 
     .system-actions { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 420px; align-items: center; }
 
-    /* капсула-оболочка */
     .cat-bar-wrap { padding: 10px 14px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
-    .cat-bar {
-      position: relative; display: flex; height: 58px; border-radius: 999px;
-      touch-action: none; user-select: none; -webkit-user-select: none;
-      max-width: 560px; margin: 0 auto;
-      box-shadow: inset 0 2px 6px rgba(0,0,0,.5), inset 0 -1px 0 rgba(255,255,255,.12), 0 10px 30px rgba(0,0,0,.45);
-    }
-    .cat-btn {
-      flex: 1; position: relative; z-index: 2; background: none; border: none; cursor: pointer;
+    .cat-bar { position: relative; display: flex; height: 58px; border-radius: 999px;
+      touch-action: none; user-select: none; -webkit-user-select: none; max-width: 560px; margin: 0 auto;
+      box-shadow: inset 0 2px 6px rgba(0,0,0,.5), inset 0 -1px 0 rgba(255,255,255,.12), 0 10px 30px rgba(0,0,0,.45); }
+    .cat-btn { flex: 1; position: relative; z-index: 2; background: none; border: none; cursor: pointer;
       color: rgba(255,255,255,.55); font-size: 14px; font-weight: 600; border-radius: 999px;
-      transition: color .15s ease, transform .1s ease;
-    }
+      transition: color .15s ease, transform .1s ease; }
     .cat-btn:active { transform: scale(.94); }
     .cat-btn.active { color: #fff; text-shadow: 0 0 12px rgba(255,255,255,.45); }
     .cat-btn:focus-visible { outline: 2px solid rgba(255,255,255,.6); outline-offset: -4px; }
 
-    .pill {
-      position: absolute; left: 0; top: 50%; z-index: 1; border-radius: 999px;
+    .pill { position: absolute; left: 0; top: 50%; z-index: 1; border-radius: 999px; overflow: hidden;
       will-change: transform; pointer-events: none;
-      background: rgba(255,255,255,.10);
-      border: 1px solid rgba(255,255,255,.30);
+      background: rgba(255,255,255,.10); border: 1px solid rgba(255,255,255,.30);
       -webkit-backdrop-filter: blur(3px) saturate(1.8) brightness(1.1);
       backdrop-filter: blur(3px) saturate(1.8) brightness(1.1);
-      box-shadow: inset 0 1px 1px rgba(255,255,255,.55), inset 0 -1px 1px rgba(255,255,255,.15), 0 6px 18px rgba(0,0,0,.4);
-    }
-    .pill-lens {
-      position: absolute; inset: 0; border-radius: inherit;
-      -webkit-backdrop-filter: url(#wm-liquid); backdrop-filter: url(#wm-liquid);
-    }
-    .pill::after {
-      content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-      background: linear-gradient(180deg, rgba(255,255,255,.35), transparent 42%, rgba(255,255,255,.06));
-    }
-    .pill-press {
-      position: absolute; top: 50%; left: var(--pressx, 50%); width: 46px; height: 46px;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,.55), inset 0 -1px 1px rgba(255,255,255,.15), 0 6px 18px rgba(0,0,0,.4); }
+    .pill-lens { position: absolute; inset: 0; border-radius: inherit;
+      -webkit-backdrop-filter: url(#wm-liquid); backdrop-filter: url(#wm-liquid); }
+    .pill::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+      background: linear-gradient(180deg, rgba(255,255,255,.35), transparent 42%, rgba(255,255,255,.06)); }
+    .pill::before { content: ''; position: absolute; top: 12%; bottom: 12%; width: calc(var(--spill,0) * 40px);
+      border-radius: 50%; background: rgba(255,255,255,.3); filter: blur(4px);
+      left: calc(calc(var(--spilldir,0) * -1) * calc(var(--spill,0) * 40px)); opacity: var(--spill,0); z-index: 3; }
+    .pill-press { position: absolute; top: 50%; left: var(--pressx,50%); width: 46px; height: 46px;
       transform: translate(-50%,-50%); border-radius: 50%; pointer-events: none;
       background: radial-gradient(circle, rgba(255,255,255,.5), transparent 65%);
-      opacity: var(--pressop, 0); filter: blur(2px);
-      transition: opacity .12s ease;
-    }
+      opacity: var(--pressop,0); filter: blur(2px); transition: opacity .12s ease; }
 
-    .settings-layout.sound-locked button:not(.cat-btn):not(.seg-item),
-    .settings-layout.sound-locked select { pointer-events: none; }
+    .settings-layout.sound-locked button:not(.cat-btn):not(.liq-stop), .settings-layout.sound-locked select,
     .settings-layout.sound-locked input[type="range"] { pointer-events: none; }
     .settings-layout.sound-locked { cursor: progress; }
 
-    .wm-overlay {
-      position: absolute; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center;
+    .wm-overlay { position: absolute; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center;
       background: rgba(0,0,0,0); -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0);
-      transition: background .16s ease, backdrop-filter .16s ease;
-    }
+      transition: background .16s ease, backdrop-filter .16s ease; }
     .wm-overlay.show { background: rgba(5,2,10,.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
-    .wm-dialog {
-      width: min(92%, 380px); padding: 20px; border-radius: 24px; background: rgba(26,18,34,.85);
+    .wm-dialog { width: min(92%, 380px); padding: 20px; border-radius: 24px; background: rgba(26,18,34,.85);
       transform: translateY(14px) scale(.95); opacity: 0;
-      transition: transform .16s cubic-bezier(.32,.72,0,1), opacity .14s ease;
-    }
+      transition: transform .16s cubic-bezier(.32,.72,0,1), opacity .14s ease; }
     .wm-overlay.show .wm-dialog { transform: none; opacity: 1; }
     .wm-dialog-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
     .wm-dialog-text { font-size: 14px; color: #cfcfd4; line-height: 1.45; margin-bottom: 16px; }
     .wm-dialog-buttons { display: flex; gap: 10px; }
-    .wm-dialog-buttons .g-btn { flex: 1; }
+    .wm-dialog-buttons .g-btn { flex: 1; padding: 12px 10px; text-align: center; }
 
-    .wm-tooltip {
-      position: fixed; z-index: 120; padding: 10px 14px; max-width: 280px;
+    .wm-tooltip { position: fixed; z-index: 120; padding: 10px 14px; max-width: 280px;
       background: rgba(32,22,44,.94); color: #fff; font-size: 13px; line-height: 1.4;
       border: 1px solid rgba(255,255,255,.18); border-radius: 12px;
       -webkit-backdrop-filter: blur(10px) saturate(1.4); backdrop-filter: blur(10px) saturate(1.4);
-      box-shadow: 0 8px 24px rgba(0,0,0,.6);
-      opacity: 0; transform: translateY(4px); transition: opacity .12s ease, transform .12s ease;
-      pointer-events: none;
-    }
+      box-shadow: 0 8px 24px rgba(0,0,0,.6); opacity: 0; transform: translateY(4px);
+      transition: opacity .12s ease, transform .12s ease; pointer-events: none; }
     .wm-tooltip.show { opacity: 1; transform: none; }
 
     @media (prefers-reduced-motion: reduce) {
       .settings-page > * { animation: none; }
       .wm-fog i { animation: none; }
-      .g-btn, .cat-btn, .wm-dialog, .wm-tooltip, .seg-thumb { transition: none; }
+      .g-btn, .cat-btn, .wm-dialog, .wm-tooltip, .wob { transition: none; animation: none; }
     }
   `; }
 };
